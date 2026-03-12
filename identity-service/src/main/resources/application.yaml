@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: identity-service
+
+
+  datasource:
+    url: jdbc:mysql://rideupmicrosql-hung2307xuan-bff7.e.aivencloud.com:27741/identity_service_db?sslMode=REQUIRED
+    username: avnadmin
+    password: AVNS_ocjQn0eSi4xYNcPtXdQ
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+  data:
+    redis:
+      host: rideupmicroredis-hung2307xuan-bff7.f.aivencloud.com
+      port: 27742
+      username: default
+      password: AVNS_w8vWRSdFiTovQJ277R8
+      timeout: 10s
+      ssl:
+        enabled: true
+  cache:
+    type: redis
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: hungabc2307@gmail.com
+    password: kblwzwaamhqyokjc
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+server:
+  port: 8081
+  servlet:
+    context-path: /api/identity
+
+jwt:
+  signerKey: S5eUx6DQSJ3ce3Dokj+qZmVlpj3hG7M841wX3NEj3oMcPwx6+oOA9AdHzbZE3Nb84
+  valid-duration: 36000
+  refreshable-duration: 360000
+
+expiryTime: 3600
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+
+supabase:
+  url: https://tgbtragwxkulpittcjzw.supabase.co
+  api-key: sb_secret_J_fc93TeUV2CNFWJPh0aVQ_fYGfDwnZ
+  bucket: Ride_Up_Micro
+
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka

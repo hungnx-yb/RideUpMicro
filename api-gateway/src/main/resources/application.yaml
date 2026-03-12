@@ -1,0 +1,49 @@
+server:
+  port: 8080
+
+spring:
+  main:
+    web-application-type: reactive
+  application:
+    name: api-gateway
+
+  data:
+    redis:
+      host: rideupmicroredis-hung2307xuan-bff7.f.aivencloud.com
+      port: 27742
+      username: default
+      password: AVNS_w8vWRSdFiTovQJ277R8
+      timeout: 10s
+      ssl:
+        enabled: true
+
+  cloud:
+    gateway:
+      routes:
+        - id: identity-service
+          uri: lb://identity-service # dùng service name đăng ký với Eureka
+          predicates:
+            - Path=/api/identity/**
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: false
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+# JWT Configuration
+jwt:
+  signerKey: "your-256-bit-secret-key-here-must-be-at-least-64-characters-long-for-HS512"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
