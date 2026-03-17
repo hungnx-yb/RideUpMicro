@@ -1,10 +1,10 @@
 spring:
   application:
-    name: identity-service
+    name: trip-service
 
 
   datasource:
-    url: jdbc:mysql://localhost:3306/identity_service_db?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
+    url: jdbc:mysql://localhost:3306/trip_service_db?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
     username: root
     password: Hung23072004
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -34,22 +34,10 @@ spring:
   cache:
     type: redis
 
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: hungabc2307@gmail.com
-    password: kblwzwaamhqyokjc
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-
 server:
-  port: 8081
+  port: 8083
   servlet:
-    context-path: /api/identity
+    context-path: /api/trip
 
 jwt:
   signerKey: S5eUx6DQSJ3ce3Dokj+qZmVlpj3hG7M841wX3NEj3oMcPwx6+oOA9AdHzbZE3Nb84
@@ -63,11 +51,6 @@ logging:
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
 
-supabase:
-  url: https://tgbtragwxkulpittcjzw.supabase.co
-  api-key: sb_secret_J_fc93TeUV2CNFWJPh0aVQ_fYGfDwnZ
-  bucket: Ride_Up_Micro
-
 
 eureka:
   client:
@@ -76,3 +59,9 @@ eureka:
 
 app:
   frontend-base-url: http://localhost:5173
+
+location:
+  seeding:
+    enabled: true
+    max-retries: 3
+    initial-backoff-ms: 1500

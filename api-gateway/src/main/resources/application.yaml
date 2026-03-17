@@ -21,9 +21,21 @@ spring:
     gateway:
       routes:
         - id: identity-service
-          uri: lb://identity-service # dùng service name đăng ký với Eureka
+          uri: lb://identity-service
           predicates:
             - Path=/api/identity/**
+
+        - id: location-service
+          uri: lb://location-service
+          predicates:
+            - Path=/api/location/**
+
+
+        - id: trip-service
+          uri: lb://trip-service
+          predicates:
+            - Path=/api/trip/**
+
       globalcors:
         cors-configurations:
           "[/**]":
