@@ -1,11 +1,10 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.request.*;
+import com.example.demo.dto.request.auth.*;
 import com.example.demo.dto.response.ApiResponse;
-import com.example.demo.dto.response.AuthenticationResponse;
-import com.example.demo.dto.response.UserResponse;
+import com.example.demo.dto.response.auth.AuthenticationResponse;
+import com.example.demo.dto.response.user.UserResponse;
 import com.example.demo.service.AuthenticationService;
-import com.example.demo.service.UserService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

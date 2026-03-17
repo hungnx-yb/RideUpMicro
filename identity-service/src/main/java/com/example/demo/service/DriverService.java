@@ -1,9 +1,9 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.request.DriverRegisterRequest;
-import com.example.demo.dto.request.DriverUpdateRequest;
-import com.example.demo.dto.response.DriverResponse;
-import com.example.demo.dto.response.DriverStatusResponse;
+import com.example.demo.dto.request.user.DriverRegisterRequest;
+import com.example.demo.dto.request.user.DriverUpdateRequest;
+import com.example.demo.dto.response.user.DriverResponse;
+import com.example.demo.dto.response.user.DriverStatusResponse;
 import com.example.demo.entity.DriverProfile;
 import com.example.demo.entity.User;
 import com.example.demo.enums.DriverStatus;
@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -96,10 +98,10 @@ public class DriverService {
             driverProfile.setCccd(request.getCccd());
         }
         if (request.getCccdImageFront() != null) {
-            driverProfile.setCccdImageFront(request.getCccdImageFront());
+            driverProfile.setCccdImageFront(fileService.upload(request.getCccdImageFront(), "drivers/documents"));
         }
         if (request.getCccdImageBack() != null) {
-            driverProfile.setCccdImageBack(request.getCccdImageBack());
+            driverProfile.setCccdImageBack(fileService.upload(request.getCccdImageBack(), "drivers/documents"));
         }
         if (request.getGplx() != null && !request.getGplx().equals(driverProfile.getGplx())) {
             if (driverProfileRepository.existsByGplx(request.getGplx())) {
@@ -115,7 +117,7 @@ public class DriverService {
         }
         
         if (request.getGplxImage() != null) {
-            driverProfile.setGplxImage(request.getGplxImage());
+            driverProfile.setGplxImage(fileService.upload(request.getGplxImage(), "drivers/documents"));
         }
         
         if (driverProfile.getStatus() == DriverStatus.REJECTED) {
@@ -141,14 +143,9 @@ public class DriverService {
                            (driverProfile.getRejectionReason() != null ? driverProfile.getRejectionReason() : "Not specified");
         };
         
-        return DriverStatusResponse.builder()
-                .status(driverProfile.getStatus())
-                .approvedAt(driverProfile.getApprovedAt())
-                .approvedBy(driverProfile.getApprovedBy())
-                .rejectedAt(driverProfile.getRejectedAt())
-                .rejectionReason(driverProfile.getRejectionReason())
-                .message(message)
-                .build();
+        DriverStatusResponse driverStatusResponse = modelMapper.map(driverProfile, DriverStatusResponse.class);
+        driverStatusResponse.setMessage(message);
+        return driverStatusResponse;
     }
 
     @Transactional
@@ -163,4 +160,59 @@ public class DriverService {
         driverProfileRepository.delete(driverProfile);
     }
 
+    public List<DriverResponse> getPendingDrivers() {
+        return driverProfileRepository.findAllByStatus(DriverStatus.PENDING)
+                .stream()
+                .map(this::mapToDriverResponse)
+                .toList();
+    }
+
+    @Transactional
+    public DriverResponse approveDriver(String driverId) {
+        DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        User approver = userService.getCurrentUser();
+        driverProfile.setStatus(DriverStatus.APPROVED);
+        driverProfile.setApprovedAt(LocalDateTime.now());
+        driverProfile.setApprovedBy(approver.getEmail());
+        driverProfile.setUser(approver);
+        driverProfile = driverProfileRepository.save(driverProfile);
+        return modelMapper.map(driverProfile, DriverResponse.class);
+    }
+
+    @Transactional
+    public DriverResponse rejectDriver(String driverId, String reason) {
+        DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        User approver = userService.getCurrentUser();
+        driverProfile.setStatus(DriverStatus.REJECTED);
+        driverProfile.setRejectedAt(LocalDateTime.now());
+        driverProfile.setRejectionReason(reason);
+        driverProfile.setApprovedAt(null);
+        driverProfile.setApprovedBy(approver.getEmail());
+
+        driverProfile = driverProfileRepository.save(driverProfile);
+        return modelMapper.map(driverProfile, DriverResponse.class);
+    }
+
+    public Long countDriverByStatus(String  status) {
+        return  driverProfileRepository.countByStatus(DriverStatus.valueOf(status));
+    }
+
+    private DriverResponse mapToDriverResponse(DriverProfile driverProfile) {
+
+        DriverResponse response = modelMapper.map(driverProfile, DriverResponse.class);
+
+        if (driverProfile.getUser() != null) {
+            response.setUserId(driverProfile.getUser().getId());
+            response.setFullName(driverProfile.getUser().getFullName());
+            response.setEmail(driverProfile.getUser().getEmail());
+            response.setPhoneNumber(driverProfile.getUser().getPhoneNumber());
+            response.setAvatarUrl(driverProfile.getUser().getAvatarUrl());
+        }
+
+        return response;
+    }
 }

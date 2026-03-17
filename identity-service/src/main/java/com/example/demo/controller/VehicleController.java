@@ -1,17 +1,19 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.request.VehicleDocumentsUpdateRequest;
-import com.example.demo.dto.request.VehicleRegisterRequest;
-import com.example.demo.dto.request.VehicleUpdateRequest;
+import com.example.demo.dto.request.vehicle.VehicleRegisterRequest;
 import com.example.demo.dto.response.ApiResponse;
-import com.example.demo.dto.response.VehicleResponse;
+import com.example.demo.dto.response.vehicle.VehicleResponse;
+import com.example.demo.dto.response.vehicle.VehicleStatusResponse;
 import com.example.demo.service.VehicleService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/vehicles")
@@ -20,8 +22,8 @@ import org.springframework.web.bind.annotation.*;
 public class VehicleController {
     VehicleService vehicleService;
 
-    @PostMapping
-    public ApiResponse<VehicleResponse> registerVehicle(@Valid @RequestBody VehicleRegisterRequest request) {
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<VehicleResponse> registerVehicle(@Valid @ModelAttribute VehicleRegisterRequest request) {
         return ApiResponse.<VehicleResponse>builder()
                 .result(vehicleService.registerVehicle(request))
                 .message("Vehicle registered successfully")
@@ -33,6 +35,14 @@ public class VehicleController {
         return ApiResponse.<VehicleResponse>builder()
                 .result(vehicleService.getMyVehicle())
                 .message("Vehicle information retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/me/status")
+    public ApiResponse<VehicleStatusResponse> getMyVehicleStatus() {
+        return ApiResponse.<VehicleStatusResponse>builder()
+                .result(vehicleService.getMyVehicleStatus())
+                .message("Vehicle status retrieved successfully")
                 .build();
     }
 
@@ -57,6 +67,42 @@ public class VehicleController {
         vehicleService.deleteMyVehicle();
         return ApiResponse.<Void>builder()
                 .message("Vehicle deleted successfully")
+                .build();
+    }
+
+//    @PreAuthorize("hasAuthority('ADMIN')")
+    @GetMapping("/admin/pending")
+    public ApiResponse<List<VehicleResponse>> getPendingVehicles() {
+        return ApiResponse.<List<VehicleResponse>>builder()
+                .result(vehicleService.getPendingVehicles())
+                .message("Pending vehicles retrieved successfully")
+                .build();
+    }
+
+//    @PreAuthorize("hasAuthority('ADMIN')")
+    @PostMapping("/admin/{vehicleId}/approve")
+    public ApiResponse<VehicleResponse> approveVehicle(@PathVariable String vehicleId) {
+        return ApiResponse.<VehicleResponse>builder()
+                .result(vehicleService.approveVehicle(vehicleId))
+                .message("Vehicle approved successfully")
+                .build();
+    }
+
+//    @PreAuthorize("hasAuthority('ADMIN')")
+    @PostMapping("/admin/{vehicleId}/reject")
+    public ApiResponse<VehicleResponse> rejectVehicle(@PathVariable String vehicleId,
+                                                      @RequestParam(required = false) String reason) {
+        return ApiResponse.<VehicleResponse>builder()
+                .result(vehicleService.rejectVehicle(vehicleId, reason))
+                .message("Vehicle rejected successfully")
+                .build();
+    }
+
+//    @PreAuthorize("hasAuthority('ADMIN')")
+    @GetMapping("/admin/count/pending-driver")
+    public ApiResponse<Long>  getCountStatusVehicle(@RequestParam Boolean  isVerified) {
+        return ApiResponse.<Long >builder()
+                .result(vehicleService.countVehicleByStatus(isVerified))
                 .build();
     }
 

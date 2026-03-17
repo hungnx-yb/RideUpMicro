@@ -7,13 +7,14 @@ spring:
     url: jdbc:mysql://rideupmicrosql-hung2307xuan-bff7.e.aivencloud.com:27741/identity_service_db?sslMode=REQUIRED
     username: avnadmin
     password: AVNS_ocjQn0eSi4xYNcPtXdQ
-
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
 
   servlet:
@@ -72,3 +73,6 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka
+
+app:
+  frontend-base-url: http://localhost:5173

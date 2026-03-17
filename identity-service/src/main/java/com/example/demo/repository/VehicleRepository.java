@@ -5,6 +5,7 @@ import com.example.demo.entity.Vehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -14,4 +15,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, String> {
     boolean existsByDriver(DriverProfile driver);
     boolean existsByPlateNumber(String plateNumber);
     Optional<Vehicle> findByPlateNumber(String plateNumber);
+    List<Vehicle> findAllByIsVerifiedFalseAndRejectedAtIsNull();
+    Long countByIsVerified(boolean verified);
 }

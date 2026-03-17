@@ -35,9 +35,14 @@ public class User {
     String email;
 
     @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id")
+    )
+    @Column(name = "role")
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    Set<Role> roles = new HashSet<>();
+    private Set<Role> roles = new HashSet<>();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

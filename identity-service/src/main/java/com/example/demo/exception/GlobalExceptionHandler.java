@@ -5,6 +5,8 @@ import jakarta.validation.ConstraintViolation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -22,8 +24,18 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiResponse<?>> handlingRuntimeException(Exception  exception) {
         ApiResponse<?> apiResponse = new ApiResponse<>();
         apiResponse.setCode(ErrorCode.UNCATEGOEIZED_EXCEPTION.getCode());
-        apiResponse.setMessage(ErrorCode.UNAUTHENTICATED.getMessage());
-        return ResponseEntity.badRequest().body(apiResponse);
+        apiResponse.setMessage(ErrorCode.UNCATEGOEIZED_EXCEPTION.getMessage());
+        return ResponseEntity.status(ErrorCode.UNCATEGOEIZED_EXCEPTION.getHttpStatus()).body(apiResponse);
+    }
+
+    @ExceptionHandler(value = AuthenticationCredentialsNotFoundException.class)
+    ResponseEntity<ApiResponse<?>> handlingAuthenticationCredentialsNotFoundException(
+            AuthenticationCredentialsNotFoundException exception) {
+        ErrorCode errorCode = ErrorCode.UNAUTHENTICATED;
+        ApiResponse<?> apiResponse = new ApiResponse<>();
+        apiResponse.setCode(errorCode.getCode());
+        apiResponse.setMessage(errorCode.getMessage());
+        return ResponseEntity.status(errorCode.getHttpStatus()).body(apiResponse);
     }
 
     @ExceptionHandler(value = AppException.class)
@@ -32,7 +44,7 @@ public class GlobalExceptionHandler {
         ApiResponse<?> apiResponse = new ApiResponse<>();
         apiResponse.setCode(errorCode.getCode());
         apiResponse.setMessage(errorCode.getMessage());
-        return ResponseEntity.badRequest().body(apiResponse);
+        return ResponseEntity.status(errorCode.getHttpStatus()).body(apiResponse);
     }
 
     @ExceptionHandler(value = AccessDeniedException.class)
@@ -70,6 +82,20 @@ public class GlobalExceptionHandler {
                         : errorCode.getMessage());
         return ResponseEntity.status(errorCode.getHttpStatus()).body(apiResponse);
     }
+
+        @ExceptionHandler(value = BindException.class)
+        ResponseEntity<ApiResponse<?>> handlingBindException(BindException exception) {
+        ErrorCode errorCode = ErrorCode.INVALID_KEY;
+        String message = exception.getBindingResult().getFieldError() != null
+            ? exception.getBindingResult().getFieldError().getDefaultMessage()
+            : errorCode.getMessage();
+
+        return ResponseEntity.status(errorCode.getHttpStatus())
+            .body(ApiResponse.builder()
+                .code(errorCode.getCode())
+                .message(message)
+                .build());
+        }
 
     private String mapAttributes(String message, Map<String, Object> attributes) {
         String minValue = attributes.get(MIN_ATTRIBUTE).toString();

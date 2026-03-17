@@ -41,7 +41,7 @@ spring:
 
 # JWT Configuration
 jwt:
-  signerKey: "your-256-bit-secret-key-here-must-be-at-least-64-characters-long-for-HS512"
+  signerKey: S5eUx6DQSJ3ce3Dokj+qZmVlpj3hG7M841wX3NEj3oMcPwx6+oOA9AdHzbZE3Nb84
 
 eureka:
   client:

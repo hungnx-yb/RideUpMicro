@@ -1,9 +1,9 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.request.UserAvatarRequest;
-import com.example.demo.dto.request.UserInforRequest;
+import com.example.demo.dto.request.user.UserAvatarRequest;
+import com.example.demo.dto.request.user.UserInforRequest;
 import com.example.demo.dto.response.ApiResponse;
-import com.example.demo.dto.response.UserResponse;
+import com.example.demo.dto.response.user.UserResponse;
 import com.example.demo.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

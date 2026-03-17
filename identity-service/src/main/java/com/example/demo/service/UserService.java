@@ -1,8 +1,8 @@
 package com.example.demo.service;
 import com.example.demo.constant.StoragePrefixConstant;
-import com.example.demo.dto.request.UserAvatarRequest;
-import com.example.demo.dto.request.UserInforRequest;
-import com.example.demo.dto.response.UserResponse;
+import com.example.demo.dto.request.user.UserAvatarRequest;
+import com.example.demo.dto.request.user.UserInforRequest;
+import com.example.demo.dto.response.user.UserResponse;
 import com.example.demo.entity.User;
 import com.example.demo.exception.AppException;
 import com.example.demo.exception.ErrorCode;

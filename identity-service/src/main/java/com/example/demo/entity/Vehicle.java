@@ -60,10 +60,22 @@ public class Vehicle {
     LocalDate insuranceExpiryDate;
 
     // Trạng thái xác minh
-    Boolean isVerified;
-
+    @Builder.Default
+    Boolean isVerified = false;
     // Trạng thái hoạt động
     Boolean isActive;
+
+    // Thời điểm duyệt
+    LocalDateTime approvedAt;
+
+    // Admin duyệt
+    String approvedBy;
+
+    // Thời điểm từ chối
+    LocalDateTime rejectedAt;
+
+    // Lý do từ chối
+    String rejectionReason;
 
     // Tài xế sở hữu xe (1-1)
     @OneToOne(fetch = FetchType.LAZY)

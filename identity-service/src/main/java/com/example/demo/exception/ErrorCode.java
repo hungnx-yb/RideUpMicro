@@ -35,7 +35,9 @@ public enum ErrorCode {
     PLATE_NUMBER_ALREADY_USED(3003, "This plate number is already registered", HttpStatus.BAD_REQUEST),
     REGISTRATION_EXPIRED(3004, "Vehicle registration has expired", HttpStatus.BAD_REQUEST),
     INSURANCE_EXPIRED(3005, "Vehicle insurance has expired", HttpStatus.BAD_REQUEST),
-    NO_DOCUMENT_TO_UPDATE(3006, "No document information provided to update", HttpStatus.BAD_REQUEST);
+    NO_DOCUMENT_TO_UPDATE(3006, "No document information provided to update", HttpStatus.BAD_REQUEST),
+    VEHICLE_ALREADY_APPROVED(3007, "Vehicle is already approved", HttpStatus.BAD_REQUEST),
+    VEHICLE_NOT_PENDING(3008, "Vehicle is not in pending status", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

@@ -2,9 +2,9 @@ package com.example.demo.service;
 
 import com.example.demo.constant.RedisKeyTTL;
 import com.example.demo.constant.RedisPrefixKeyConstant;
-import com.example.demo.dto.request.*;
-import com.example.demo.dto.response.AuthenticationResponse;
-import com.example.demo.dto.response.UserResponse;
+import com.example.demo.dto.request.auth.*;
+import com.example.demo.dto.response.auth.AuthenticationResponse;
+import com.example.demo.dto.response.user.UserResponse;
 import com.example.demo.entity.RefreshToken;
 import com.example.demo.entity.User;
 import com.example.demo.enums.Role;
@@ -64,10 +64,10 @@ public class AuthenticationService {
 
     public UserResponse  registerAccount(AccountRegisterRequest request) throws Exception {
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
-
+        Role role = Role.valueOf(request.getRole().toUpperCase());
         User user = modelMapper.map(request, User.class);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRoles(new HashSet<>(Collections.singletonList(Role.CUSTOMER)));
+        user.setRoles(new HashSet<>(Collections.singletonList(role)));
 
         userRepository.save(user);
 
@@ -122,6 +122,7 @@ public class AuthenticationService {
                 .token(token)
                 .refreshToken(rawRefreshToken)
                 .authenticated(true)
+                .user(modelMapper.map(user, UserResponse.class))
                 .build();
     }
 
