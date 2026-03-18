@@ -32,7 +32,11 @@ public class CustomJwtDecoder implements JwtDecoder {
         if (nimbusJwtDecoder == null) {
             synchronized (this) {
                 if (nimbusJwtDecoder == null) {
-                    SecretKeySpec keySpec = new SecretKeySpec(signerKey.getBytes(StandardCharsets.UTF_8), "HmacSHA512");
+                    SecretKeySpec keySpec = new SecretKeySpec(
+                            signerKey.getBytes(StandardCharsets.UTF_8),
+                            "HmacSHA512"
+                    );
+
                     nimbusJwtDecoder = NimbusJwtDecoder
                             .withSecretKey(keySpec)
                             .macAlgorithm(MacAlgorithm.HS512)
@@ -41,18 +45,28 @@ public class CustomJwtDecoder implements JwtDecoder {
             }
         }
 
-        Jwt jwt = nimbusJwtDecoder.decode(token);
-        String jti = jwt.getId();
+        try {
+            Jwt jwt = nimbusJwtDecoder.decode(token);
 
-        if (jti == null) {
-            throw new JwtException("Token missing jti");
+            String jti = jwt.getId();
+            if (jti == null || jti.isBlank()) {
+                throw new JwtException("Token missing jti");
+            }
+
+            boolean exists = Boolean.TRUE.equals(
+                    redisTemplate.hasKey(RedisPrefixKeyConstant.TOKEN + token)
+            );
+
+            if (!exists) {
+                throw new JwtException("Token expired or revoked (Redis)");
+            }
+
+            return jwt;
+
+        } catch (JwtException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new JwtException("Invalid token", e);
         }
-
-        boolean exists = redisTemplate.hasKey(RedisPrefixKeyConstant.TOKEN+token);
-        if (!exists) {
-            throw new JwtException("Token expired or revoked (Redis)");
-        }
-
-        return jwt;
     }
 }

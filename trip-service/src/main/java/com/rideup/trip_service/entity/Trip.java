@@ -4,9 +4,14 @@ import com.rideup.trip_service.enums.TripStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Getter
@@ -19,40 +24,47 @@ public class Trip {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    String id;
 
-    private String id;
+    // 🔥 BẮT BUỘC có route
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "route_id", nullable = false)
+    Route route;
 
-    private String routeId;
+    String driverId;
+    String vehicleId;
 
-    private String driverId;
-    private String vehicleId;
+    String startProvinceId;
+    String endProvinceId;
 
-    private String startProvinceId;
-    private String endProvinceId;
+    String startAddressText;
+    String endAddressText;
 
+    BigDecimal startLat;
+    BigDecimal startLng;
+    BigDecimal endLat;
+    BigDecimal endLng;
 
-    private String startAddressText;
-    private String endAddressText;
+    LocalDateTime departureTime;
+    LocalDateTime estimatedArrivalTime;
 
-    private BigDecimal startLat;
-    private BigDecimal startLng;
-    private BigDecimal endLat;
-    private BigDecimal endLng;
+    Integer seatTotal;
+    Integer seatAvailable;
 
-    private LocalDateTime departureTime;
-    private LocalDateTime estimatedArrivalTime;
-
-    private Integer seatTotal;
-    private Integer seatAvailable;
-
-    private BigDecimal priceVnd;
+    BigDecimal priceVnd;
 
     @Enumerated(EnumType.STRING)
-    private TripStatus status;
+    TripStatus status;
 
-    @Version // 🔥 cực quan trọng
-    private Integer version;
+    @Version
+    Integer version;
 
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    @CreationTimestamp
+    LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "trip", cascade = CascadeType.ALL, orphanRemoval = true)
+    List<TripStop> stops;
 }

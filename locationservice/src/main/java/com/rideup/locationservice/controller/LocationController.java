@@ -6,9 +6,7 @@ import com.rideup.locationservice.dto.response.WardResponse;
 import com.rideup.locationservice.service.LocationService;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -34,6 +32,14 @@ public class LocationController {
         return ApiResponse.<List<WardResponse>>builder()
                 .result(locationService.getAllWards(keyword, provinceId))
                 .message("Get all wards successfully!")
+                .build();
+    }
+
+    @GetMapping("/province/{provinceId}")
+    public ApiResponse<ProvinceResponse> getProvinceById(@PathVariable String provinceId) {
+        return ApiResponse.<ProvinceResponse>builder()
+                .result(locationService.getDetailProvince(provinceId))
+                .message("Get province successfully!")
                 .build();
     }
 }

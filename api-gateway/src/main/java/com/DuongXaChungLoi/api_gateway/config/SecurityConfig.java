@@ -8,6 +8,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -28,6 +29,12 @@ public class SecurityConfig {
 
     @Autowired
     private CustomJwtDecoder customJwtDecoder;
+
+    @Autowired
+    private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
+    @Autowired
+    private JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
     // Public endpoints - không cần authentication
     private static final String[] PUBLIC_ENDPOINTS = {
@@ -51,13 +58,10 @@ public class SecurityConfig {
                         .pathMatchers("/api/**").authenticated()
                         .anyExchange().authenticated()
                 )
-                .exceptionHandling(exception -> exception
-//                        401 Unauthorized - khi token không hợp lệ hoặc thiếu
-                        .authenticationEntryPoint(new JwtAuthenticationEntryPoint())
-//                        403 Forbidden - khi token hợp lệ nhưng không có quyền truy cập
-                        .accessDeniedHandler(new JwtAccessDeniedHandler())
-                )
+
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler)
                         .jwt(jwt -> jwt
                                 .jwtDecoder(reactiveJwtDecoder())
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())
@@ -71,7 +75,9 @@ public class SecurityConfig {
     @Bean
     public ReactiveJwtDecoder reactiveJwtDecoder() {
         return token -> Mono.fromCallable(() -> customJwtDecoder.decode(token))
-                .onErrorMap(ex -> new org.springframework.security.oauth2.jwt.JwtException(ex.getMessage(), ex));
+                .onErrorMap(org.springframework.security.oauth2.jwt.JwtException.class,
+                        ex -> new BadJwtException(ex.getMessage(), ex))
+                .onErrorMap(ex -> new BadJwtException("Invalid token", ex));
     }
 
 

@@ -16,9 +16,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class SecurityConfig {
 
     private final CustomJwtDecoder customJwtDecoder;
-
-    public SecurityConfig(CustomJwtDecoder customJwtDecoder) {
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    public SecurityConfig(CustomJwtDecoder customJwtDecoder, JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint) {
         this.customJwtDecoder = customJwtDecoder;
+        this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
     }
 
     @Bean
@@ -40,6 +41,7 @@ public class SecurityConfig {
                                 .decoder(customJwtDecoder)
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())
                         )
+                                .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                 );
 
         return http.build();

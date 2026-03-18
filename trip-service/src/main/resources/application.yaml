@@ -34,6 +34,14 @@ spring:
   cache:
     type: redis
 
+  cloud:
+    openfeign:
+      client:
+        config:
+          location-service:
+            connect-timeout: 2000
+            read-timeout: 3000
+
 server:
   port: 8083
   servlet:
@@ -59,6 +67,11 @@ eureka:
 
 app:
   frontend-base-url: http://localhost:5173
+
+clients:
+  location:
+    name: location-service
+    path: /api/location
 
 location:
   seeding:

@@ -143,3 +143,22 @@ Booking Created → Kafka Event → Notification Service / Payment Service / Ana
   "message": "Success",
   "data": {}
 }
+
+
+
+SYNC (Feign/REST) nên dùng cho:
+Check driver hợp lệ.
+Check trip tồn tại, đang mở bán.
+Check seat available.
+Giữ chỗ hoặc trừ ghế tạm thời ngay lúc đặt.
+ASYNC (Event) nên dùng cho:
+Gửi mail/SMS/push.
+Ghi log/audit/analytics.
+Đồng bộ sang hệ khác (BI, notification, history).
+Điểm cần chỉnh:
+Giảm ghế không nên chỉ async thuần.
+Nếu giảm ghế async, dễ bị oversell khi nhiều user đặt cùng lúc.
+Nên xử lý đồng bộ trong TripService bằng optimistic lock hoặc row lock để “reserve seat” ngay khi tạo booking.
+Payment:
+Nếu cần phản hồi đặt vé ngay: gọi payment sync để lấy trạng thái ban đầu (PENDING/SUCCESS/FAILED).
+Sau đó dùng event để hoàn tất luồng (payment success -> confirm booking, payment fail/timeout -> release seat).

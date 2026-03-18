@@ -38,7 +38,16 @@ public enum ErrorCode {
     INSURANCE_EXPIRED(3005, "Vehicle insurance has expired", HttpStatus.BAD_REQUEST),
     NO_DOCUMENT_TO_UPDATE(3006, "No document information provided to update", HttpStatus.BAD_REQUEST),
     VEHICLE_ALREADY_APPROVED(3007, "Vehicle is already approved", HttpStatus.BAD_REQUEST),
-    VEHICLE_NOT_PENDING(3008, "Vehicle is not in pending status", HttpStatus.BAD_REQUEST);
+    VEHICLE_NOT_PENDING(3008, "Vehicle is not in pending status", HttpStatus.BAD_REQUEST),
+
+    // Route related errors
+    ROUTE_NOT_FOUND(4001, "Route not found", HttpStatus.NOT_FOUND),
+    ROUTE_ALREADY_EXISTS(4002, "Route already exists with this start and end province", HttpStatus.BAD_REQUEST),
+    ROUTE_START_END_MUST_BE_DIFFERENT(4003, "Start province and end province must be different", HttpStatus.BAD_REQUEST),
+
+    // Location validation errors
+    INVALID_PROVINCE_ID(4004, "Province does not exist", HttpStatus.BAD_REQUEST),
+    LOCATION_SERVICE_UNAVAILABLE(4005, "Location service is unavailable", HttpStatus.SERVICE_UNAVAILABLE);
 
     private Integer code;
     private String message;

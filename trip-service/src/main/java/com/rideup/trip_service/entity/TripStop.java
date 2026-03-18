@@ -19,8 +19,6 @@ public class TripStop {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    private String tripId;
-
     @Enumerated(EnumType.STRING)
     private StopType stopType;
 
@@ -38,4 +36,8 @@ public class TripStop {
     private BigDecimal extraFeeVnd;
 
     private LocalDateTime createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "trip_id", nullable = false)
+    Trip trip;
 }
