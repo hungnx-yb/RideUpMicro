@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import com.example.demo.dto.request.user.DriverRegisterRequest;
 import com.example.demo.dto.request.user.DriverUpdateRequest;
+import com.example.demo.dto.response.user.DriverDetailProjection;
 import com.example.demo.dto.response.user.DriverResponse;
 import com.example.demo.dto.response.user.DriverStatusResponse;
 import com.example.demo.entity.DriverProfile;
@@ -214,5 +215,10 @@ public class DriverService {
         }
 
         return response;
+    }
+
+
+    public List<DriverDetailProjection>  getDriverDetailList(List<String> driverIds){
+        return driverProfileRepository.getDriverDetailList(driverIds);
     }
 }

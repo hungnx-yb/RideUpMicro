@@ -15,6 +15,8 @@ import org.modelmapper.ModelMapper;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 @Service
@@ -60,5 +62,15 @@ public class UserService {
         User user = getCurrentUser();
         modelMapper.map(user, request);
         return modelMapper.map(userRepository.save(user), UserResponse.class);
+    }
+
+    public List<UserResponse> getUserByIds(List<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return userRepository.findAllByIdIn(userIds).stream()
+                .map(user -> modelMapper.map(user, UserResponse.class))
+                .toList();
     }
 }

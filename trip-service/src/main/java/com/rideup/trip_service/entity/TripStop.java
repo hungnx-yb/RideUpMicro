@@ -22,16 +22,13 @@ public class TripStop {
     @Enumerated(EnumType.STRING)
     private StopType stopType;
 
-    private Integer sequenceNo;
-
     private String wardId;
 
     private String addressText;
 
     private BigDecimal lat;
-    private BigDecimal lng;
 
-    private LocalDateTime plannedTime;
+    private BigDecimal lng;
 
     private BigDecimal extraFeeVnd;
 
@@ -40,4 +37,5 @@ public class TripStop {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "trip_id", nullable = false)
     Trip trip;
+
 }

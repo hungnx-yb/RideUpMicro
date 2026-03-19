@@ -10,6 +10,8 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -48,6 +50,14 @@ public class UserController {
                 .result(userService.updateMyInfor(request))
                 .message("Update user information successfully")
                 .build();
+    }
+
+
+    @PostMapping()
+    public ApiResponse<List<UserResponse>> getUserByIds(@RequestBody List<String> userIds){
+       return ApiResponse.<List<UserResponse>>builder()
+               .result(userService.getUserByIds(userIds))
+               .build();
     }
 
 }

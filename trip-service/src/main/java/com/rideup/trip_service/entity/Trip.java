@@ -26,7 +26,6 @@ public class Trip {
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
 
-    // 🔥 BẮT BUỘC có route
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "route_id", nullable = false)
     Route route;
@@ -40,10 +39,6 @@ public class Trip {
     String startAddressText;
     String endAddressText;
 
-    BigDecimal startLat;
-    BigDecimal startLng;
-    BigDecimal endLat;
-    BigDecimal endLng;
 
     LocalDateTime departureTime;
     LocalDateTime estimatedArrivalTime;
@@ -64,6 +59,8 @@ public class Trip {
 
     @UpdateTimestamp
     LocalDateTime updatedAt;
+
+    String note;
 
     @OneToMany(mappedBy = "trip", cascade = CascadeType.ALL, orphanRemoval = true)
     List<TripStop> stops;

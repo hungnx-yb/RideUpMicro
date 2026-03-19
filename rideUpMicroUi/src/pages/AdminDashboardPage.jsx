@@ -40,10 +40,10 @@ import {
 } from "../services/adminApi";
 
 const topMenus = [
-  { label: "Thống kê", icon: FaRegChartBar, active: true },
+  { label: "Thống kê", icon: FaRegChartBar, active: true, path: "/admin-dashboard" },
   { label: "Phân tích", icon: FaChartBar, active: false },
   { label: "Người dùng", icon: FaUserFriends, active: false },
-  { label: "Tuyến đường", icon: FaLocationArrow, active: false },
+  { label: "Tuyến đường", icon: FaLocationArrow, active: false, path: "/admin-dashboard/routes" },
   { label: "Hỗ trợ", icon: FaComments, active: false },
 ];
 
@@ -531,6 +531,7 @@ function AdminDashboardPage() {
                   <button
                     key={menu.label}
                     type="button"
+                    onClick={() => menu.path && navigate(menu.path)}
                     className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-base font-semibold ${
                       menu.active
                         ? "bg-orange-50 text-orange-600"
@@ -691,6 +692,7 @@ function AdminDashboardPage() {
               onClick={() => navigate("/admin-dashboard/vehicles-approval")}
             />
           </div>
+
         </section>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-2">

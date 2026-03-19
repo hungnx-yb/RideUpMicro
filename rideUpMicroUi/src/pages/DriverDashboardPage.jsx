@@ -7,10 +7,12 @@ import QuickActions from "../components/QuickActions";
 import RatingCard from "../components/RatingCard";
 import RecentActivities from "../components/RecentActivities";
 import UpcomingTrips from "../components/UpcomingTrips";
+import DriverCreateTripModal from "../components/DriverCreateTripModal";
 import useAuth from "../hooks/useAuth";
 
 function DriverDashboardPage() {
   const { user } = useAuth();
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [statistics] = useState({
     totalTrips: { value: "14", description: "5 sắp tới" },
     bookedCustomers: { value: "69", description: "69 đã thanh toán" },
@@ -127,6 +129,7 @@ function DriverDashboardPage() {
 
           <button
             type="button"
+            onClick={() => setShowCreateModal(true)}
             className="relative z-10 inline-flex items-center gap-2 rounded-3xl bg-white px-7 py-3.5 text-xl font-bold text-orange-600 shadow-lg transition-colors hover:bg-orange-50"
           >
             <FaPlusCircle />
@@ -154,6 +157,12 @@ function DriverDashboardPage() {
           </div>
         </section>
       </main>
+
+      <DriverCreateTripModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={() => setShowCreateModal(false)}
+      />
     </div>
   );
 }

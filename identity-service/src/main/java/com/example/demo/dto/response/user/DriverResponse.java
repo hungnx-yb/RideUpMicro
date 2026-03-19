@@ -14,7 +14,6 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class DriverResponse {
     String id;
-    String userId;
     String cccd;
     String cccdImageFront;
     String cccdImageBack;
@@ -32,8 +31,16 @@ public class DriverResponse {
     LocalDateTime updatedAt;
     
     // User info
+    String userId;
     String fullName;
     String email;
     String phoneNumber;
     String avatarUrl;
+
+//    Vehicle infor
+    String vehicleImage;
+    String vehicleBrand;
+    String vehicleModel;
+
+
 }

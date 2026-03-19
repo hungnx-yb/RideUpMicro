@@ -1,5 +1,6 @@
 package com.rideup.trip_service.dto.response;
 
+import com.rideup.trip_service.enums.StopType;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,22 +18,13 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class RouteResponse {
-	String id;
-	String routeName;
-	String startProvinceId;
-	String endProvinceId;
-	BigDecimal basePriceVnd;
-	BigDecimal distanceKm;
-	Integer estimatedDurationMin;
-	Boolean isActive;
-	String createdBy;
-	LocalDateTime createdAt;
-	LocalDateTime updatedAt;
-
-
-//	CREATOR
-	String fullName;
-	String email;
-	String sdt;
+public class TripStopResponse {
+    String id;
+    StopType stopType;
+    String wardId;
+    String addressText;
+    BigDecimal lat;
+    BigDecimal lng;
+    Integer sequenceNo;
+    LocalDateTime plannedTime;
 }

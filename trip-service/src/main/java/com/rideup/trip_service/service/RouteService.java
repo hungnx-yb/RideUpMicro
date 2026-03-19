@@ -1,5 +1,6 @@
 package com.rideup.trip_service.service;
 
+import com.rideup.trip_service.dto.response.PageResponse;
 import com.rideup.trip_service.dto.response.ProvinceResponse;
 import com.rideup.trip_service.dto.response.UserResponse;
 import com.rideup.trip_service.feignClient.IdentityServiceClient;
@@ -12,14 +13,20 @@ import com.rideup.trip_service.exception.AppException;
 import com.rideup.trip_service.exception.ErrorCode;
 import com.rideup.trip_service.repository.RouteRepository;
 import feign.FeignException;
+import jakarta.persistence.SecondaryTable;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +37,7 @@ public class RouteService {
 	LocationServiceClient locationClient;
 	ModelMapper modelMapper;
 	IdentityServiceClient identifyClient;
+
 	@Transactional
 	public RouteResponse createRoute(CreateRouteRequest request) {
 		UserResponse admin = identifyClient.getUserInfo().getResult();
@@ -50,13 +58,6 @@ public class RouteService {
 		return modelMapper.map(routeRepository.save(route), RouteResponse.class);
 	}
 
-	@Transactional(readOnly = true)
-	public RouteResponse getRouteById(String id) {
-		Route route = findRouteById(id);
-		return modelMapper.map(route, RouteResponse.class);
-	}
-
-
 	@Transactional
 	public RouteResponse activateRoute(String id, Boolean isActive) {
 		Route route = findRouteById(id);
@@ -66,14 +67,13 @@ public class RouteService {
 	}
 
 	public RouteResponse suggestRoute(CreateRouteRequest request) {
-		UserResponse admin = identifyClient.getUserInfo().getResult();
+		UserResponse driver = identifyClient.getUserInfo().getResult();
 		String startProvinceId = request.getStartProvinceId().trim();
 		String endProvinceId = request.getEndProvinceId().trim();
 		validateRoute(startProvinceId, endProvinceId);
 		LocalDateTime now = LocalDateTime.now();
 		Route route = modelMapper.map(request, Route.class);
-		route.setCreatedBy(admin.getId());
-		route.setIsActive(true);
+		route.setCreatedBy(driver.getId());
 		return modelMapper.map(routeRepository.save(route), RouteResponse.class);
 	}
 
@@ -95,7 +95,6 @@ public class RouteService {
 		}
 	}
 
-
 	private void validateRoute(String startProvinceId, String endProvinceId) {
 		if (routeRepository.existsByStartProvinceIdAndEndProvinceId(startProvinceId, endProvinceId)) {
 			throw new AppException(ErrorCode.ROUTE_ALREADY_EXISTS);
@@ -103,4 +102,52 @@ public class RouteService {
 		validateProvince(startProvinceId);
 		validateProvince(endProvinceId);
 	}
+
+	public PageResponse<RouteResponse> getAllRoutes(String startProvinceId, String endProvinceId, Boolean isActive, Pageable pageable){
+		Page<Route> routePage = routeRepository.getAllRoutes(startProvinceId, endProvinceId, isActive, pageable);
+		List<String> userIds = routePage.getContent().stream()
+				.map(Route::getCreatedBy)
+				.distinct()
+				.toList();
+
+		List<UserResponse> users = identifyClient.getUsersInfoByIds(userIds).getResult();
+		Map<String, UserResponse> mapUser = users.stream()
+				.collect(Collectors.toMap(UserResponse::getId, Function.identity()));
+
+		List<RouteResponse> routeResult = routePage.getContent().stream()
+				.map(route -> {
+					UserResponse createdByUser = mapUser.get(route.getCreatedBy());
+					RouteResponse routeResponse = modelMapper.map(route, RouteResponse.class);
+					routeResponse.setFullName(createdByUser.getFullName());
+					routeResponse.setEmail(createdByUser.getEmail());
+					routeResponse.setSdt(createdByUser.getPhoneNumber());
+
+					return routeResponse;
+				})
+				.toList();
+
+
+		PageResponse.Meta meta = PageResponse.Meta.builder()
+				.page(routePage.getNumber())
+				.size(routePage.getSize())
+				.totalElements(routePage.getTotalElements())
+				.totalPages(routePage.getTotalPages())
+				.build();
+
+		PageResponse<RouteResponse> pageResponse = new PageResponse<>();
+		pageResponse.setItems(routeResult);
+		pageResponse.setMeta(meta);
+		return pageResponse;
+	}
+
+
+	public Integer countRoute(Boolean isActive) {
+		return routeRepository.countByIsActive(isActive);
+	}
+
+	public RouteResponse getRouteDetailByStartAndEnd(String startProvinceId, String endProvinceId) {
+		Route route = routeRepository.findByStartProvinceIdAndEndProvinceId(startProvinceId, endProvinceId).orElseThrow(()-> new AppException(ErrorCode.ROUTE_NOT_FOUND));
+		return modelMapper.map(route, RouteResponse.class);
+	}
+
 }

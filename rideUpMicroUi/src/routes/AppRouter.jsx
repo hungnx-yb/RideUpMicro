@@ -8,6 +8,7 @@ import DriverDashboardPage from "../pages/DriverDashboardPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import AdminDriverApprovalPage from "../pages/AdminDriverApprovalPage";
 import AdminVehicleApprovalPage from "../pages/AdminVehicleApprovalPage";
+import AdminRouteManagementPage from "../pages/AdminRouteManagementPage";
 import AuthVerifyNoticePage from "../pages/AuthVerifyNoticePage";
 import AuthVerifyAccountPage from "../pages/AuthVerifyAccountPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
@@ -16,21 +17,7 @@ import ProtectedRoute from "./ProtectedRoute";
 import useAuth from "../hooks/useAuth";
 import { getMyDriverProfileApi, getMyVehicleApi } from "../services/driverOnboardingApi";
 
-function DashboardRouteByRole() {
-  const { activeRole } = useAuth();
-
-  if (activeRole === "DRIVER") {
-    return <Navigate to="/driver-dashboard" replace />;
-  }
-
-  if (activeRole === "ADMIN") {
-    return <Navigate to="/admin-dashboard" replace />;
-  }
-
-  return <SearchTripPage />;
-}
-
-function DriverOnlyRoute() {
+function DriverAccessWrapper({ children }) {
   const { activeRole } = useAuth();
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
   const [canAccessDriverDashboard, setCanAccessDriverDashboard] = useState(false);
@@ -103,7 +90,29 @@ function DriverOnlyRoute() {
     return <Navigate to="/driver/onboarding" replace />;
   }
 
-  return <DriverDashboardPage />;
+  return children;
+}
+
+function DashboardRouteByRole() {
+  const { activeRole } = useAuth();
+
+  if (activeRole === "DRIVER") {
+    return <Navigate to="/driver-dashboard" replace />;
+  }
+
+  if (activeRole === "ADMIN") {
+    return <Navigate to="/admin-dashboard" replace />;
+  }
+
+  return <SearchTripPage />;
+}
+
+function DriverOnlyRoute() {
+  return (
+    <DriverAccessWrapper>
+      <DriverDashboardPage />
+    </DriverAccessWrapper>
+  );
 }
 
 function CustomerOnlyRoute() {
@@ -162,6 +171,14 @@ function AppRouter() {
           element={(
             <AdminOnlyRoute>
               <AdminVehicleApprovalPage />
+            </AdminOnlyRoute>
+          )}
+        />
+        <Route
+          path="/admin-dashboard/routes"
+          element={(
+            <AdminOnlyRoute>
+              <AdminRouteManagementPage />
             </AdminOnlyRoute>
           )}
         />

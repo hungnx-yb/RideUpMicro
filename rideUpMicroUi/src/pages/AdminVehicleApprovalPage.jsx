@@ -35,10 +35,10 @@ import { getApiErrorMessage } from "../services/authApi";
 import { resolveImageUrl } from "../utils/imageUrl";
 
 const topMenus = [
-  { label: "Thống kê", icon: FaRegChartBar, active: true },
+  { label: "Thống kê", icon: FaRegChartBar, active: false, path: "/admin-dashboard" },
   { label: "Phân tích", icon: FaChartBar, active: false },
-  { label: "Người dùng", icon: FaUserFriends, active: false },
-  { label: "Tuyến đường", icon: FaLocationArrow, active: false },
+  { label: "Người dùng", icon: FaUserFriends, active: true, path: "/admin-dashboard/vehicles-approval" },
+  { label: "Tuyến đường", icon: FaLocationArrow, active: false, path: "/admin-dashboard/routes" },
   { label: "Hỗ trợ", icon: FaComments, active: false },
 ];
 
@@ -190,6 +190,7 @@ function AdminVehicleApprovalPage() {
                   <button
                     key={menu.label}
                     type="button"
+                    onClick={() => menu.path && navigate(menu.path)}
                     className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-base font-semibold ${
                       menu.active
                         ? "bg-orange-50 text-orange-600"

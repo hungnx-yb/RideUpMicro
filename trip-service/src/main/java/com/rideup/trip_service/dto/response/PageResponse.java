@@ -5,7 +5,12 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.util.List;
-
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class PageResponse<T> {
 
     List<T> items;
@@ -27,11 +32,5 @@ public class PageResponse<T> {
         long totalElements;
         int totalPages;
 
-        boolean hasNext;
-        boolean hasPrevious;
-
-
-        String sortBy;
-        String sortDirection;
     }
 }
