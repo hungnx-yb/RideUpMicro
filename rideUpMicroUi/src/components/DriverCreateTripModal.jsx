@@ -20,6 +20,7 @@ const initialForm = {
   endProvinceId: "",
   startWardIds: [],
   endWardIds: [],
+  note: "",
   departureTime: "",
   seatTotal: "",
   priceVnd: "",
@@ -318,10 +319,19 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
 
     try {
       setIsSubmitting(true);
+      const provinceNameMap = new Map(provinces.map((province) => [province.id, province.name]));
+      const startWardNameMap = new Map(startWards.map((ward) => [ward.id, ward.name]));
+      const endWardNameMap = new Map(endWards.map((ward) => [ward.id, ward.name]));
+      const startAddressText = provinceNameMap.get(form.startProvinceId);
+      const endAddressText = provinceNameMap.get(form.endProvinceId);
+
       const payload = {
         routeId: routeDetail.id,
         startProvinceId: form.startProvinceId,
         endProvinceId: form.endProvinceId,
+        startAddressText: startAddressText || undefined,
+        endAddressText: endAddressText || undefined,
+        note: form.note?.trim() || undefined,
         departureTime: form.departureTime ? new Date(form.departureTime).toISOString() : null,
         estimatedArrivalTime: estimatedArrivalTimeIso,
         seatTotal: Number(form.seatTotal),
@@ -330,10 +340,12 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
           ...form.startWardIds.map((wardId) => ({
             stopType: "PICKUP",
             wardId,
+            addressText: startWardNameMap.get(wardId) || undefined,
           })),
           ...form.endWardIds.map((wardId) => ({
             stopType: "DROPOFF",
             wardId,
+            addressText: endWardNameMap.get(wardId) || undefined,
           })),
         ],
       };
@@ -570,6 +582,19 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
                     Nhập giờ xuất phát để xem giờ dự kiến kết thúc.
                   </div>
                 )}
+              </div>
+
+              <div className="mt-3">
+                <label className="text-sm font-medium text-slate-700">
+                  Ghi chú (tùy chọn)
+                  <textarea
+                    rows={3}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-orange-500 focus:outline-none"
+                    placeholder="Ví dụ: Xe có trung chuyển, không hút thuốc, mang hành lý gọn..."
+                    value={form.note}
+                    onChange={(event) => handleChange("note", event.target.value)}
+                  />
+                </label>
               </div>
             </section>
           </div>

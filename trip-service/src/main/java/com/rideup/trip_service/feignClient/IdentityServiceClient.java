@@ -1,9 +1,8 @@
 package com.rideup.trip_service.feignClient;
 import com.rideup.trip_service.config.FeignClientConfig;
 import com.rideup.trip_service.dto.response.ApiResponse;
-import com.rideup.trip_service.dto.response.DriverDetailProjection;
+import com.rideup.trip_service.dto.response.DriverResponse;
 import com.rideup.trip_service.dto.response.UserResponse;
-import org.apache.catalina.User;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +22,6 @@ public interface IdentityServiceClient {
     @PostMapping("/users")
     ApiResponse<List<UserResponse>> getUsersInfoByIds(@RequestBody List<String> userIds);
 
-    @PostMapping("/detail")
-    ApiResponse<List<DriverDetailProjection>> getDriverDetail(@RequestBody List<String> userIds);
+    @PostMapping("/drivers/detail")
+    ApiResponse<List<DriverResponse>> getDriverDetail(@RequestBody List<String> userIds);
 }

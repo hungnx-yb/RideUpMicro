@@ -29,7 +29,6 @@ public class TripStopRequest {
     String wardId;
 
     String addressText;
-    BigDecimal lat;
-    BigDecimal lng;
+
 
 }

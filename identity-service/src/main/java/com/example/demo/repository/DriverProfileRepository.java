@@ -1,6 +1,6 @@
 package com.example.demo.repository;
 
-import com.example.demo.dto.response.user.DriverDetailProjection;
+import com.example.demo.dto.response.user.DriverResponse;
 import com.example.demo.entity.DriverProfile;
 import com.example.demo.entity.User;
 import com.example.demo.enums.DriverStatus;
@@ -22,26 +22,22 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, St
     long countByStatus(DriverStatus status);
     List<DriverProfile> findAllByStatus(DriverStatus status);
 
-    @Query(value = """
-    SELECT 
-        v.id AS vehicleId,
-        v.vehicle_image AS vehicleImage,
-        v.vehicle_brand AS vehicleBrand,
-        v.vehicle_model AS vehicleModel,
-
-        u.id AS driverId,
-        u.full_name AS driverName,
-        u.email AS driverEmail,
-        u.phone_number AS driverPhone,
-        u.avatar_url AS avatarUrl
-
-    FROM user u
-    JOIN driver_profile d ON u.id = d.user_id
-    JOIN vehicle v ON d.id = v.driver_id
-
-    WHERE u.id IN (:driverIds)
-    """, nativeQuery = true)
-    List<DriverDetailProjection> getDriverDetailList(
-            @Param("driverIds") List<String> driverIds
-    );
+    @Query("""
+    SELECT new com.example.demo.dto.response.user.DriverResponse(
+        u.id,
+        u.fullName,
+        u.email,
+        u.phoneNumber,
+        u.avatarUrl,
+        v.id,
+        v.vehicleImage,
+        v.vehicleBrand,
+        v.vehicleModel
+    )
+    FROM User u
+    JOIN DriverProfile d ON u.id = d.user.id
+    JOIN Vehicle v ON d.id = v.driver.id
+    WHERE u.id IN :driverIds
+    """)
+    List<DriverResponse> getDriverDetailList(@Param("driverIds") List<String> driverIds);
 }

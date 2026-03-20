@@ -41,6 +41,29 @@ public class DriverResponse {
     String vehicleImage;
     String vehicleBrand;
     String vehicleModel;
+    String vehicleId;
 
+
+    public DriverResponse(
+            String userId,
+            String fullName,
+            String email,
+            String phoneNumber,
+            String avatarUrl,
+            String vehicleId,
+            String vehicleImage,
+            String vehicleBrand,
+            String vehicleModel
+    ) {
+        this.userId = userId;
+        this.fullName = fullName;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+        this.avatarUrl = avatarUrl;
+        this.vehicleId = vehicleId;
+        this.vehicleImage = vehicleImage;
+        this.vehicleBrand = vehicleBrand;
+        this.vehicleModel = vehicleModel;
+    }
 
 }

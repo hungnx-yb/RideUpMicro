@@ -2,13 +2,14 @@ package com.rideup.trip_service.service;
 
 import com.rideup.trip_service.dto.request.CreateTripRequest;
 import com.rideup.trip_service.dto.request.TripStatusChangeRequest;
-import com.rideup.trip_service.dto.request.TripStopRequest;
 import com.rideup.trip_service.dto.response.*;
+import com.rideup.trip_service.entity.Route;
 import com.rideup.trip_service.entity.Trip;
 import com.rideup.trip_service.entity.TripStop;
 import com.rideup.trip_service.exception.AppException;
 import com.rideup.trip_service.exception.ErrorCode;
 import com.rideup.trip_service.feignClient.IdentityServiceClient;
+import com.rideup.trip_service.repository.RouteRepository;
 import com.rideup.trip_service.repository.TripRepository;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
@@ -29,31 +30,37 @@ public class TripService {
     TripRepository tripRepository;
     ModelMapper modelMapper;
     IdentityServiceClient  identityServiceClient;
+    RouteRepository routeRepository;
 
     @Transactional
     public TripResponse createTrip(CreateTripRequest request) {
+        Route route = routeRepository.findById(request.getRouteId()).orElseThrow(() -> new AppException(ErrorCode.ROUTE_NOT_FOUND));
         UserResponse userResponse = identityServiceClient.getUserInfo().getResult();
         List<String> userIds = List.of(userResponse.getId());
-        List<DriverDetailProjection> driverDetailProjections = identityServiceClient.getDriverDetail(userIds).getResult();
-        Map<String, DriverDetailProjection> driverMap =
-                driverDetailProjections.stream()
+        List<DriverResponse> driverResponses = identityServiceClient.getDriverDetail(userIds).getResult();
+        Map<String, DriverResponse> driverMap =
+                driverResponses.stream()
                         .collect(Collectors.toMap(
-                                DriverDetailProjection::getDriverId,
+                                DriverResponse::getUserId,
                                 Function.identity()
                         ));
         Trip trip = modelMapper.map(request, Trip.class);
+        trip.setStops(null);
         trip.setDriverId(userResponse.getId());
         trip.setVehicleId(driverMap.get(userResponse.getId()).getVehicleId());
+        trip.setRoute(route);
+        trip.setSeatAvailable(request.getSeatTotal());
+
 
         if (request.getStops() != null && !request.getStops().isEmpty()) {
-            List<TripStop> stops = request.getStops().stream()
-                .map(stopReq -> modelMapper.map(stopReq, TripStop.class))
-                .collect(Collectors.toList());
-            trip.setStops(stops);
+            request.getStops().forEach(stopReq -> {
+                TripStop stop = modelMapper.map(stopReq, TripStop.class);
+                trip.addStop(stop);
+            });
         }
 
         Trip saved = tripRepository.save(trip);
-        return toResponse(saved);
+        return modelMapper.map(saved, TripResponse.class);
 
     }
 
@@ -63,14 +70,14 @@ public class TripService {
     public TripResponse changeStatus(String id, TripStatusChangeRequest request) {
         Trip trip = findTrip(id);
         trip.setStatus(request.getStatus());
-        return toResponse(tripRepository.save(trip));
+         return modelMapper.map(tripRepository.save(trip), TripResponse.class);
     }
 
 
 
     public TripResponse getDetail(String id) {
         Trip trip = findTrip(id);
-        return toResponse(trip);
+        return modelMapper.map(trip, TripResponse.class);
     }
 
     private Trip findTrip(String id) {
@@ -78,28 +85,7 @@ public class TripService {
                 .orElseThrow(() -> new AppException(ErrorCode.ROUTE_NOT_FOUND));
     }
 
-    private TripStop toTripStop(TripStopRequest request, Trip trip) {
-        TripStop stop = new TripStop();
-        stop.setTrip(trip);
-        stop.setStopType(request.getStopType());
-        stop.setWardId(request.getWardId());
-        stop.setAddressText(request.getAddressText());
-        stop.setLat(request.getLat());
-        stop.setLng(request.getLng());
-        return stop;
-    }
 
-    private TripResponse toResponse(Trip trip) {
-        List<TripStopResponse> stopResponses = null;
-        if (trip.getStops() != null) {
-            stopResponses = trip.getStops().stream()
-                    .map(stop -> modelMapper.map(stop, TripStopResponse.class))
-                    .toList();
-        }
-        TripResponse response = modelMapper.map(trip, TripResponse.class);
-        response.setStops(stopResponses);
-        return response;
-    }
 
 
 }

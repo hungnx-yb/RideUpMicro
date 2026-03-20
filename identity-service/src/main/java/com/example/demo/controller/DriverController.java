@@ -3,7 +3,6 @@ package com.example.demo.controller;
 import com.example.demo.dto.request.user.DriverRegisterRequest;
 import com.example.demo.dto.request.user.DriverUpdateRequest;
 import com.example.demo.dto.response.ApiResponse;
-import com.example.demo.dto.response.user.DriverDetailProjection;
 import com.example.demo.dto.response.user.DriverResponse;
 import com.example.demo.dto.response.user.DriverStatusResponse;
 import com.example.demo.service.DriverService;
@@ -104,8 +103,8 @@ public class DriverController {
 
 
     @PostMapping("/detail")
-    public ApiResponse<List<DriverDetailProjection>> getDriverDetailList(@RequestBody List<String> driverIds) {
-        return ApiResponse.<List<DriverDetailProjection>>builder()
+    public ApiResponse<List<DriverResponse>> getDriverDetailList(@RequestBody List<String> driverIds) {
+        return ApiResponse.<List<DriverResponse>>builder()
                 .result(driverService.getDriverDetailList(driverIds))
                 .message("Driver details retrieved successfully")
                 .build();

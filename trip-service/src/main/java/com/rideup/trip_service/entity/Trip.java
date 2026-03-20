@@ -11,6 +11,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -64,4 +65,13 @@ public class Trip {
 
     @OneToMany(mappedBy = "trip", cascade = CascadeType.ALL, orphanRemoval = true)
     List<TripStop> stops;
+
+
+    public void addStop(TripStop stop) {
+        if (stops == null) {
+            stops = new ArrayList<>();
+        }
+        stops.add(stop);
+        stop.setTrip(this);
+    }
 }

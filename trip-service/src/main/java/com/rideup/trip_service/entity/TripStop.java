@@ -26,14 +26,6 @@ public class TripStop {
 
     private String addressText;
 
-    private BigDecimal lat;
-
-    private BigDecimal lng;
-
-    private BigDecimal extraFeeVnd;
-
-    private LocalDateTime createdAt;
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "trip_id", nullable = false)
     Trip trip;
