@@ -1,4 +1,4 @@
-package com.rideUp.booking_service.dto.trip;
+package com.rideUp.booking_service.dto.request;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -14,11 +14,7 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class TripSeatUpdateResponse {
-
+public class TripSeatReleaseRequest {
     String tripId;
-    Integer seatAvailable;
-    Integer seatTotal;
-    Integer version;
-    String status;
+    Integer seatCount;
 }

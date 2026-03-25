@@ -1,5 +1,7 @@
-package com.rideUp.booking_service.dto.event;
+package com.rideUp.payment_service.dto.response;
 
+import com.rideUp.payment_service.enums.PaymentMethod;
+import com.rideUp.payment_service.enums.PaymentStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,14 +19,17 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class PaymentRequestedEvent {
+public class PaymentResponse {
 
-    String eventId;
+    String id;
     String bookingId;
-    String customerId;
-    String tripId;
-    Integer seatCount;
     BigDecimal amount;
-    String paymentMethod;
+    PaymentMethod method;
+    PaymentStatus status;
+    String transactionId;
+    String paymentUrl;
+    String failureReason;
+    LocalDateTime paidAt;
     LocalDateTime createdAt;
+    LocalDateTime updatedAt;
 }

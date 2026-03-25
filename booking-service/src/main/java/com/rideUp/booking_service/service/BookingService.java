@@ -7,15 +7,16 @@ import com.rideUp.booking_service.dto.request.PaymentFailedRequest;
 import com.rideUp.booking_service.dto.event.PaymentRequestedEvent;
 import com.rideUp.booking_service.dto.response.BookingResponse;
 import com.rideUp.booking_service.dto.response.ApiResponse;
-import com.rideUp.booking_service.dto.trip.TripSeatReleaseRequest;
-import com.rideUp.booking_service.dto.trip.TripSeatReserveRequest;
-import com.rideUp.booking_service.dto.trip.TripSeatUpdateResponse;
+import com.rideUp.booking_service.dto.request.TripSeatReleaseRequest;
+import com.rideUp.booking_service.dto.request.TripSeatReserveRequest;
+import com.rideUp.booking_service.dto.request.TripSeatUpdateResponse;
 import com.rideUp.booking_service.entity.Booking;
 import com.rideUp.booking_service.enums.BookingStatus;
 import com.rideUp.booking_service.enums.PaymentMethod;
 import com.rideUp.booking_service.exception.AppException;
 import com.rideUp.booking_service.exception.ErrorCode;
 import com.rideUp.booking_service.feignClient.TripServiceClient;
+import com.rideUp.booking_service.kafka.producer.BookingEventPublisher;
 import com.rideUp.booking_service.repository.BookingRepository;
 import feign.FeignException;
 import jakarta.transaction.Transactional;
@@ -51,6 +52,9 @@ public class BookingService {
     @Value("${expiryTime:3600}")
     long expirySeconds;
 
+    @Value("${booking.payment.default-price-per-seat:10000}")
+    BigDecimal defaultPricePerSeat;
+
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request) {
         reserveTripSeats(request.getTripId(), request.getSeatCount());
@@ -63,8 +67,8 @@ public class BookingService {
                 .tripId(request.getTripId())
                 .status(BookingStatus.PENDING)
                 .seatCount(request.getSeatCount())
-                .pricePerSeat(null)
-                .totalAmount(BigDecimal.ZERO)
+            .pricePerSeat(defaultPricePerSeat)
+            .totalAmount(defaultPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())))
                 .pickupLat(request.getPickupLat())
                 .pickupLng(request.getPickupLng())
                 .pickupAddressText(request.getPickupAddressText())
@@ -264,7 +268,8 @@ public class BookingService {
                 .customerId(booking.getCustomerId())
                 .tripId(booking.getTripId())
                 .seatCount(booking.getSeatCount())
-                .paymentMethod(paymentMethod)
+            .amount(booking.getTotalAmount())
+            .paymentMethod(paymentMethod.name())
                 .createdAt(now)
                 .build();
 

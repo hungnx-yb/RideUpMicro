@@ -1,4 +1,4 @@
-package com.rideUp.booking_service.dto.trip;
+package com.rideUp.booking_service.dto.request;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;

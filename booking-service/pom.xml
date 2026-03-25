@@ -105,6 +105,12 @@
 			<artifactId>spring-cloud-starter-openfeign</artifactId>
 		</dependency>
 
+		<!-- Kafka -->
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+
 		<!-- Actuator (Eureka health check) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

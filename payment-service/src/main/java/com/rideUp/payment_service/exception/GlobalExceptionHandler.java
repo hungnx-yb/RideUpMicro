@@ -1,5 +1,6 @@
 package com.rideUp.payment_service.exception;
 
+import com.rideUp.payment_service.dto.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -16,9 +17,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = Exception.class)
     ResponseEntity<ApiResponse<?>> handlingRuntimeException(Exception exception) {
         ApiResponse<?> apiResponse = new ApiResponse<>();
-        apiResponse.setCode(ErrorCode.UNCATEGOEIZED_EXCEPTION.getCode());
-        apiResponse.setMessage(ErrorCode.UNCATEGOEIZED_EXCEPTION.getMessage());
-        return ResponseEntity.status(ErrorCode.UNCATEGOEIZED_EXCEPTION.getHttpStatus()).body(apiResponse);
+        apiResponse.setCode(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode());
+        apiResponse.setMessage(ErrorCode.UNCATEGORIZED_EXCEPTION.getMessage());
+        return ResponseEntity.status(ErrorCode.UNCATEGORIZED_EXCEPTION.getHttpStatus()).body(apiResponse);
     }
 
     @ExceptionHandler(value = AuthenticationCredentialsNotFoundException.class)

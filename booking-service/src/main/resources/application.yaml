@@ -39,6 +39,16 @@ spring:
           trip-service:
             connect-timeout: 2000
             read-timeout: 3000
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_GROUP_BOOKING:booking-service-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 
 
@@ -67,15 +77,19 @@ eureka:
 
 app:
   frontend-base-url: http://localhost:5173
+  kafka:
+    topics:
+      payment-requested: ${KAFKA_TOPIC_PAYMENT_REQUESTED:booking.payment.requested.v1}
+      payment-completed: ${KAFKA_TOPIC_PAYMENT_COMPLETED:payment.completed.v1}
+      payment-failed: ${KAFKA_TOPIC_PAYMENT_FAILED:payment.failed.v1}
 
-clients:
-  trip:
-    name: trip-service
-    path: /api/trip/trip/internal
+
 
 booking:
   expire:
     fixed-delay-ms: 30000
+  payment:
+    default-price-per-seat: 10000
 
 location:
   seeding:

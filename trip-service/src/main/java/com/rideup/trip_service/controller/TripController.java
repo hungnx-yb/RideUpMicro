@@ -44,13 +44,7 @@ public class TripController {
             .build();
         }
 
-        @PostMapping("/internal/seats/reserve")
-        public ApiResponse<SeatUpdateResponse> reserveSeatsInternal(@Valid @RequestBody SeatReserveRequest request) {
-            return ApiResponse.<SeatUpdateResponse>builder()
-                    .result(tripService.reserveSeats(request))
-                    .message("Seats reserved successfully")
-                    .build();
-        }
+
 
         @PostMapping("/seats/release")
         public ApiResponse<SeatUpdateResponse> releaseSeats(@RequestBody SeatReleaseRequest request) {
@@ -60,13 +54,7 @@ public class TripController {
             .build();
         }
 
-        @PostMapping("/internal/seats/release")
-        public ApiResponse<SeatUpdateResponse> releaseSeatsInternal(@Valid @RequestBody SeatReleaseRequest request) {
-            return ApiResponse.<SeatUpdateResponse>builder()
-                    .result(tripService.releaseSeats(request))
-                    .message("Seats released successfully")
-                    .build();
-        }
+
 
 
 

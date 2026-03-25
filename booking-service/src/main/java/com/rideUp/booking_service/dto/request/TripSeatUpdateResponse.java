@@ -1,4 +1,4 @@
-package com.rideUp.booking_service.dto.event;
+package com.rideUp.booking_service.dto.request;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -8,23 +8,17 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class PaymentRequestedEvent {
+public class TripSeatUpdateResponse {
 
-    String eventId;
-    String bookingId;
-    String customerId;
     String tripId;
-    Integer seatCount;
-    BigDecimal amount;
-    String paymentMethod;
-    LocalDateTime createdAt;
+    Integer seatAvailable;
+    Integer seatTotal;
+    Integer version;
+    String status;
 }

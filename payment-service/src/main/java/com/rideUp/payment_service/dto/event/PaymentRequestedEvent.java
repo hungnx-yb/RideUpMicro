@@ -1,4 +1,4 @@
-package com.rideUp.booking_service.dto.event;
+package com.rideUp.payment_service.dto.event;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
