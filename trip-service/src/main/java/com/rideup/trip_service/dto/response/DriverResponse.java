@@ -16,6 +16,7 @@ public class DriverResponse {
     String email;
     String phoneNumber;
     String avatarUrl;
+    Double driverRating;
 
     //    Vehicle infor
     String vehicleImage;

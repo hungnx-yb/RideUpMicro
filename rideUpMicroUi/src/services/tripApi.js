@@ -14,3 +14,11 @@ export async function createTripApi(payload) {
   const response = await axiosClient.post(`${tripBaseUrl}/trip`, payload);
   return unwrapApiResponse(response);
 }
+
+export async function getAllTripsApi(params) {
+  const response = await axiosClient.get(`${tripBaseUrl}/trip`, { params });
+  return {
+    items: response?.data?.result || [],
+    count: response?.data?.count || 0,
+  };
+}

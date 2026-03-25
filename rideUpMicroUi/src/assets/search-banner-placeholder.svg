@@ -1,0 +1,40 @@
+<svg width="1600" height="520" viewBox="0 0 1600 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7F1D1D"/>
+      <stop offset="0.5" stop-color="#DC2626"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(320 130) rotate(25) scale(360 220)">
+      <stop stop-color="#FDBA74" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#FDBA74" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1290 380) rotate(-15) scale(360 180)">
+      <stop stop-color="#FDE68A" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FDE68A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="520" rx="28" fill="url(#bg)"/>
+  <ellipse cx="320" cy="130" rx="360" ry="220" fill="url(#glow1)"/>
+  <ellipse cx="1290" cy="380" rx="360" ry="180" fill="url(#glow2)"/>
+
+  <g opacity="0.18">
+    <circle cx="140" cy="100" r="42" fill="white"/>
+    <circle cx="1520" cy="70" r="34" fill="white"/>
+    <circle cx="1490" cy="440" r="54" fill="white"/>
+    <circle cx="90" cy="430" r="30" fill="white"/>
+  </g>
+
+  <rect x="96" y="96" width="1408" height="328" rx="24" fill="white" fill-opacity="0.08" stroke="white" stroke-opacity="0.22"/>
+
+  <text x="800" y="228" text-anchor="middle" fill="white" font-family="Manrope, sans-serif" font-size="42" font-weight="800">
+    BANNER PLACEHOLDER
+  </text>
+  <text x="800" y="278" text-anchor="middle" fill="#FFEDD5" font-family="Manrope, sans-serif" font-size="24" font-weight="600">
+    Thay file nay bang anh ban muon dung
+  </text>
+  <text x="800" y="320" text-anchor="middle" fill="#FED7AA" font-family="Manrope, sans-serif" font-size="18" font-weight="500">
+    Path: src/assets/search-banner-placeholder.svg
+  </text>
+</svg>

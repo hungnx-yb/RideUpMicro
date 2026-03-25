@@ -29,6 +29,7 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, St
         u.email,
         u.phoneNumber,
         u.avatarUrl,
+        d.driverRating,
         v.id,
         v.vehicleImage,
         v.vehicleBrand,
@@ -38,6 +39,6 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, St
     JOIN DriverProfile d ON u.id = d.user.id
     JOIN Vehicle v ON d.id = v.driver.id
     WHERE u.id IN :driverIds
-    """)
+""")
     List<DriverResponse> getDriverDetailList(@Param("driverIds") List<String> driverIds);
 }

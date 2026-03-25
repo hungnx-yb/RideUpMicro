@@ -31,7 +31,6 @@ public class RouteResponse {
 	LocalDateTime updatedAt;
 
 
-//	CREATOR
 	String fullName;
 	String email;
 	String sdt;

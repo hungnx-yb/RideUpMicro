@@ -50,6 +50,7 @@ public class DriverResponse {
             String email,
             String phoneNumber,
             String avatarUrl,
+            Double driverRating,
             String vehicleId,
             String vehicleImage,
             String vehicleBrand,
@@ -60,6 +61,7 @@ public class DriverResponse {
         this.email = email;
         this.phoneNumber = phoneNumber;
         this.avatarUrl = avatarUrl;
+        this.driverRating = driverRating;
         this.vehicleId = vehicleId;
         this.vehicleImage = vehicleImage;
         this.vehicleBrand = vehicleBrand;

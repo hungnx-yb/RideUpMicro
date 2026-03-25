@@ -1,5 +1,6 @@
-package com.rideup.trip_service.dto.response;
+package com.rideUp.booking_service.dto.request;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,19 +9,17 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
-import java.util.List;
-
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class RoutePageResponse {
-	List<RouteResponse> items;
-	int page;
-	int size;
-	long totalElements;
-	int totalPages;
-	boolean hasNext;
+public class PaymentFailedRequest {
+
+    @NotBlank(message = "Booking id is required")
+    String bookingId;
+
+    String paymentId;
+    String reason;
 }

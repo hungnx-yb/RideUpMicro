@@ -28,10 +28,6 @@ public class TripResponse {
     String endProvinceId;
     String startAddressText;
     String endAddressText;
-    BigDecimal startLat;
-    BigDecimal startLng;
-    BigDecimal endLat;
-    BigDecimal endLng;
     LocalDateTime departureTime;
     LocalDateTime estimatedArrivalTime;
     Integer seatTotal;
@@ -42,4 +38,15 @@ public class TripResponse {
     LocalDateTime updatedAt;
 
     List<TripStopResponse> stops;
+
+
+    String driverName;
+    String driverEmail;
+    String driverPhone;
+    String avatarUrl;
+    Double driverRating;
+
+    String vehicleImage;
+    String vehicleBrand;
+    String vehicleModel;
 }

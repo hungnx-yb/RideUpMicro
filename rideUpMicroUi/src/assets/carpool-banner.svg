@@ -1,0 +1,71 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7F1D1D"/>
+      <stop offset="0.45" stop-color="#C2410C"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <linearGradient id="road" x1="120" y1="620" x2="1080" y2="620" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#334155" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="carBody" x1="355" y1="410" x2="850" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EF4444"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="500" y1="300" x2="740" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#E2E8F0" stop-opacity="0.82"/>
+    </linearGradient>
+    <filter id="shadow" x="300" y="250" width="620" height="280" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="16"/>
+      <feGaussianBlur stdDeviation="16"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.06 0 0 0 0 0.06 0 0 0 0 0.07 0 0 0 0.35 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="720" rx="36" fill="url(#bg)"/>
+  <circle cx="160" cy="120" r="120" fill="white" fill-opacity="0.08"/>
+  <circle cx="1040" cy="110" r="150" fill="#FDBA74" fill-opacity="0.2"/>
+  <circle cx="930" cy="170" r="90" fill="white" fill-opacity="0.12"/>
+
+  <rect x="120" y="540" width="960" height="160" rx="26" fill="url(#road)"/>
+  <rect x="180" y="612" width="840" height="12" rx="6" fill="white" fill-opacity="0.58"/>
+  <rect x="220" y="612" width="70" height="12" rx="6" fill="#111827"/>
+  <rect x="370" y="612" width="70" height="12" rx="6" fill="#111827"/>
+  <rect x="520" y="612" width="70" height="12" rx="6" fill="#111827"/>
+  <rect x="670" y="612" width="70" height="12" rx="6" fill="#111827"/>
+  <rect x="820" y="612" width="70" height="12" rx="6" fill="#111827"/>
+
+  <g filter="url(#shadow)">
+    <path d="M378 432C378 387.817 413.817 352 458 352H757C793.451 352 823.197 381.23 824.102 417.671L825 454H378V432Z" fill="url(#carBody)"/>
+    <path d="M516 300C516 286.193 527.193 275 541 275H707C718.428 275 728.425 282.773 731.251 293.847L745 348H516V300Z" fill="url(#glass)"/>
+    <rect x="355" y="410" width="495" height="95" rx="45" fill="url(#carBody)"/>
+    <rect x="404" y="430" width="140" height="36" rx="18" fill="#FDE68A" fill-opacity="0.85"/>
+    <rect x="654" y="430" width="140" height="36" rx="18" fill="#FDE68A" fill-opacity="0.85"/>
+  </g>
+
+  <circle cx="470" cy="512" r="46" fill="#0F172A"/>
+  <circle cx="470" cy="512" r="20" fill="#CBD5E1"/>
+  <circle cx="735" cy="512" r="46" fill="#0F172A"/>
+  <circle cx="735" cy="512" r="20" fill="#CBD5E1"/>
+
+  <g opacity="0.95">
+    <rect x="870" y="284" width="178" height="106" rx="20" fill="white" fill-opacity="0.16"/>
+    <rect x="892" y="314" width="132" height="10" rx="5" fill="white" fill-opacity="0.86"/>
+    <rect x="892" y="334" width="92" height="10" rx="5" fill="white" fill-opacity="0.66"/>
+    <rect x="892" y="354" width="116" height="10" rx="5" fill="white" fill-opacity="0.66"/>
+  </g>
+
+  <g opacity="0.95">
+    <rect x="140" y="244" width="210" height="126" rx="22" fill="white" fill-opacity="0.16"/>
+    <rect x="166" y="278" width="146" height="10" rx="5" fill="white" fill-opacity="0.9"/>
+    <rect x="166" y="300" width="112" height="10" rx="5" fill="white" fill-opacity="0.68"/>
+    <rect x="166" y="322" width="132" height="10" rx="5" fill="white" fill-opacity="0.68"/>
+  </g>
+</svg>

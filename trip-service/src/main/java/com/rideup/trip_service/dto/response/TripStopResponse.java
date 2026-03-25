@@ -23,8 +23,5 @@ public class TripStopResponse {
     StopType stopType;
     String wardId;
     String addressText;
-    BigDecimal lat;
-    BigDecimal lng;
-    Integer sequenceNo;
-    LocalDateTime plannedTime;
+
 }

@@ -47,7 +47,13 @@ public enum ErrorCode {
 
     // Location validation errors
     INVALID_PROVINCE_ID(4004, "Province does not exist", HttpStatus.BAD_REQUEST),
-    LOCATION_SERVICE_UNAVAILABLE(4005, "Location service is unavailable", HttpStatus.SERVICE_UNAVAILABLE);
+    LOCATION_SERVICE_UNAVAILABLE(4005, "Location service is unavailable", HttpStatus.SERVICE_UNAVAILABLE),
+
+    // Trip / seat errors
+    TRIP_NOT_FOUND(5001, "Trip not found", HttpStatus.NOT_FOUND),
+    INVALID_SEAT_COUNT(5002, "Seat count must be greater than zero", HttpStatus.BAD_REQUEST),
+    SEAT_NOT_AVAILABLE(5003, "Not enough available seats", HttpStatus.BAD_REQUEST),
+    VERSION_CONFLICT(5004, "Trip was updated, please retry", HttpStatus.CONFLICT);
 
     private Integer code;
     private String message;

@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: booking-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/booking_service_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+    username: root
+    password: Hung23072004
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+  data:
+    redis:
+      host: rideupmicroredis-hung2307xuan-bff7.f.aivencloud.com
+      port: 27742
+      username: default
+      password: AVNS_w8vWRSdFiTovQJ277R8
+      timeout: 10s
+      ssl:
+        enabled: true
+  cache:
+    type: redis
+  cloud:
+    openfeign:
+      client:
+        config:
+          trip-service:
+            connect-timeout: 2000
+            read-timeout: 3000
+
+
+
+server:
+  port: 8084
+  servlet:
+    context-path: /api/booking
+
+jwt:
+  signerKey: S5eUx6DQSJ3ce3Dokj+qZmVlpj3hG7M841wX3NEj3oMcPwx6+oOA9AdHzbZE3Nb84
+  valid-duration: 36000
+  refreshable-duration: 360000
+
+expiryTime: 3600
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+app:
+  frontend-base-url: http://localhost:5173
+
+clients:
+  trip:
+    name: trip-service
+    path: /api/trip/trip/internal
+
+booking:
+  expire:
+    fixed-delay-ms: 30000
+
+location:
+  seeding:
+    enabled: true
+    max-retries: 3
+    initial-backoff-ms: 1500
