@@ -23,6 +23,7 @@ public class PaymentResponse {
 
     String id;
     String bookingId;
+    String correlationId;
     BigDecimal amount;
     PaymentMethod method;
     PaymentStatus status;

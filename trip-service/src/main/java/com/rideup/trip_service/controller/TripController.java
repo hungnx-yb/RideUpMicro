@@ -6,7 +6,7 @@ import com.rideup.trip_service.dto.request.SeatReserveRequest;
 import com.rideup.trip_service.dto.request.TripStatusChangeRequest;
 import com.rideup.trip_service.dto.response.ApiResponse;
 import com.rideup.trip_service.dto.response.PageResponse;
-import com.rideup.trip_service.dto.response.SeatUpdateResponse;
+import com.rideup.trip_service.dto.response.SeatResponse;
 import com.rideup.trip_service.dto.response.TripResponse;
 import com.rideup.trip_service.service.TripService;
 import jakarta.validation.Valid;
@@ -36,9 +36,9 @@ public class TripController {
     }
 
         @PostMapping("/seats/reserve")
-        public ApiResponse<SeatUpdateResponse> reserveSeats(
+        public ApiResponse<SeatResponse> reserveSeats(
                                 @Valid @RequestBody SeatReserveRequest request) {
-        return ApiResponse.<SeatUpdateResponse>builder()
+        return ApiResponse.<SeatResponse>builder()
             .result(tripService.reserveSeats( request))
             .message("Seats reserved successfully")
             .build();
@@ -47,8 +47,8 @@ public class TripController {
 
 
         @PostMapping("/seats/release")
-        public ApiResponse<SeatUpdateResponse> releaseSeats(@RequestBody SeatReleaseRequest request) {
-        return ApiResponse.<SeatUpdateResponse>builder()
+        public ApiResponse<SeatResponse> releaseSeats(@RequestBody SeatReleaseRequest request) {
+        return ApiResponse.<SeatResponse>builder()
             .result(tripService.releaseSeats(request))
             .message("Seats released successfully")
             .build();

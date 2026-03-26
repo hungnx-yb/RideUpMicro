@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 public class PaymentRequestedEvent {
 
     String eventId;
+    String correlationId;
     String bookingId;
     String customerId;
     String tripId;

@@ -1,6 +1,5 @@
-package com.rideup.trip_service.dto.response;
+package com.rideup.trip_service.dto.event;
 
-import com.rideup.trip_service.enums.TripStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,16 +8,21 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class SeatUpdateResponse {
+public class BookingCancelledEvent {
+
+    String eventId;
+    String correlationId;
+    String bookingId;
     String tripId;
-    Integer seatAvailable;
-    Integer seatTotal;
-    Integer version;
-    TripStatus status;
+    Integer seatCount;
+    String reason;
+    LocalDateTime createdAt;
 }

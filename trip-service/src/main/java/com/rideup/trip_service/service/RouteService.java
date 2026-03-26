@@ -12,6 +12,7 @@ import com.rideup.trip_service.entity.Route;
 import com.rideup.trip_service.exception.AppException;
 import com.rideup.trip_service.exception.ErrorCode;
 import com.rideup.trip_service.repository.RouteRepository;
+import com.rideup.trip_service.utils.SecurityUtils;
 import feign.FeignException;
 import jakarta.persistence.SecondaryTable;
 import lombok.AccessLevel;
@@ -40,13 +41,12 @@ public class RouteService {
 
 	@Transactional
 	public RouteResponse createRoute(CreateRouteRequest request) {
-		UserResponse admin = identifyClient.getUserInfo().getResult();
 		String startProvinceId = request.getStartProvinceId().trim();
 		String endProvinceId = request.getEndProvinceId().trim();
 		validateRoute(startProvinceId, endProvinceId);
 		LocalDateTime now = LocalDateTime.now();
 		Route route = modelMapper.map(request, Route.class);
-		route.setCreatedBy(admin.getId());
+		route.setCreatedBy(SecurityUtils.getCurrentUserId());
 		route.setIsActive(true);
 		return modelMapper.map(routeRepository.save(route), RouteResponse.class);
 	}
@@ -67,13 +67,12 @@ public class RouteService {
 	}
 
 	public RouteResponse suggestRoute(CreateRouteRequest request) {
-		UserResponse driver = identifyClient.getUserInfo().getResult();
 		String startProvinceId = request.getStartProvinceId().trim();
 		String endProvinceId = request.getEndProvinceId().trim();
 		validateRoute(startProvinceId, endProvinceId);
 		LocalDateTime now = LocalDateTime.now();
 		Route route = modelMapper.map(request, Route.class);
-		route.setCreatedBy(driver.getId());
+		route.setCreatedBy(SecurityUtils.getCurrentUserId());
 		return modelMapper.map(routeRepository.save(route), RouteResponse.class);
 	}
 

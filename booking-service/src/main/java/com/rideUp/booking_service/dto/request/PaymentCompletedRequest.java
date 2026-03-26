@@ -22,4 +22,6 @@ public class PaymentCompletedRequest {
 
     @NotBlank(message = "Payment id is required")
     String paymentId;
+
+    String correlationId;
 }

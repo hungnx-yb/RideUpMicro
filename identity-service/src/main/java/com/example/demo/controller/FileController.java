@@ -16,8 +16,6 @@ import org.springframework.web.multipart.MultipartFile;
 @FieldDefaults(level = lombok.AccessLevel.PRIVATE, makeFinal = true)
 public class FileController {
     FileService fileService;
-
-
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<String> uploadFiles(@RequestParam("file") MultipartFile file) {
         return ApiResponse.<String>builder()

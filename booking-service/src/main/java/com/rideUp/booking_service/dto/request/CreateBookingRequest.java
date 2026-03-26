@@ -36,6 +36,9 @@ public class CreateBookingRequest {
     @NotNull(message = "Pickup longitude is required")
     Double pickupLng;
 
+    @NotBlank(message = "Pickup ward id is required")
+    String pickupWardId;
+
     @NotBlank(message = "Pickup address is required")
     String pickupAddressText;
 
@@ -44,6 +47,9 @@ public class CreateBookingRequest {
 
     @NotNull(message = "Dropoff longitude is required")
     Double dropoffLng;
+
+    @NotBlank(message = "Dropoff ward id is required")
+    String dropoffWardId;
 
     @NotBlank(message = "Dropoff address is required")
     String dropoffAddressText;

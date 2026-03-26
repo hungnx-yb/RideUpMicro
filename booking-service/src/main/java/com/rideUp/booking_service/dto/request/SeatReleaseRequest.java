@@ -14,11 +14,7 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class TripSeatUpdateResponse {
-
+public class SeatReleaseRequest {
     String tripId;
-    Integer seatAvailable;
-    Integer seatTotal;
-    Integer version;
-    String status;
+    Integer seatCount;
 }

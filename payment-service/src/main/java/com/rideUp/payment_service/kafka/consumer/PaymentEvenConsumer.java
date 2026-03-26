@@ -14,11 +14,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class PaymentRequestedEventConsumer {
+public class PaymentEvenConsumer {
 
     PaymentService paymentService;
     ObjectMapper objectMapper;
@@ -29,8 +31,15 @@ public class PaymentRequestedEventConsumer {
     )
     public void onPaymentRequested(String payload) throws Exception {
         PaymentRequestedEvent event = objectMapper.readValue(payload, PaymentRequestedEvent.class);
-        log.info("[PaymentRequestedEvent] eventId={}, bookingId={}, method={}",
-                event.getEventId(), event.getBookingId(), event.getPaymentMethod());
+        String correlationId = event.getCorrelationId();
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+            log.warn("PaymentRequestedEvent without correlationId. Generated correlationId={} for bookingId={}",
+                    correlationId, event.getBookingId());
+        }
+
+        log.info("[PaymentRequestedEvent] eventId={}, bookingId={}, method={}, correlationId={}",
+            event.getEventId(), event.getBookingId(), event.getPaymentMethod(), correlationId);
 
         PaymentMethod paymentMethod;
         try {
@@ -47,6 +56,7 @@ public class PaymentRequestedEventConsumer {
                             .bookingId(event.getBookingId())
                             .amount(event.getAmount())
                             .paymentMethod(paymentMethod)
+                            .correlationId(correlationId)
                             .build(),
                     null
             );

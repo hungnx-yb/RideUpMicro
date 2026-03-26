@@ -18,6 +18,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,20 +40,30 @@ public class PaymentService {
 	PaymentRepository paymentRepository;
 	PaymentEventPublisher paymentEventPublisher;
 	VnpayConfig vnpayConfig;
+	ModelMapper modelMapper;
 
 	@Transactional
 	public PaymentResponse createPayment(CreatePaymentRequest request, HttpServletRequest httpServletRequest) {
+		log.info("Creating payment for bookingId={}, method={}, correlationId={}",
+				request.getBookingId(), request.getPaymentMethod(), request.getCorrelationId());
+
 		if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
 			throw new AppException(ErrorCode.INVALID_PAYMENT_AMOUNT);
 		}
 
 		Payment existingPayment = paymentRepository.findByBookingId(request.getBookingId()).orElse(null);
 		if (existingPayment != null) {
+			if ((existingPayment.getCorrelationId() == null || existingPayment.getCorrelationId().isBlank())
+					&& request.getCorrelationId() != null && !request.getCorrelationId().isBlank()) {
+				existingPayment.setCorrelationId(request.getCorrelationId());
+				existingPayment = paymentRepository.save(existingPayment);
+			}
 			return toResponse(existingPayment);
 		}
 
 		Payment payment = Payment.builder()
 				.bookingId(request.getBookingId())
+				.correlationId(request.getCorrelationId())
 				.amount(request.getAmount())
 				.method(request.getPaymentMethod())
 				.status(PaymentStatus.PENDING)
@@ -78,7 +89,7 @@ public class PaymentService {
 			publishPaymentCompleted(savedPayment);
 		}
 
-		return toResponse(savedPayment);
+		return modelMapper.map(savedPayment, PaymentResponse.class);
 	}
 
 	@Transactional
@@ -217,6 +228,7 @@ public class PaymentService {
 		return PaymentResponse.builder()
 				.id(payment.getId())
 				.bookingId(payment.getBookingId())
+				.correlationId(payment.getCorrelationId())
 				.amount(payment.getAmount())
 				.method(payment.getMethod())
 				.status(payment.getStatus())

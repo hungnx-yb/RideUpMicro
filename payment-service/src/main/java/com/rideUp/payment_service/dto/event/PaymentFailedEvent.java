@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 public class PaymentFailedEvent {
 
     String eventId;
+    String correlationId;
     String bookingId;
     String paymentId;
     String reason;

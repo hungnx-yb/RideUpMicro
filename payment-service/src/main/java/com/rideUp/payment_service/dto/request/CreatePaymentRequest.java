@@ -31,4 +31,6 @@ public class CreatePaymentRequest {
 
     @NotNull(message = "Payment method is required")
     PaymentMethod paymentMethod;
+
+    String correlationId;
 }

@@ -15,7 +15,7 @@ public class BookingExpireScheduler {
 
     BookingService bookingService;
 
-    @Scheduled(fixedDelayString = "${booking.expire.fixed-delay-ms:30000}")
+//    @Scheduled(fixedDelayString = "${booking.expire.fixed-delay-ms:30000}")
     public void expirePendingBookings() {
         int expiredCount = bookingService.expirePendingBookings();
         if (expiredCount > 0) {

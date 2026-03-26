@@ -22,4 +22,5 @@ public class PaymentFailedRequest {
 
     String paymentId;
     String reason;
+    String correlationId;
 }

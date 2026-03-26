@@ -16,12 +16,13 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class PaymentFailedEvent {
+public class BookingCancelledEvent {
 
     String eventId;
     String correlationId;
     String bookingId;
-    String paymentId;
+    String tripId;
+    Integer seatCount;
     String reason;
-    LocalDateTime processedAt;
+    LocalDateTime createdAt;
 }

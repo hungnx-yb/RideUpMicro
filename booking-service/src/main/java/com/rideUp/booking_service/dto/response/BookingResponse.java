@@ -33,10 +33,12 @@ public class BookingResponse {
 
     Double pickupLat;
     Double pickupLng;
+    String pickupWardId;
     String pickupAddressText;
 
     Double dropoffLat;
     Double dropoffLng;
+    String dropoffWardId;
     String dropoffAddressText;
 
     String note;

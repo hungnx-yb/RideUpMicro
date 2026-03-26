@@ -28,6 +28,9 @@ public class Payment {
     @Column(nullable = false, unique = true)
     String bookingId;
 
+    @Column(length = 64)
+    String correlationId;
+
 
     @Column(nullable = false)
     BigDecimal amount;

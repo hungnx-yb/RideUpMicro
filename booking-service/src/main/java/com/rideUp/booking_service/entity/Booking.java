@@ -46,13 +46,12 @@ public class Booking {
     LocalDateTime reservedAt;
     LocalDateTime expiresAt;
 
-    String pickupStopId;
+
     String pickupWardId;
     Double pickupLat;
     Double pickupLng;
     String pickupAddressText;
 
-    String dropoffStopId;
     String dropoffWardId;
     Double dropoffLat;
     Double dropoffLng;

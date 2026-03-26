@@ -26,7 +26,7 @@ spring:
 				enabled: ${REDIS_SSL_ENABLED:false}
 
 	kafka:
-		bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+		bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
 		consumer:
 			group-id: ${KAFKA_GROUP_PAYMENT:payment-service-group}
 			auto-offset-reset: earliest
@@ -56,8 +56,8 @@ app:
 vnpay:
 	pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
 	return-url: ${VNPAY_RETURN_URL:http://localhost:8087/api/payment/payments/vnpay/callback}
-	tmn-code: ${VNPAY_TMN_CODE:REPLACE_ME}
-	secret-key: ${VNPAY_SECRET_KEY:REPLACE_ME}
+	tmn-code: ${VNPAY_TMN_CODE:J29SJO2W}
+	secret-key: ${VNPAY_SECRET_KEY:8NX0ZBUMFUNX3UBZ4S4NB2UKGIBC0RY3}
 	version: ${VNPAY_VERSION:2.1.0}
 	command: ${VNPAY_COMMAND:pay}
 	order-type: ${VNPAY_ORDER_TYPE:other}

@@ -8,6 +8,7 @@ import com.rideUp.payment_service.entity.Payment;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -25,9 +26,11 @@ public class PaymentEventPublisher {
     KafkaTemplate<String, String> kafkaTemplate;
     ObjectMapper objectMapper;
 
+    @NonFinal
     @Value("${app.kafka.topics.payment-completed}")
     String paymentCompletedTopic;
 
+    @NonFinal
     @Value("${app.kafka.topics.payment-failed}")
     String paymentFailedTopic;
 
@@ -35,6 +38,7 @@ public class PaymentEventPublisher {
     public void publishPaymentCompleted(Payment payment) {
         PaymentCompletedEvent event = PaymentCompletedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
+                .correlationId(payment.getCorrelationId())
                 .bookingId(payment.getBookingId())
                 .paymentId(payment.getId())
                 .processedAt(LocalDateTime.now())
@@ -43,8 +47,8 @@ public class PaymentEventPublisher {
         try {
             String payload = objectMapper.writeValueAsString(event);
             kafkaTemplate.send(paymentCompletedTopic, event.getBookingId(), payload);
-            log.info("Published PaymentCompletedEvent eventId={}, bookingId={}, paymentId={}",
-                    event.getEventId(), event.getBookingId(), event.getPaymentId());
+                log.info("Published PaymentCompletedEvent eventId={}, bookingId={}, paymentId={}, correlationId={}",
+                    event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize PaymentCompletedEvent", ex);
         }
@@ -53,6 +57,7 @@ public class PaymentEventPublisher {
     public void publishPaymentFailed(Payment payment, String reason) {
         PaymentFailedEvent event = PaymentFailedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
+                .correlationId(payment.getCorrelationId())
                 .bookingId(payment.getBookingId())
                 .paymentId(payment.getId())
                 .reason(reason)
@@ -62,8 +67,8 @@ public class PaymentEventPublisher {
         try {
             String payload = objectMapper.writeValueAsString(event);
             kafkaTemplate.send(paymentFailedTopic, event.getBookingId(), payload);
-            log.info("Published PaymentFailedEvent eventId={}, bookingId={}, paymentId={}",
-                    event.getEventId(), event.getBookingId(), event.getPaymentId());
+                log.info("Published PaymentFailedEvent eventId={}, bookingId={}, paymentId={}, correlationId={}",
+                    event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize PaymentFailedEvent", ex);
         }

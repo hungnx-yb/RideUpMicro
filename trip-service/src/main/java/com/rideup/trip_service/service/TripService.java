@@ -13,7 +13,6 @@ import com.rideup.trip_service.exception.ErrorCode;
 import com.rideup.trip_service.feignClient.IdentityServiceClient;
 import com.rideup.trip_service.repository.RouteRepository;
 import com.rideup.trip_service.repository.TripRepository;
-import io.lettuce.core.CompositeArgument;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
@@ -26,14 +25,15 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TripService {
@@ -89,7 +89,7 @@ public class TripService {
 
 
     @Transactional
-    public SeatUpdateResponse reserveSeats( SeatReserveRequest request) {
+    public SeatResponse reserveSeats(SeatReserveRequest request) {
         int maxRetry = 3;
         for (int i = 0; i < maxRetry; i++) {
             try {
@@ -106,26 +106,27 @@ public class TripService {
 
                 Trip saved = tripRepository.save(trip);
 
-                return SeatUpdateResponse.builder()
-                        .tripId(saved.getId())
-                        .seatAvailable(saved.getSeatAvailable())
-                        .seatTotal(saved.getSeatTotal())
-                        .version(saved.getVersion())
-                        .status(saved.getStatus())
-                        .build();
+                return modelMapper.map(saved, SeatResponse.class);
 
             } catch (OptimisticLockException | ObjectOptimisticLockingFailureException e) {
+                if (i < maxRetry - 1) {
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+
                 if (i == maxRetry - 1) {
                     throw new AppException(ErrorCode.VERSION_CONFLICT);
                 }
-
             }
         }
         throw new AppException(ErrorCode.VERSION_CONFLICT);
     }
 
     @Transactional
-    public SeatUpdateResponse releaseSeats( SeatReleaseRequest request) {
+    public SeatResponse releaseSeats(SeatReleaseRequest request) {
         Trip trip = tripRepository.findById(request.getTripId()).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
         if (request.getSeatCount() == null || request.getSeatCount() <= 0) {
             throw new AppException(ErrorCode.INVALID_SEAT_COUNT);
@@ -136,13 +137,12 @@ public class TripService {
 
         Trip saved = tripRepository.save(trip);
 
-        return SeatUpdateResponse.builder()
-                .tripId(saved.getId())
-                .seatAvailable(saved.getSeatAvailable())
-                .seatTotal(saved.getSeatTotal())
-                .version(saved.getVersion())
-                .status(saved.getStatus())
-                .build();
+        return modelMapper.map(saved, SeatResponse.class);
+    }
+
+    public void handleBookingConfirmed(String tripId, Integer seatCount, String bookingId, String correlationId) {
+        log.info("Finalize hold from BookingConfirmedEvent bookingId={}, tripId={}, seatCount={}, correlationId={}",
+                bookingId, tripId, seatCount, correlationId);
     }
 
 

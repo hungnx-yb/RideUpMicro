@@ -28,13 +28,14 @@ public class BookingPaymentEventConsumer {
     )
     public void onPaymentCompleted(String payload) throws Exception {
         PaymentCompletedEvent event = objectMapper.readValue(payload, PaymentCompletedEvent.class);
-        log.info("[PaymentCompletedEvent] eventId={}, bookingId={}, paymentId={}",
-                event.getEventId(), event.getBookingId(), event.getPaymentId());
+        log.info("[PaymentCompletedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
+                event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
 
         bookingService.handlePaymentCompleted(
                 PaymentCompletedRequest.builder()
                         .bookingId(event.getBookingId())
                         .paymentId(event.getPaymentId())
+                        .correlationId(event.getCorrelationId())
                         .build()
         );
     }
@@ -45,14 +46,15 @@ public class BookingPaymentEventConsumer {
     )
     public void onPaymentFailed(String payload) throws Exception {
         PaymentFailedEvent event = objectMapper.readValue(payload, PaymentFailedEvent.class);
-        log.info("[PaymentFailedEvent] eventId={}, bookingId={}, paymentId={}",
-                event.getEventId(), event.getBookingId(), event.getPaymentId());
+        log.info("[PaymentFailedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
+                event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
 
         bookingService.handlePaymentFailed(
                 PaymentFailedRequest.builder()
                         .bookingId(event.getBookingId())
                         .paymentId(event.getPaymentId())
                         .reason(event.getReason())
+                        .correlationId(event.getCorrelationId())
                         .build()
         );
     }

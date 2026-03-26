@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 public class PaymentCompletedEvent {
 
     String eventId;
+    String correlationId;
     String bookingId;
     String paymentId;
     LocalDateTime processedAt;

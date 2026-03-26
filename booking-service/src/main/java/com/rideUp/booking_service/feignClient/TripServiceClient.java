@@ -2,9 +2,9 @@ package com.rideUp.booking_service.feignClient;
 
 import com.rideUp.booking_service.config.FeignClientConfig;
 import com.rideUp.booking_service.dto.response.ApiResponse;
-import com.rideUp.booking_service.dto.request.TripSeatReleaseRequest;
-import com.rideUp.booking_service.dto.request.TripSeatReserveRequest;
-import com.rideUp.booking_service.dto.request.TripSeatUpdateResponse;
+import com.rideUp.booking_service.dto.request.SeatReleaseRequest;
+import com.rideUp.booking_service.dto.request.SeatReserveRequest;
+import com.rideUp.booking_service.dto.request.SeatResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface TripServiceClient {
 
     @PostMapping("/seats/reserve")
-    ApiResponse<TripSeatUpdateResponse> reserveSeats(@RequestBody TripSeatReserveRequest request);
+    ApiResponse<SeatResponse> reserveSeats(@RequestBody SeatReserveRequest request);
 
     @PostMapping("/seats/release")
-    ApiResponse<TripSeatUpdateResponse> releaseSeats(@RequestBody TripSeatReleaseRequest request);
+    ApiResponse<SeatResponse> releaseSeats(@RequestBody SeatReleaseRequest request);
 }
