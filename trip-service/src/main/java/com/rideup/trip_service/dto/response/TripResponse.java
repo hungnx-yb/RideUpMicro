@@ -36,6 +36,7 @@ public class TripResponse {
     TripStatus status;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    String note;
 
     List<TripStopResponse> stops;
 

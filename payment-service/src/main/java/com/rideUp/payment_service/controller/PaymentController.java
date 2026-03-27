@@ -89,4 +89,12 @@ public class PaymentController {
                                 .result(paymentService.processVnpayCallback(params))
                                 .build();
         }
+
+        @GetMapping("/payment_url")
+        public ApiResponse<String> getPaymentUrl(@RequestParam String  bookingId) {
+                return ApiResponse.<String>builder()
+                        .message("Get payment url successfully")
+                        .result(paymentService.getPaymentUrl(bookingId))
+                        .build();
+        }
 }

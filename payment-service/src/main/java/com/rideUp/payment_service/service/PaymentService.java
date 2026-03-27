@@ -69,10 +69,9 @@ public class PaymentService {
 				.status(PaymentStatus.PENDING)
 				.build();
 
-		if (request.getPaymentMethod() == PaymentMethod.CASH) {
-			payment.setStatus(PaymentStatus.PAID);
+		if (request.getPaymentMethod() == PaymentMethod.CASH ) {
+			payment.setStatus(PaymentStatus.PENDING);
 			payment.setTransactionId("CASH-" + UUID.randomUUID());
-			payment.setPaidAt(LocalDateTime.now());
 		}
 
 		Payment savedPayment = paymentRepository.save(payment);
@@ -85,7 +84,7 @@ public class PaymentService {
 			savedPayment = paymentRepository.save(savedPayment);
 		}
 
-		if (savedPayment.getStatus() == PaymentStatus.PAID) {
+		if (savedPayment.getStatus() == PaymentStatus.PAID || (savedPayment.getStatus() == PaymentStatus.PENDING  && savedPayment.getMethod()== PaymentMethod.CASH) ) {
 			publishPaymentCompleted(savedPayment);
 		}
 
@@ -265,4 +264,11 @@ public class PaymentService {
 		String secureHash = VnpayUtil.hmacSHA512(vnpayConfig.getSecretKey(), hashData);
 		return vnpayConfig.getPayUrl() + "?" + queryUrl + "&vnp_SecureHash=" + secureHash;
 	}
+
+	public String getPaymentUrl(String bookingId) {
+		return paymentRepository.findByBookingId(bookingId)
+				.map(payment -> payment.getPaymentUrl())
+				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_URL_NOT_FOUND));
+	}
+
 }

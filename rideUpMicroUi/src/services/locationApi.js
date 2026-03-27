@@ -20,3 +20,9 @@ export async function getAllWards(provinceId, keyword = "") {
   const res = await axiosClient.get(`${locationBaseUrl}/ward`, { params });
   return res.data.result;
 }
+
+export async function getWardById(wardId) {
+  if (!wardId) return null;
+  const res = await axiosClient.get(`${locationBaseUrl}/ward/${wardId}`);
+  return res.data.result;
+}

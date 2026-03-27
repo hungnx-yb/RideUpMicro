@@ -5,22 +5,22 @@ function DriverInfo({ driver }) {
   const avatarSrc = resolveImageUrl(driver.avatarUrl);
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2.5">
       {avatarSrc ? (
         <img
           src={avatarSrc}
           alt={driver.name || "Driver avatar"}
-          className="h-11 w-11 rounded-xl border border-slate-200 object-cover shadow-md"
+          className="h-9 w-9 rounded-lg border border-slate-200 object-cover shadow-sm"
         />
       ) : (
-        <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-base font-bold text-white shadow-md">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-r from-red-500 to-orange-500 text-sm font-bold text-white shadow-sm">
           {driver.initial}
         </span>
       )}
 
       <div>
-        <p className="text-sm font-semibold text-slate-900">{driver.name}</p>
-        <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+        <p className="text-[13px] font-semibold text-slate-900">{driver.name}</p>
+        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
           <FaStar className="text-amber-400" />
           <span>{driver.rating}</span>
           <span>•</span>

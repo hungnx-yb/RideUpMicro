@@ -42,4 +42,13 @@ public class LocationController {
                 .message("Get province successfully!")
                 .build();
     }
+
+    @GetMapping("/ward/{wardId}")
+    public ApiResponse<WardResponse> getWardById(@PathVariable String wardId) {
+        return ApiResponse.<WardResponse>builder()
+                .result(locationService.getWardDetail(wardId))
+                .message("Get ward successfully!")
+                .build();
+
+    }
 }

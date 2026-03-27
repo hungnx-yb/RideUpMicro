@@ -1,18 +1,14 @@
 package com.rideup.locationservice.service;
-
 import com.rideup.locationservice.dto.response.ProvinceResponse;
 import com.rideup.locationservice.dto.response.WardResponse;
-import com.rideup.locationservice.entity.Province;
 import com.rideup.locationservice.repository.ProvinceRepository;
 import com.rideup.locationservice.repository.WardRepository;
-import io.lettuce.core.cluster.pubsub.RedisClusterPubSubListener;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
-
 import java.util.List;
 
 @Service
@@ -42,4 +38,8 @@ public class LocationService {
    public ProvinceResponse getDetailProvince(String provinceId) {
         return modelMapper.map(provinceRepository.findById(provinceId), ProvinceResponse.class);
    }
+
+    public WardResponse getWardDetail(String wardId) {
+        return modelMapper.map(wardRepository.findById(wardId), WardResponse.class);
+    }
 }
