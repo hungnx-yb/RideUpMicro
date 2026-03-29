@@ -292,7 +292,7 @@ function SearchTripPage() {
     setSearchForm((previous) => ({ ...previous, date: today }));
   };
 
-  const handleConfirmBooking = async ({ seatCount, paymentMethod, pickupStop, dropoffStop, pickupLocation, dropoffLocation }) => {
+  const handleConfirmBooking = async ({ paymentMethod, pickupStop, dropoffStop, pickupLocation, dropoffLocation }) => {
     if (!selectedTrip) {
       return;
     }
@@ -303,7 +303,7 @@ function SearchTripPage() {
 
       const bookingResult = await createBookingApi({
         tripId: selectedTrip.id,
-        seatCount: Number(seatCount || 1),
+        seatCount: 1,
         paymentMethod,
         pickupLat: Number(pickupLocation?.lat),
         pickupLng: Number(pickupLocation?.lng),

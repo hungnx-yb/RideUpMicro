@@ -14,7 +14,6 @@ import { resolveImageUrl } from "../utils/imageUrl";
 function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting = false }) {
   const [selectedPickupWardId, setSelectedPickupWardId] = useState("");
   const [selectedDropoffWardId, setSelectedDropoffWardId] = useState("");
-  const [selectedSeatCount, setSelectedSeatCount] = useState(1);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("CASH");
   const [pickupLocation, setPickupLocation] = useState({ lat: NaN, lng: NaN, addressText: "" });
   const [dropoffLocation, setDropoffLocation] = useState({ lat: NaN, lng: NaN, addressText: "" });
@@ -42,42 +41,17 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
     setSelectedDropoffWardId(defaultDropoffStop?.wardId || "");
     setPickupLocation(mapStopToLocation(defaultPickupStop));
     setDropoffLocation(mapStopToLocation(defaultDropoffStop));
-    setSelectedSeatCount(1);
     setSelectedPaymentMethod("CASH");
   }, [trip]);
 
   const pickupStopOptions = trip?.pickupStopOptions || [];
   const dropoffStopOptions = trip?.dropoffStopOptions || [];
-  const maxBookableSeats = Math.max(0, Number(trip?.availableSeats ?? 0));
   const selectedPickupStop = pickupStopOptions.find((stop) => stop.wardId === selectedPickupWardId) || null;
   const selectedDropoffStop = dropoffStopOptions.find((stop) => stop.wardId === selectedDropoffWardId) || null;
   const isPickupLocationValid = isValidCoordinate(Number(pickupLocation?.lat), Number(pickupLocation?.lng));
   const isDropoffLocationValid = isValidCoordinate(Number(dropoffLocation?.lat), Number(dropoffLocation?.lng));
-  const hasValidSeatCount = selectedSeatCount >= 1 && selectedSeatCount <= maxBookableSeats;
   const hasAddressDetail = Boolean(pickupLocation?.addressText?.trim()) && Boolean(dropoffLocation?.addressText?.trim());
-  const canSubmit = Boolean(
-    selectedPickupStop
-    && selectedDropoffStop
-    && isPickupLocationValid
-    && isDropoffLocationValid
-    && hasAddressDetail
-    && hasValidSeatCount
-  );
-
-  useEffect(() => {
-    if (maxBookableSeats <= 0) {
-      setSelectedSeatCount(0);
-      return;
-    }
-
-    setSelectedSeatCount((previous) => {
-      if (previous < 1) {
-        return 1;
-      }
-
-      return Math.min(previous, maxBookableSeats);
-    });
-  }, [maxBookableSeats]);
+  const canSubmit = Boolean(selectedPickupStop && selectedDropoffStop && isPickupLocationValid && isDropoffLocationValid && hasAddressDetail);
 
   useEffect(() => {
     if (!selectedPickupStop) {
@@ -103,7 +77,6 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
     }
 
     onConfirmBooking({
-      seatCount: selectedSeatCount,
       paymentMethod: selectedPaymentMethod,
       pickupStop: selectedPickupStop,
       dropoffStop: selectedDropoffStop,
@@ -290,32 +263,6 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
             accentClass="border-red-100 bg-red-50/30"
           />
 
-          <section className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
-            <p className="mb-2 text-sm font-bold uppercase tracking-wide text-emerald-800">Số ghế đặt</p>
-            <div className="flex items-center gap-3">
-              <select
-                value={selectedSeatCount}
-                onChange={(event) => setSelectedSeatCount(Number(event.target.value))}
-                disabled={maxBookableSeats <= 0}
-                className="w-24 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-emerald-400"
-              >
-                {maxBookableSeats > 0
-                  ? Array.from({ length: maxBookableSeats }, (_, index) => index + 1).map((seatNumber) => (
-                    <option key={seatNumber} value={seatNumber}>
-                      {seatNumber}
-                    </option>
-                  ))
-                  : <option value={0}>0</option>}
-              </select>
-              <p className="text-xs text-slate-600">
-                Còn <span className="font-semibold text-emerald-700">{maxBookableSeats}</span> chỗ trống.
-              </p>
-            </div>
-            {maxBookableSeats <= 0 ? (
-              <p className="mt-1.5 text-xs text-red-600">Chuyến này đã hết chỗ, vui lòng chọn chuyến khác.</p>
-            ) : null}
-          </section>
-
           <section className="rounded-xl border border-violet-100 bg-violet-50/40 p-3">
             <p className="mb-2 text-sm font-bold uppercase tracking-wide text-violet-800">Phương thức thanh toán</p>
             <div className="grid gap-2">
@@ -350,7 +297,7 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
 
           {!canSubmit ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Vui lòng chọn đầy đủ điểm đón/trả trên bản đồ, nhập địa chỉ chi tiết và số ghế hợp lệ trước khi xác nhận đặt chỗ.
+              Vui lòng chọn đầy đủ điểm đón/trả trên bản đồ và nhập địa chỉ chi tiết trước khi xác nhận đặt chỗ.
             </div>
           ) : null}
 

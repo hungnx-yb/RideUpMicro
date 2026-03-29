@@ -271,4 +271,26 @@ public class PaymentService {
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_URL_NOT_FOUND));
 	}
 
+	@Transactional(readOnly = true)
+	public String generateTestVnpayUrl(String bookingId, BigDecimal amount, HttpServletRequest httpServletRequest) {
+		if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+			throw new AppException(ErrorCode.INVALID_PAYMENT_AMOUNT);
+		}
+
+		String resolvedBookingId = (bookingId == null || bookingId.isBlank())
+				? "TEST-BOOKING"
+				: bookingId;
+
+		Payment transientPayment = Payment.builder()
+				.id(UUID.randomUUID().toString())
+				.bookingId(resolvedBookingId)
+				.amount(amount)
+				.method(PaymentMethod.VNPAY)
+				.status(PaymentStatus.PENDING)
+				.build();
+
+		String clientIp = httpServletRequest == null ? "127.0.0.1" : VnpayUtil.getIpAddress(httpServletRequest);
+		return generateVnpayPaymentUrl(transientPayment, clientIp);
+	}
+
 }

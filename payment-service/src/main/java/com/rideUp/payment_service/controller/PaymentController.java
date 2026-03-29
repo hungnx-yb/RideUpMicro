@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @RestController
@@ -95,6 +96,18 @@ public class PaymentController {
                 return ApiResponse.<String>builder()
                         .message("Get payment url successfully")
                         .result(paymentService.getPaymentUrl(bookingId))
+                        .build();
+        }
+
+        @GetMapping("/vnpay/test-url")
+        public ApiResponse<String> generateTestVnpayUrl(
+                @RequestParam String bookingId,
+                @RequestParam BigDecimal amount,
+                HttpServletRequest httpServletRequest
+        ) {
+                return ApiResponse.<String>builder()
+                        .message("Generate VNPay test url successfully")
+                        .result(paymentService.generateTestVnpayUrl(bookingId, amount, httpServletRequest))
                         .build();
         }
 }
