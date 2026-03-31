@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FaCalendarAlt, FaChevronDown, FaMapMarkerAlt, FaSearch } from "react-icons/fa";
+import { FaArrowRight, FaCalendarAlt, FaChevronDown, FaMapMarkerAlt, FaSearch, FaSpinner } from "react-icons/fa";
 
 function LocationDropdown({
   value,
@@ -34,7 +34,7 @@ function LocationDropdown({
           if (typeof onOpen === "function") onOpen();
           setOpen((previous) => !previous);
         }}
-        className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 py-2 pl-8 pr-2.5 text-sm text-slate-900 outline-none transition focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+        className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-8 pr-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-100"
       >
         <span className={selectedLabel ? "text-slate-900" : "text-slate-500"}>
           {isLoading ? "Dang tai..." : selectedLabel || placeholder}
@@ -43,7 +43,7 @@ function LocationDropdown({
       </button>
 
       {open && !disabled ? (
-        <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+        <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           <div className="max-h-40 overflow-y-auto py-1">
             {options.length ? (
               options.map((item) => (
@@ -85,20 +85,24 @@ function TripSearchBar({
   isSearching,
 }) {
   return (
-    <section className="w-full rounded-2xl border border-white/25 bg-white/95 p-3 shadow-xl shadow-black/15 backdrop-blur-sm sm:p-4">
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <p className="text-sm font-extrabold uppercase tracking-wide text-slate-700">Bo loc chuyen di</p>
-        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
-          Cap nhat theo tim kiem
+    <section className="w-full rounded-3xl border border-white/40 bg-white/95 p-4 shadow-2xl shadow-slate-900/15 backdrop-blur-sm sm:p-5">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-600">RideUp now</p>
+          <h2 className="text-lg font-extrabold text-slate-900">Ban muon di dau hom nay?</h2>
+        </div>
+        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          Danh sach cap nhat theo bo loc
         </span>
       </div>
 
-      <form className="space-y-2.5" onSubmit={onSubmit}>
+      <form className="space-y-3" onSubmit={onSubmit}>
         <div className="grid gap-2.5 lg:grid-cols-4">
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Tinh/Thanh di</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Tinh/Thanh di</span>
             <span className="relative block">
-              <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-orange-500" />
+              <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
               <LocationDropdown
                 value={form.startProvinceId}
                 onFocus={onProvinceFocus}
@@ -111,9 +115,9 @@ function TripSearchBar({
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Phuong/Xa di</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Phuong/Xa di</span>
             <span className="relative block">
-              <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-orange-500" />
+              <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
               <LocationDropdown
                 value={form.startWardId}
                 onChange={(val) => onChange("startWardId", val)}
@@ -126,9 +130,9 @@ function TripSearchBar({
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Tinh/Thanh den</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Tinh/Thanh den</span>
             <span className="relative block">
-              <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-red-400" />
+              <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500" />
               <LocationDropdown
                 value={form.endProvinceId}
                 onOpen={onProvinceFocus}
@@ -140,9 +144,9 @@ function TripSearchBar({
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Phuong/Xa den</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Phuong/Xa den</span>
             <span className="relative block">
-              <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-red-400" />
+              <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500" />
               <LocationDropdown
                 value={form.endWardId}
                 onChange={(val) => onChange("endWardId", val)}
@@ -155,16 +159,16 @@ function TripSearchBar({
           </label>
         </div>
 
-        <div className="grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_200px]">
+        <div className="grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_220px]">
           <label className="block">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Ngay di</span>
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Ngay di</span>
           <span className="relative block">
-            <FaCalendarAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-orange-500" />
+            <FaCalendarAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
             <input
               type="date"
               value={form.date}
               onChange={(event) => onChange("date", event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm text-slate-900 outline-none transition focus:border-orange-300 focus:bg-white focus:ring-2 focus:ring-orange-100"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-8 pr-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-2 focus:ring-emerald-100"
             />
           </span>
           </label>
@@ -172,10 +176,11 @@ function TripSearchBar({
           <button
             type="submit"
             disabled={isSearching || !form.startWardId || !form.endWardId}
-            className="mt-auto inline-flex h-[38px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 via-rose-500 to-orange-500 px-4 text-sm font-semibold text-white shadow-md shadow-orange-500/30 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-auto inline-flex h-[42px] items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <FaSearch className="text-xs" />
-            {isSearching ? "Dang tim..." : "Tim kiem chuyen"}
+            {isSearching ? <FaSpinner className="text-xs animate-spin" /> : <FaSearch className="text-xs" />}
+            {isSearching ? "Dang tim..." : "Tim chuyen"}
+            {!isSearching ? <FaArrowRight className="text-[10px]" /> : null}
           </button>
         </div>
       </form>

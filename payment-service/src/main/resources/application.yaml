@@ -61,7 +61,7 @@ app:
 
 vnpay:
   pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-  return-url: ${VNPAY_RETURN_URL:http://localhost:8085/api/payment/payments/vnpay/callback}
+  return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payments/vnpay-result}
   tmn-code: ${VNPAY_TMN_CODE:GQ9S08FR}
   secret-key: ${VNPAY_SECRET_KEY:0X3LM1OM4UT9ELU96UJ9T2W6T57P3RAP}
   version: ${VNPAY_VERSION:2.1.0}

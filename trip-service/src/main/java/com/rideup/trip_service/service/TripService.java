@@ -8,6 +8,7 @@ import com.rideup.trip_service.dto.response.*;
 import com.rideup.trip_service.entity.Route;
 import com.rideup.trip_service.entity.Trip;
 import com.rideup.trip_service.entity.TripStop;
+import com.rideup.trip_service.enums.TripStatus;
 import com.rideup.trip_service.exception.AppException;
 import com.rideup.trip_service.exception.ErrorCode;
 import com.rideup.trip_service.feignClient.IdentityServiceClient;
@@ -60,6 +61,7 @@ public class TripService {
         trip.setDriverId(userResponse.getId());
         trip.setVehicleId(driverMap.get(userResponse.getId()).getVehicleId());
         trip.setRoute(route);
+        trip.setStatus(TripStatus.STARTED);
         trip.setSeatAvailable(request.getSeatTotal());
 
 

@@ -133,7 +133,7 @@ function CustomerNavbar() {
                 type="button"
                 onClick={() => {
                   setIsOpen(false);
-                  navigate("/dashboard");
+                  navigate("/profile");
                 }}
                 className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
               >

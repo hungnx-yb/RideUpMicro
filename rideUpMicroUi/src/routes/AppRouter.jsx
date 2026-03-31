@@ -4,6 +4,8 @@ import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
 import SearchTripPage from "../pages/SearchTripPage";
+import MyTripsPage from "../pages/MyTripsPage";
+import CustomerProfilePage from "../pages/CustomerProfilePage";
 import DriverDashboardPage from "../pages/DriverDashboardPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import AdminDriverApprovalPage from "../pages/AdminDriverApprovalPage";
@@ -13,6 +15,7 @@ import AuthVerifyNoticePage from "../pages/AuthVerifyNoticePage";
 import AuthVerifyAccountPage from "../pages/AuthVerifyAccountPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
 import DriverOnboardingPage from "../pages/DriverOnboardingPage";
+import PaymentVnpayResultPage from "../pages/PaymentVnpayResultPage";
 import ProtectedRoute from "./ProtectedRoute";
 import useAuth from "../hooks/useAuth";
 import { getMyDriverProfileApi, getMyVehicleApi } from "../services/driverOnboardingApi";
@@ -115,7 +118,7 @@ function DriverOnlyRoute() {
   );
 }
 
-function CustomerOnlyRoute() {
+function CustomerOnlyRoute({ children }) {
   const { activeRole } = useAuth();
 
   if (activeRole === "DRIVER") {
@@ -126,7 +129,7 @@ function CustomerOnlyRoute() {
     return <Navigate to="/admin-dashboard" replace />;
   }
 
-  return <SearchTripPage />;
+  return children || <SearchTripPage />;
 }
 
 function AdminOnlyRoute({ children }) {
@@ -147,6 +150,7 @@ function AppRouter() {
       <Route path="/auth/register" element={<RegisterPage />} />
       <Route path="/auth/verify-notice" element={<AuthVerifyNoticePage />} />
       <Route path="/auth/verify" element={<AuthVerifyAccountPage />} />
+      <Route path="/payments/vnpay-result" element={<PaymentVnpayResultPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardRouteByRole />} />
         <Route path="/driver-dashboard" element={<DriverOnlyRoute />} />
@@ -183,6 +187,22 @@ function AppRouter() {
           )}
         />
         <Route path="/trips/search" element={<CustomerOnlyRoute />} />
+        <Route
+          path="/profile"
+          element={(
+            <CustomerOnlyRoute>
+              <CustomerProfilePage />
+            </CustomerOnlyRoute>
+          )}
+        />
+        <Route
+          path="/trips/my"
+          element={(
+            <CustomerOnlyRoute>
+              <MyTripsPage />
+            </CustomerOnlyRoute>
+          )}
+        />
         <Route path="/driver/onboarding" element={<DriverOnboardingPage />} />
         <Route path="/auth/change-password" element={<ChangePasswordPage />} />
       </Route>

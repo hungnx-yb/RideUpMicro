@@ -14,3 +14,14 @@ export async function createBookingApi(payload) {
   const response = await axiosClient.post(`${bookingBaseUrl}/bookings`, payload);
   return unwrapApiResponse(response);
 }
+
+export async function getMyBookingsApi() {
+  const response = await axiosClient.get(`${bookingBaseUrl}/bookings/my-bookings`);
+  return unwrapApiResponse(response) || [];
+}
+
+export async function cancelBookingApi(bookingId, cancelReason = "") {
+  const payload = cancelReason ? { reason: cancelReason } : {};
+  const response = await axiosClient.post(`${bookingBaseUrl}/bookings/${bookingId}/cancel`, payload);
+  return unwrapApiResponse(response);
+}

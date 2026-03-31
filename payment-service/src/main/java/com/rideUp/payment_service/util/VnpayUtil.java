@@ -73,18 +73,6 @@ public class VnpayUtil {
                 .collect(Collectors.joining("&"));
     }
 
-    public static Map<String, String> getVnpayParams(HttpServletRequest request) {
-        Map<String, String> fields = new HashMap<>();
-        Enumeration<String> params = request.getParameterNames();
-        while (params.hasMoreElements()) {
-            String fieldName = params.nextElement();
-            String fieldValue = request.getParameter(fieldName);
-            if (fieldValue != null && fieldValue.length() > 0) {
-                fields.put(fieldName, fieldValue);
-            }
-        }
-        return fields;
-    }
 }
 
 

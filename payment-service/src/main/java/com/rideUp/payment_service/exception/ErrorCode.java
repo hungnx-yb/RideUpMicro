@@ -18,7 +18,8 @@ public enum ErrorCode {
     INVALID_PAYMENT_METHOD(7006, "Invalid payment method", HttpStatus.BAD_REQUEST),
     KAFKA_PUBLISH_FAILED(7007, "Failed to publish Kafka event", HttpStatus.BAD_GATEWAY),
     INVALID_PAYMENT_AMOUNT(7008, "Invalid payment amount", HttpStatus.BAD_REQUEST),
-    PAYMENT_URL_NOT_FOUND(7009, "Payment URL not found", HttpStatus.NOT_FOUND);
+    PAYMENT_URL_NOT_FOUND(7009, "Payment URL not found", HttpStatus.NOT_FOUND),
+    PAYMENT_URL_WAIT_INTERRUPTED(7010, "Interrupted while waiting for payment URL", HttpStatus.INTERNAL_SERVER_ERROR);
     private Integer code;
     private String message;
     private HttpStatus httpStatus;

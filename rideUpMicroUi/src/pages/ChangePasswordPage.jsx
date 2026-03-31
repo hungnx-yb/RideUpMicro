@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { FaKey, FaLock, FaPaperPlane } from "react-icons/fa";
+import { FaArrowLeft, FaCheckCircle, FaKey, FaLock, FaPaperPlane, FaShieldAlt, FaSpinner } from "react-icons/fa";
+import CustomerNavbar from "../components/CustomerNavbar";
+import FloatingSupportMenu from "../components/FloatingSupportMenu";
 import {
   changePasswordApi,
   getApiErrorMessage,
@@ -61,93 +63,115 @@ function ChangePasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fff7ed_0%,#f8fafc_55%)] px-4 py-10">
-      <main className="mx-auto w-full max-w-xl rounded-3xl border border-orange-100 bg-white p-8 shadow-xl">
-        <h1 className="text-3xl font-extrabold text-slate-900">Đổi mật khẩu</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Nhập mật khẩu hiện tại để nhận OTP qua email, sau đó đặt mật khẩu mới.
-        </p>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_100%_-20%,#dcfce7_0%,#f8fafc_38%,#f1f5f9_100%)]">
+      <CustomerNavbar />
 
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">Mật khẩu hiện tại</span>
-            <span className="relative block">
-              <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
-                placeholder="Nhập mật khẩu hiện tại"
-              />
-            </span>
-          </label>
+      <main className="mx-auto w-full max-w-5xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+        <section className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-900 p-5 text-white shadow-xl shadow-slate-900/20 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100">
+                <FaShieldAlt className="text-[11px]" />
+                Bao mat tai khoan
+              </p>
+              <h1 className="mt-2 text-2xl font-extrabold sm:text-3xl">Doi mat khau</h1>
+              <p className="mt-1 text-sm text-emerald-50/90">
+                Xac thuc OTP truoc khi cap nhat mat khau moi de dam bao an toan.
+              </p>
+            </div>
+            <Link
+              to="/profile"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+            >
+              <FaArrowLeft className="text-xs" />
+              Quay lai trang ca nhan
+            </Link>
+          </div>
+        </section>
 
-          <button
-            type="button"
-            onClick={handleRequestOtp}
-            disabled={isRequestingOtp}
-            className="inline-flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-600 transition-colors hover:bg-orange-100"
-          >
-            <FaPaperPlane className="text-xs" />
-            {isRequestingOtp ? "Đang gửi OTP..." : "Gửi OTP"}
-          </button>
+        <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_170px] sm:items-end">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Mat khau hien tai</span>
+                <span className="relative block">
+                  <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                    placeholder="Nhap mat khau hien tai"
+                  />
+                </span>
+              </label>
 
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">OTP</span>
-            <span className="relative block">
-              <FaKey className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
-              <input
-                type="text"
-                value={otp}
-                onChange={(event) => setOtp(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
-                placeholder="Nhập OTP"
-              />
-            </span>
-          </label>
+              <button
+                type="button"
+                onClick={handleRequestOtp}
+                disabled={isRequestingOtp}
+                className="inline-flex h-[42px] items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isRequestingOtp ? <FaSpinner className="text-xs animate-spin" /> : <FaPaperPlane className="text-xs" />}
+                {isRequestingOtp ? "Dang gui OTP..." : "Gui OTP"}
+              </button>
+            </div>
 
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">Mật khẩu mới</span>
-            <span className="relative block">
-              <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                minLength={6}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
-                placeholder="Nhập mật khẩu mới"
-              />
-            </span>
-          </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">OTP</span>
+              <span className="relative block">
+                <FaKey className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
+                <input
+                  type="text"
+                  value={otp}
+                  onChange={(event) => setOtp(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Nhap ma OTP"
+                />
+              </span>
+            </label>
 
-          {errorMessage ? (
-            <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
-              {errorMessage}
-            </p>
-          ) : null}
-          {message ? (
-            <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-600">
-              {message}
-            </p>
-          ) : null}
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Mat khau moi</span>
+              <span className="relative block">
+                <FaLock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  minLength={6}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Nhap mat khau moi (toi thieu 6 ky tu)"
+                />
+              </span>
+            </label>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
-          >
-            {isSubmitting ? "Đang cập nhật..." : "Xác nhận đổi mật khẩu"}
-          </button>
-        </form>
+            {errorMessage ? (
+              <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                {errorMessage}
+              </p>
+            ) : null}
 
-        <div className="mt-5 text-center">
-          <Link to="/dashboard" className="text-sm font-medium text-orange-600 hover:text-orange-700">
-            Quay lại dashboard
-          </Link>
-        </div>
+            {message ? (
+              <p className="inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                <FaCheckCircle className="text-xs" />
+                {message}
+              </p>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSubmitting ? <FaSpinner className="text-xs animate-spin" /> : null}
+              {isSubmitting ? "Dang cap nhat..." : "Xac nhan doi mat khau"}
+            </button>
+          </form>
+        </section>
       </main>
+
+      <FloatingSupportMenu />
     </div>
   );
 }
