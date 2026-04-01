@@ -142,10 +142,7 @@ public class TripService {
         return modelMapper.map(saved, SeatResponse.class);
     }
 
-    public void handleBookingConfirmed(String tripId, Integer seatCount, String bookingId, String correlationId) {
-        log.info("Finalize hold from BookingConfirmedEvent bookingId={}, tripId={}, seatCount={}, correlationId={}",
-                bookingId, tripId, seatCount, correlationId);
-    }
+
 
 
     public PageResponse<TripResponse> getAllTrips(String startWardId,

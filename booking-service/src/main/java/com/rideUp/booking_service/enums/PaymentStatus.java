@@ -1,4 +1,4 @@
-package com.rideUp.payment_service.enums;
+package com.rideUp.booking_service.enums;
 
 public enum PaymentStatus {
     PENDING,

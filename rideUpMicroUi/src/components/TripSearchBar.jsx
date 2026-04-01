@@ -89,18 +89,18 @@ function TripSearchBar({
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-600">RideUp now</p>
-          <h2 className="text-lg font-extrabold text-slate-900">Ban muon di dau hom nay?</h2>
+          <h2 className="text-lg font-extrabold text-slate-900">Bạn muốn đi đâu hôm nay?</h2>
         </div>
         <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          Danh sach cap nhat theo bo loc
+          Danh sách chuyến đi liên tục được cập nhật
         </span>
       </div>
 
       <form className="space-y-3" onSubmit={onSubmit}>
         <div className="grid gap-2.5 lg:grid-cols-4">
           <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Tinh/Thanh di</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Tỉnh/Thành đi</span>
             <span className="relative block">
               <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
               <LocationDropdown
@@ -109,20 +109,20 @@ function TripSearchBar({
                 onOpen={onProvinceFocus}
                 onChange={(val) => onChange("startProvinceId", val)}
                 options={startProvinceOptions}
-                placeholder="Chon tinh/thanh di"
+                placeholder="Chọn tinh/thành đi"
               />
             </span>
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Phuong/Xa di</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Phường/Xã đi</span>
             <span className="relative block">
               <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
               <LocationDropdown
                 value={form.startWardId}
                 onChange={(val) => onChange("startWardId", val)}
                 options={startWardOptions}
-                placeholder="Chon phuong/xa di"
+                placeholder="Chọn phường/xã đi"
                 disabled={!form.startProvinceId || isLoadingStartWards}
                 isLoading={isLoadingStartWards}
               />
@@ -130,7 +130,7 @@ function TripSearchBar({
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Tinh/Thanh den</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Tỉnh/Thành đến</span>
             <span className="relative block">
               <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500" />
               <LocationDropdown
@@ -138,20 +138,20 @@ function TripSearchBar({
                 onOpen={onProvinceFocus}
                 onChange={(val) => onChange("endProvinceId", val)}
                 options={endProvinceOptions}
-                placeholder="Chon tinh/thanh den"
+                placeholder="Chọn tỉnh/thành đến"
               />
             </span>
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Phuong/Xa den</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Phường/Xã đến</span>
             <span className="relative block">
               <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500" />
               <LocationDropdown
                 value={form.endWardId}
                 onChange={(val) => onChange("endWardId", val)}
                 options={endWardOptions}
-                placeholder="Chon phuong/xa den"
+                placeholder="Chọn phường/xã đến"
                 disabled={!form.endProvinceId || isLoadingEndWards}
                 isLoading={isLoadingEndWards}
               />
@@ -161,7 +161,7 @@ function TripSearchBar({
 
         <div className="grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_220px]">
           <label className="block">
-          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Ngay di</span>
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-600">Ngày đi</span>
           <span className="relative block">
             <FaCalendarAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-600" />
             <input

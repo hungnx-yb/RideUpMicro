@@ -76,6 +76,7 @@ app:
       payment-failed: ${KAFKA_TOPIC_PAYMENT_FAILED:payment.failed}
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
+      seat-release: ${KAFKA_TOPIC_SEAT_RELEASE:trip.seat-release}
 
 booking:
   expire:

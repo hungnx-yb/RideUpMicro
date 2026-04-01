@@ -1,18 +1,36 @@
 package com.rideUp.payment_service.util;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rideUp.payment_service.config.VnpayConfig;
+import com.rideUp.payment_service.entity.Payment;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.stream.Collectors;
 
+
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class VnpayUtil {
+
+    VnpayConfig vnpayConfig;
+
     public static String hmacSHA512(final String key, final String data) {
         try {
             if (key == null || data == null) {
@@ -50,16 +68,6 @@ public class VnpayUtil {
     }
 
 
-    public static String getRandomNumber(int len) {
-        Random rnd = new Random();
-        String chars = "0123456789";
-        StringBuilder sb = new StringBuilder(len);
-        for (int i = 0; i < len; i++) {
-            sb.append(chars.charAt(rnd.nextInt(chars.length())));
-        }
-        return sb.toString();
-    }
-
     public static String getPaymentURL(Map<String, String> paramsMap, boolean encodeKey) {
         return paramsMap.entrySet().stream()
                 .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
@@ -72,6 +80,48 @@ public class VnpayUtil {
                                         , StandardCharsets.US_ASCII))
                 .collect(Collectors.joining("&"));
     }
+
+    public static String callApi(String url, Map<String, String> params) {
+
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+
+            headers.set("User-Agent", "Mozilla/5.0");
+            headers.set("Accept", "*/*");
+
+            HttpEntity<Map<String, String>> request =
+                    new HttpEntity<>(params, headers);
+
+            ResponseEntity<String> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.POST,
+                            request,
+                            String.class
+                    );
+
+            return response.getBody();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Call VNPAY API failed", e);
+        }
+    }
+
+
+
+    public static Map<String, String> parseResponse(String response) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            return mapper.readValue(response, new TypeReference<Map<String, String>>() {});
+        } catch (Exception e) {
+            throw new RuntimeException("Parse response failed", e);
+        }
+    }
+
 
 }
 

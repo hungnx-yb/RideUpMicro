@@ -1,6 +1,7 @@
 package com.rideUp.booking_service.dto.response;
 
 import com.rideUp.booking_service.enums.BookingStatus;
+import com.rideUp.booking_service.enums.PaymentStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,6 +27,7 @@ public class BookingResponse {
     String tripId;
     BookingStatus status;
     String paymentId;
+    PaymentStatus paymentStatus;
 
     Integer seatCount;
     BigDecimal pricePerSeat;

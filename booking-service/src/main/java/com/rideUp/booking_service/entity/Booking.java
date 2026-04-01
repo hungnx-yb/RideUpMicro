@@ -1,6 +1,7 @@
 package com.rideUp.booking_service.entity;
 
 import com.rideUp.booking_service.enums.BookingStatus;
+import com.rideUp.booking_service.enums.PaymentStatus;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -36,6 +37,10 @@ public class Booking {
     BookingStatus status;
 
     String paymentId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    PaymentStatus paymentStatus;
 
     Integer seatCount;
 

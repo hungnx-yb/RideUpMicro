@@ -26,23 +26,7 @@ public class BookingDomainEventConsumer {
     ObjectMapper objectMapper;
         ProcessedKafkaEventRepository processedKafkaEventRepository;
 
-    @KafkaListener(
-            topics = "${app.kafka.topics.booking-confirmed}",
-            groupId = "${spring.kafka.consumer.group-id}"
-    )
-        @Transactional
-    public void onBookingConfirmed(String payload) throws Exception {
-        BookingConfirmedEvent event = objectMapper.readValue(payload, BookingConfirmedEvent.class);
 
-                if (!markEventProcessed(event.getEventId(), "BOOKING_CONFIRMED", event.getCorrelationId())) {
-                        return;
-                }
-
-        log.info("[BookingConfirmedEvent] eventId={}, bookingId={}, tripId={}, correlationId={}",
-                event.getEventId(), event.getBookingId(), event.getTripId(), event.getCorrelationId());
-
-        tripService.handleBookingConfirmed(event.getTripId(), event.getSeatCount(), event.getBookingId(), event.getCorrelationId());
-    }
 
     @KafkaListener(
             topics = "${app.kafka.topics.booking-cancelled}",

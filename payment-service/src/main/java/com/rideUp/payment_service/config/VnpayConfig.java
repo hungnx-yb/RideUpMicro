@@ -40,6 +40,9 @@ public class VnpayConfig {
     @Value("${vnpay.expire-minutes:15}")
     private int expireMinutes;
 
+    @Value("${vnpay.refund-url}")
+    private String refundUrl;
+
     public Map<String, String> getBaseParams() {
         Map<String, String> params = new HashMap<>();
         params.put("vnp_Version", version);
@@ -51,6 +54,7 @@ public class VnpayConfig {
         params.put("vnp_ReturnUrl", returnUrl);
         return params;
     }
+
 }
 
 

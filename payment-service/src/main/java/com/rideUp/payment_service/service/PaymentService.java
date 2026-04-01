@@ -21,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -29,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
+
 import java.util.UUID;
 
 @Slf4j
@@ -58,7 +58,7 @@ public class PaymentService {
 				existingPayment.setCorrelationId(request.getCorrelationId());
 				existingPayment = paymentRepository.save(existingPayment);
 			}
-			return toResponse(existingPayment);
+			return modelMapper.map(existingPayment, PaymentResponse.class);
 		}
 
 		Payment payment = Payment.builder()
@@ -69,7 +69,7 @@ public class PaymentService {
 				.status(PaymentStatus.PENDING)
 				.build();
 
-		if (request.getPaymentMethod() == PaymentMethod.CASH ) {
+		if (request.getPaymentMethod() == PaymentMethod.CASH) {
 			payment.setStatus(PaymentStatus.PENDING);
 			payment.setTransactionId("CASH-" + UUID.randomUUID());
 		}
@@ -84,7 +84,8 @@ public class PaymentService {
 			savedPayment = paymentRepository.save(savedPayment);
 		}
 
-		if (savedPayment.getStatus() == PaymentStatus.PAID || (savedPayment.getStatus() == PaymentStatus.PENDING  && savedPayment.getMethod()== PaymentMethod.CASH) ) {
+		if (savedPayment.getStatus() == PaymentStatus.PAID || (savedPayment.getStatus() == PaymentStatus.PENDING
+				&& savedPayment.getMethod() == PaymentMethod.CASH)) {
 			publishPaymentCompleted(savedPayment);
 		}
 
@@ -120,44 +121,44 @@ public class PaymentService {
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
 		if (payment.getStatus() == PaymentStatus.PAID || payment.getStatus() == PaymentStatus.FAILED) {
-			return toResponse(payment);
+			return modelMapper.map(payment, PaymentResponse.class);
 		}
 
 		String responseCode = callbackParams.get("vnp_ResponseCode");
 		String transactionNo = callbackParams.get("vnp_TransactionNo");
-
+		String transactionDate = callbackParams.get("vnp_PayDate");
 		if ("00".equals(responseCode)) {
 			payment.setStatus(PaymentStatus.PAID);
-			payment.setTransactionId(transactionNo == null || transactionNo.isBlank() ? payment.getTransactionId() : transactionNo);
+			payment.setTransactionId(
+					transactionNo == null || transactionNo.isBlank() ? payment.getTransactionId() : transactionNo);
+			payment.setPayDate(transactionDate);
 			payment.setFailureReason(null);
 			payment.setPaidAt(LocalDateTime.now());
 
 			Payment savedPayment = paymentRepository.save(payment);
 			publishPaymentCompleted(savedPayment);
-			return toResponse(savedPayment);
+			return modelMapper.map(savedPayment, PaymentResponse.class);
 		}
 
 		payment.setStatus(PaymentStatus.FAILED);
 		payment.setFailureReason("VNPay response code: " + responseCode);
-		payment.setPaidAt(null);
-
 		Payment savedPayment = paymentRepository.save(payment);
 		publishPaymentFailed(savedPayment, savedPayment.getFailureReason());
-		return toResponse(savedPayment);
+		return modelMapper.map(savedPayment, PaymentResponse.class);
 	}
 
 	@Transactional(readOnly = true)
 	public PaymentResponse getPaymentById(String paymentId) {
 		Payment payment = paymentRepository.findById(paymentId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
-		return toResponse(payment);
+		return modelMapper.map(payment, PaymentResponse.class);
 	}
 
 	@Transactional(readOnly = true)
 	public PaymentResponse getPaymentByBookingId(String bookingId) {
 		Payment payment = paymentRepository.findByBookingId(bookingId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
-		return toResponse(payment);
+		return modelMapper.map(payment, PaymentResponse.class);
 	}
 
 	@Transactional
@@ -166,7 +167,7 @@ public class PaymentService {
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
 		if (payment.getStatus() == PaymentStatus.PAID) {
-			return toResponse(payment);
+			return modelMapper.map(payment, PaymentResponse.class);
 		}
 
 		if (payment.getStatus() == PaymentStatus.FAILED) {
@@ -180,7 +181,7 @@ public class PaymentService {
 
 		Payment savedPayment = paymentRepository.save(payment);
 		publishPaymentCompleted(savedPayment);
-		return toResponse(savedPayment);
+		return modelMapper.map(savedPayment, PaymentResponse.class);
 	}
 
 	@Transactional
@@ -193,7 +194,7 @@ public class PaymentService {
 		}
 
 		if (payment.getStatus() == PaymentStatus.FAILED) {
-			return toResponse(payment);
+			return modelMapper.map(payment, PaymentResponse.class);
 		}
 
 		payment.setStatus(PaymentStatus.FAILED);
@@ -202,7 +203,7 @@ public class PaymentService {
 
 		Payment savedPayment = paymentRepository.save(payment);
 		publishPaymentFailed(savedPayment, request.getReason());
-		return toResponse(savedPayment);
+		return modelMapper.map(savedPayment, PaymentResponse.class);
 	}
 
 	private void publishPaymentCompleted(Payment payment) {
@@ -223,22 +224,7 @@ public class PaymentService {
 		}
 	}
 
-	private PaymentResponse toResponse(Payment payment) {
-		return PaymentResponse.builder()
-				.id(payment.getId())
-				.bookingId(payment.getBookingId())
-				.correlationId(payment.getCorrelationId())
-				.amount(payment.getAmount())
-				.method(payment.getMethod())
-				.status(payment.getStatus())
-				.transactionId(payment.getTransactionId())
-				.paymentUrl(payment.getPaymentUrl())
-				.failureReason(payment.getFailureReason())
-				.paidAt(payment.getPaidAt())
-				.createdAt(payment.getCreatedAt())
-				.updatedAt(payment.getUpdatedAt())
-				.build();
-	}
+
 
 	private String generateVnpayPaymentUrl(Payment payment, String clientIp) {
 		Map<String, String> params = vnpayConfig.getBaseParams();

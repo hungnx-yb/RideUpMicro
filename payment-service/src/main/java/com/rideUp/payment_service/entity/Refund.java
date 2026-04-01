@@ -1,7 +1,6 @@
 package com.rideUp.payment_service.entity;
 
-import com.rideUp.payment_service.enums.PaymentMethod;
-import com.rideUp.payment_service.enums.PaymentStatus;
+import com.rideUp.payment_service.enums.RefundStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -18,41 +17,30 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Payment {
-
+public class Refund {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
 
-
-    @Column(nullable = false, unique = true)
-    String bookingId;
-
-    @Column(length = 64)
-    String correlationId;
-
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_id", nullable = false)
+    Payment payment;
 
     @Column(nullable = false)
     BigDecimal amount;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    PaymentMethod method;
+    RefundStatus status;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    PaymentStatus status;
+    @Column(nullable = false, unique = true)
+    String requestId;
 
-    String transactionId;
+    String responseCode;
 
-    @Column(columnDefinition = "TEXT")
-    String paymentUrl;
-
-    LocalDateTime paidAt;
-
-    // lỗi nếu fail
     String failureReason;
 
+    LocalDateTime refundedAt;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
@@ -60,6 +48,4 @@ public class Payment {
 
     @UpdateTimestamp
     LocalDateTime updatedAt;
-
-    String payDate;
 }

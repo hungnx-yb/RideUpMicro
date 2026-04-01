@@ -19,7 +19,9 @@ public enum ErrorCode {
     KAFKA_PUBLISH_FAILED(7007, "Failed to publish Kafka event", HttpStatus.BAD_GATEWAY),
     INVALID_PAYMENT_AMOUNT(7008, "Invalid payment amount", HttpStatus.BAD_REQUEST),
     PAYMENT_URL_NOT_FOUND(7009, "Payment URL not found", HttpStatus.NOT_FOUND),
-    PAYMENT_URL_WAIT_INTERRUPTED(7010, "Interrupted while waiting for payment URL", HttpStatus.INTERNAL_SERVER_ERROR);
+    PAYMENT_URL_WAIT_INTERRUPTED(7010, "Interrupted while waiting for payment URL", HttpStatus.INTERNAL_SERVER_ERROR),
+    PAYMENT_ALREADY_REFUNDED(7011, "Payment already refunded" , HttpStatus.BAD_REQUEST ),
+    REFUND_FAILED(7012, "Failed to refund" , HttpStatus.BAD_REQUEST ),;
     private Integer code;
     private String message;
     private HttpStatus httpStatus;

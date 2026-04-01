@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rideUp.booking_service.dto.event.BookingCancelledEvent;
 import com.rideUp.booking_service.dto.event.BookingConfirmedEvent;
 import com.rideUp.booking_service.dto.event.PaymentRequestedEvent;
+import com.rideUp.booking_service.dto.event.SeatReleaseEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -34,6 +35,10 @@ public class BookingEventPublisher{
     @NonFinal
     @Value("${app.kafka.topics.booking-cancelled}")
     String bookingCancelledTopic;
+
+    @NonFinal
+    @Value("${app.kafka.topics.seat-release}")
+    String seatReleaseTopic;
 
     public void publishPaymentRequested(PaymentRequestedEvent event) {
         try {
@@ -65,6 +70,17 @@ public class BookingEventPublisher{
                     event.getEventId(), event.getBookingId(), event.getCorrelationId());
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize BookingCancelledEvent", ex);
+        }
+    }
+
+    public void publishSeatRelease(SeatReleaseEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(seatReleaseTopic, event.getBookingId(), payload);
+            log.info("Published SeatReleaseEvent eventId={}, bookingId={}, tripId={}, correlationId={}",
+                    event.getEventId(), event.getBookingId(), event.getTripId(), event.getCorrelationId());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize SeatReleaseEvent", ex);
         }
     }
 }

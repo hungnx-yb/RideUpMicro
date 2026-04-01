@@ -6,6 +6,7 @@ import com.rideUp.booking_service.dto.request.PaymentCompletedRequest;
 import com.rideUp.booking_service.dto.request.PaymentFailedRequest;
 import com.rideUp.booking_service.dto.event.BookingCancelledEvent;
 import com.rideUp.booking_service.dto.event.BookingConfirmedEvent;
+import com.rideUp.booking_service.dto.event.SeatReleaseEvent;
 import com.rideUp.booking_service.dto.event.PaymentRequestedEvent;
 import com.rideUp.booking_service.dto.response.BookingResponse;
 import com.rideUp.booking_service.dto.response.ApiResponse;
@@ -15,6 +16,7 @@ import com.rideUp.booking_service.dto.request.SeatResponse;
 import com.rideUp.booking_service.entity.Booking;
 import com.rideUp.booking_service.enums.BookingStatus;
 import com.rideUp.booking_service.enums.PaymentMethod;
+import com.rideUp.booking_service.enums.PaymentStatus;
 import com.rideUp.booking_service.exception.AppException;
 import com.rideUp.booking_service.exception.ErrorCode;
 import com.rideUp.booking_service.feignClient.TripServiceClient;
@@ -63,6 +65,7 @@ public class BookingService {
         Booking booking = modelMapper.map(request, Booking.class);
         booking.setBookingCode(generateBookingCode());
         booking.setStatus(BookingStatus.PENDING);
+        booking.setPaymentStatus(PaymentStatus.PENDING);
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
         booking.setReservedAt(now);
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
@@ -85,11 +88,12 @@ public class BookingService {
         }
 
         if (booking.getStatus() != BookingStatus.PENDING) {
-            throw new AppException(ErrorCode.BOOKING_NOT_PENDING);
+            return toResponse(booking);
         }
 
         booking.setPaymentId(request.getPaymentId());
         booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setPaymentStatus(PaymentStatus.PAID);
         booking.setExpiresAt(null);
         booking.setCancelReason(null);
         booking.setCancelledAt(null);
@@ -108,16 +112,18 @@ public class BookingService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (booking.getStatus() == BookingStatus.CANCELLED || booking.getStatus() == BookingStatus.EXPIRED) {
+        if (booking.getStatus() == BookingStatus.CANCELLED_PAYMENT_FAILED || booking.getStatus() == BookingStatus.EXPIRED
+                || booking.getStatus() == BookingStatus.CANCELLED_USER) {
+            return modelMapper.map(booking, BookingResponse.class);
+        }
+
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
             return toResponse(booking);
         }
 
-        if (booking.getStatus() != BookingStatus.PENDING) {
-            throw new AppException(ErrorCode.BOOKING_NOT_PENDING);
-        }
-
-        booking.setStatus(BookingStatus.CANCELLED);
+        booking.setStatus(BookingStatus.CANCELLED_PAYMENT_FAILED);
         booking.setPaymentId(request.getPaymentId());
+        booking.setPaymentStatus(PaymentStatus.FAILED);
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelReason(
                 request.getReason() == null || request.getReason().isBlank()
@@ -126,6 +132,7 @@ public class BookingService {
         );
 
         Booking saved = bookingRepository.save(booking);
+        publishSeatRelease(saved, request.getCorrelationId(), saved.getCancelReason());
         publishBookingCancelled(saved, request.getCorrelationId(), saved.getCancelReason());
 
         return toResponse(saved);
@@ -150,13 +157,21 @@ public class BookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        ensurePendingStatus(booking);
+        ensureCancelableStatus(booking);
 
-        booking.setStatus(BookingStatus.CANCELLED);
+        booking.setStatus(BookingStatus.CANCELLED_USER);
+        if (booking.getPaymentStatus() != PaymentStatus.PAID) {
+            booking.setPaymentStatus(PaymentStatus.FAILED);
+        }
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelReason(request == null ? null : request.getReason());
 
         Booking saved = bookingRepository.save(booking);
+        publishSeatRelease(
+            saved,
+            UUID.randomUUID().toString(),
+            saved.getCancelReason() == null || saved.getCancelReason().isBlank() ? "Cancelled by user" : saved.getCancelReason()
+        );
         publishBookingCancelled(
             saved,
             UUID.randomUUID().toString(),
@@ -170,7 +185,7 @@ public class BookingService {
     public int expirePendingBookings() {
         LocalDateTime now = LocalDateTime.now();
         List<Booking> pendingExpiredBookings = bookingRepository
-                .findByStatusAndExpiresAtBefore(BookingStatus.PENDING, now);
+            .findByStatusAndExpiresAtBefore(BookingStatus.PENDING, now);
 
         if (pendingExpiredBookings.isEmpty()) {
             return 0;
@@ -180,6 +195,7 @@ public class BookingService {
         for (Booking booking : pendingExpiredBookings) {
             try {
                 booking.setStatus(BookingStatus.EXPIRED);
+                booking.setPaymentStatus(PaymentStatus.FAILED);
                 booking.setCancelledAt(now);
                 booking.setCancelReason("Payment timeout");
 
@@ -188,6 +204,7 @@ public class BookingService {
                         UUID.randomUUID().toString(),
                         "Payment timeout"
                 );
+                publishSeatRelease(booking, UUID.randomUUID().toString(), "Payment timeout");
                 expiredCount++;
             } catch (AppException ex) {
                 log.warn("Failed to auto-expire booking {} due to release error: {}", booking.getId(), ex.getMessage());
@@ -221,35 +238,31 @@ public class BookingService {
         }
     }
 
-    private void releaseTripSeats(String tripId, Integer seatCount) {
-        try {
-            ApiResponse<SeatResponse> response = tripServiceClient.releaseSeats(
-                    SeatReleaseRequest.builder()
-                            .tripId(tripId)
-                            .seatCount(seatCount)
-                            .build()
-            );
-            if (response == null || response.getResult() == null) {
-                throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
-            }
-        } catch (FeignException ex) {
-            throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
-        }
-    }
-
-    private void ensurePendingStatus(Booking booking) {
-        if (booking.getStatus() == BookingStatus.CONFIRMED) {
-            throw new AppException(ErrorCode.BOOKING_ALREADY_CONFIRMED);
-        }
-        if (booking.getStatus() == BookingStatus.CANCELLED) {
+    private void ensureCancelableStatus(Booking booking) {
+        if (booking.getStatus() == BookingStatus.CANCELLED_USER
+                || booking.getStatus() == BookingStatus.CANCELLED_PAYMENT_FAILED) {
             throw new AppException(ErrorCode.BOOKING_ALREADY_CANCELLED);
         }
         if (booking.getStatus() == BookingStatus.EXPIRED) {
             throw new AppException(ErrorCode.BOOKING_EXPIRED);
         }
-        if (booking.getStatus() != BookingStatus.PENDING) {
-            throw new AppException(ErrorCode.BOOKING_NOT_PENDING);
+        if (booking.getStatus() == BookingStatus.COMPLETED) {
+            throw new AppException(ErrorCode.BOOKING_ALREADY_CONFIRMED);
         }
+    }
+
+    private void publishSeatRelease(Booking booking, String correlationId, String reason) {
+        SeatReleaseEvent event = SeatReleaseEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .correlationId(correlationId)
+                .bookingId(booking.getId())
+                .tripId(booking.getTripId())
+                .seatCount(booking.getSeatCount())
+                .reason(reason)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        bookingEventPublisher.publishSeatRelease(event);
     }
 
     private String generateBookingCode() {
@@ -321,6 +334,7 @@ public class BookingService {
                 .seatCount(booking.getSeatCount())
                 .pricePerSeat(booking.getPricePerSeat())
                 .totalAmount(booking.getTotalAmount())
+                .paymentStatus(booking.getPaymentStatus())
                 .pickupLat(booking.getPickupLat())
                 .pickupLng(booking.getPickupLng())
                 .pickupWardId(booking.getPickupWardId())
