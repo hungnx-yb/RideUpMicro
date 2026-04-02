@@ -31,14 +31,14 @@ const steps = [
 
 function HowItWorks() {
   return (
-    <section className="bg-[#f6f3ee] py-14 sm:py-16">
+    <section className="bg-[radial-gradient(circle_at_100%_-20%,#dcfce7_0%,#f8fafc_38%,#f1f5f9_100%)] py-14 sm:py-16">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="reveal-on-scroll mb-8 text-center sm:mb-10">
           <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-            Cách hoạt động
+            4 bước đặt chuyến
           </h2>
           <p className="mt-2 text-sm text-slate-500 sm:text-base">
-            Chỉ với 4 bước đơn giản để bắt đầu chuyến đi tiết kiệm với RideUp.
+            Luồng ngắn gọn, bám sát thói quen dùng app gọi xe phổ biến.
           </p>
         </div>
 
@@ -55,7 +55,7 @@ function HowItWorks() {
                   alt={step.title}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
-                <span className="absolute bottom-3 left-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-xs font-bold text-white">
+                <span className="absolute bottom-3 left-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-xs font-bold text-white">
                   {step.id}
                 </span>
               </div>

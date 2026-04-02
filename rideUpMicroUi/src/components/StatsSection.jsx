@@ -25,7 +25,7 @@ const stats = [
 
 function StatsSection() {
   return (
-    <section className="bg-gradient-to-r from-orange-600 to-red-500 py-6 text-white sm:py-8">
+    <section className="bg-gradient-to-r from-emerald-600 to-emerald-500 py-6 text-white sm:py-8">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-2 gap-5 px-4 sm:px-6 md:grid-cols-4 lg:px-8">
         {stats.map((item, index) => {
           const Icon = item.icon;
@@ -36,9 +36,9 @@ function StatsSection() {
               className="reveal-on-scroll rounded-xl bg-white/5 p-3 text-center ring-1 ring-white/15 sm:p-4"
               style={{ "--reveal-delay": `${(index + 1) * 90}ms` }}
             >
-              <Icon className="mx-auto mb-2 text-sm text-orange-100 sm:text-base" />
+              <Icon className="mx-auto mb-2 text-sm text-emerald-100 sm:text-base" />
               <p className="text-2xl font-bold sm:text-3xl">{item.value}</p>
-              <p className="mt-1 text-xs text-orange-100 sm:text-sm">{item.label}</p>
+              <p className="mt-1 text-xs text-emerald-100 sm:text-sm">{item.label}</p>
             </article>
           );
         })}

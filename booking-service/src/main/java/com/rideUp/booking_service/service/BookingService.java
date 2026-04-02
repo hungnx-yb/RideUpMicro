@@ -1,18 +1,11 @@
 package com.rideUp.booking_service.service;
 
-import com.rideUp.booking_service.dto.request.CancelBookingRequest;
-import com.rideUp.booking_service.dto.request.CreateBookingRequest;
-import com.rideUp.booking_service.dto.request.PaymentCompletedRequest;
-import com.rideUp.booking_service.dto.request.PaymentFailedRequest;
+import com.rideUp.booking_service.dto.request.*;
 import com.rideUp.booking_service.dto.event.BookingCancelledEvent;
 import com.rideUp.booking_service.dto.event.BookingConfirmedEvent;
-import com.rideUp.booking_service.dto.event.SeatReleaseEvent;
 import com.rideUp.booking_service.dto.event.PaymentRequestedEvent;
 import com.rideUp.booking_service.dto.response.BookingResponse;
 import com.rideUp.booking_service.dto.response.ApiResponse;
-import com.rideUp.booking_service.dto.request.SeatReleaseRequest;
-import com.rideUp.booking_service.dto.request.SeatReserveRequest;
-import com.rideUp.booking_service.dto.request.SeatResponse;
 import com.rideUp.booking_service.entity.Booking;
 import com.rideUp.booking_service.enums.BookingStatus;
 import com.rideUp.booking_service.enums.PaymentMethod;
@@ -20,7 +13,7 @@ import com.rideUp.booking_service.enums.PaymentStatus;
 import com.rideUp.booking_service.exception.AppException;
 import com.rideUp.booking_service.exception.ErrorCode;
 import com.rideUp.booking_service.feignClient.TripServiceClient;
-import com.rideUp.booking_service.kafka.producer.BookingEventPublisher;
+import com.rideUp.booking_service.kafka.producer.BookingServicePublisher;
 import com.rideUp.booking_service.repository.BookingRepository;
 import com.rideUp.booking_service.utils.SecurityUtils;
 import feign.FeignException;
@@ -30,7 +23,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.http.conn.scheme.SchemeRegistry;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -51,7 +43,7 @@ public class BookingService {
     static DateTimeFormatter CODE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     BookingRepository bookingRepository;
     TripServiceClient tripServiceClient;
-    BookingEventPublisher bookingEventPublisher;
+    BookingServicePublisher bookingServicePublisher;
     ModelMapper modelMapper;
 
     @NonFinal
@@ -72,7 +64,7 @@ public class BookingService {
         booking.setExpiresAt(request.getPaymentMethod() == PaymentMethod.VNPAY ? now.plusSeconds(expirySeconds) : null);
         Booking saved = bookingRepository.save(booking);
         publishPaymentRequested(saved, request.getPaymentMethod(), now);
-        return toResponse(saved);
+        return modelMapper.map(saved, BookingResponse.class);
     }
 
     @Transactional
@@ -84,11 +76,11 @@ public class BookingService {
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (booking.getStatus() == BookingStatus.CONFIRMED) {
-            return toResponse(booking);
+            return modelMapper.map(booking, BookingResponse.class);
         }
 
         if (booking.getStatus() != BookingStatus.PENDING) {
-            return toResponse(booking);
+            return modelMapper.map(booking, BookingResponse.class);
         }
 
         booking.setPaymentId(request.getPaymentId());
@@ -101,7 +93,7 @@ public class BookingService {
         Booking saved = bookingRepository.save(booking);
         publishBookingConfirmed(saved, request.getCorrelationId());
 
-        return toResponse(saved);
+        return modelMapper.map(saved, BookingResponse.class);
     }
 
     @Transactional
@@ -118,7 +110,7 @@ public class BookingService {
         }
 
         if (booking.getStatus() == BookingStatus.CONFIRMED) {
-            return toResponse(booking);
+            return modelMapper.map(booking, BookingResponse.class);
         }
 
         booking.setStatus(BookingStatus.CANCELLED_PAYMENT_FAILED);
@@ -132,23 +124,23 @@ public class BookingService {
         );
 
         Booking saved = bookingRepository.save(booking);
-        publishSeatRelease(saved, request.getCorrelationId(), saved.getCancelReason());
         publishBookingCancelled(saved, request.getCorrelationId(), saved.getCancelReason());
-
-        return toResponse(saved);
+        return modelMapper.map(saved, BookingResponse.class);
     }
+
+
 
     public BookingResponse getBookingDetail(String bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
-        return toResponse(booking);
+        return modelMapper.map(booking, BookingResponse.class);
     }
 
     public List<BookingResponse> getMyBookings() {
         String customerId =SecurityUtils.getCurrentUserId();
         return bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)
                 .stream()
-                .map(this::toResponse)
+                .map(booking -> modelMapper.map(booking, BookingResponse.class))
                 .toList();
     }
 
@@ -165,20 +157,19 @@ public class BookingService {
         }
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelReason(request == null ? null : request.getReason());
-
+        booking.setStatus(BookingStatus.CANCELLED_USER);
         Booking saved = bookingRepository.save(booking);
-        publishSeatRelease(
-            saved,
-            UUID.randomUUID().toString(),
-            saved.getCancelReason() == null || saved.getCancelReason().isBlank() ? "Cancelled by user" : saved.getCancelReason()
-        );
-        publishBookingCancelled(
-            saved,
-            UUID.randomUUID().toString(),
-            saved.getCancelReason() == null || saved.getCancelReason().isBlank() ? "Cancelled by user" : saved.getCancelReason()
-        );
+        String correlationId = UUID.randomUUID().toString();
+        String cancelReason = saved.getCancelReason() == null || saved.getCancelReason().isBlank()
+                ? "Cancelled by user"
+                : saved.getCancelReason();
 
-        return toResponse(saved);
+        publishBookingCancelled(saved, correlationId, cancelReason);
+
+        if (saved.getPaymentStatus() == PaymentStatus.PAID) {
+            publishBookingCancellRequested(saved, correlationId, cancelReason);
+        }
+        return modelMapper.map(saved, BookingResponse.class);
     }
 
     @Transactional
@@ -190,7 +181,6 @@ public class BookingService {
         if (pendingExpiredBookings.isEmpty()) {
             return 0;
         }
-
         int expiredCount = 0;
         for (Booking booking : pendingExpiredBookings) {
             try {
@@ -198,23 +188,16 @@ public class BookingService {
                 booking.setPaymentStatus(PaymentStatus.FAILED);
                 booking.setCancelledAt(now);
                 booking.setCancelReason("Payment timeout");
-
-                publishBookingCancelled(
-                        booking,
-                        UUID.randomUUID().toString(),
-                        "Payment timeout"
-                );
-                publishSeatRelease(booking, UUID.randomUUID().toString(), "Payment timeout");
+                booking.setStatus(BookingStatus.EXPIRED);
+                publishBookingCancelled(booking, UUID.randomUUID().toString(), booking.getCancelReason());
                 expiredCount++;
             } catch (AppException ex) {
                 log.warn("Failed to auto-expire booking {} due to release error: {}", booking.getId(), ex.getMessage());
             }
         }
-
         bookingRepository.saveAll(pendingExpiredBookings);
         return expiredCount;
     }
-
     private BigDecimal reserveTripSeats(String tripId, Integer seatCount) {
         try {
             ApiResponse<SeatResponse> response = tripServiceClient.reserveSeats(
@@ -251,19 +234,7 @@ public class BookingService {
         }
     }
 
-    private void publishSeatRelease(Booking booking, String correlationId, String reason) {
-        SeatReleaseEvent event = SeatReleaseEvent.builder()
-                .eventId(UUID.randomUUID().toString())
-                .correlationId(correlationId)
-                .bookingId(booking.getId())
-                .tripId(booking.getTripId())
-                .seatCount(booking.getSeatCount())
-                .reason(reason)
-                .createdAt(LocalDateTime.now())
-                .build();
 
-        bookingEventPublisher.publishSeatRelease(event);
-    }
 
     private String generateBookingCode() {
         String code = "BK" + LocalDateTime.now().format(CODE_TIME_FORMATTER)
@@ -292,8 +263,7 @@ public class BookingService {
                 .build();
 
         log.info("Publishing payment request for bookingId={}, correlationId={}", booking.getId(), correlationId);
-
-        bookingEventPublisher.publishPaymentRequested(event);
+        bookingServicePublisher.publishPaymentRequested(event);
     }
 
     private void publishBookingConfirmed(Booking booking, String correlationId) {
@@ -305,8 +275,7 @@ public class BookingService {
                 .seatCount(booking.getSeatCount())
                 .createdAt(LocalDateTime.now())
                 .build();
-
-        bookingEventPublisher.publishBookingConfirmed(event);
+        bookingServicePublisher.publishBookingConfirmed(event);
     }
 
     private void publishBookingCancelled(Booking booking, String correlationId, String reason) {
@@ -319,37 +288,21 @@ public class BookingService {
                 .reason(reason)
                 .createdAt(LocalDateTime.now())
                 .build();
-
-        bookingEventPublisher.publishBookingCancelled(event);
+        bookingServicePublisher.publishBookingCancelled(event);
     }
 
-    private BookingResponse toResponse(Booking booking) {
-        return BookingResponse.builder()
-                .id(booking.getId())
-                .bookingCode(booking.getBookingCode())
-                .customerId(booking.getCustomerId())
+    private void publishBookingCancellRequested(Booking booking, String correlationId, String  reason) {
+        BookingCancelledEvent event = BookingCancelledEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .correlationId(correlationId)
+                .bookingId(booking.getId())
                 .tripId(booking.getTripId())
-                .status(booking.getStatus())
-                .paymentId(booking.getPaymentId())
                 .seatCount(booking.getSeatCount())
-                .pricePerSeat(booking.getPricePerSeat())
-                .totalAmount(booking.getTotalAmount())
-                .paymentStatus(booking.getPaymentStatus())
-                .pickupLat(booking.getPickupLat())
-                .pickupLng(booking.getPickupLng())
-                .pickupWardId(booking.getPickupWardId())
-                .pickupAddressText(booking.getPickupAddressText())
-                .dropoffLat(booking.getDropoffLat())
-                .dropoffLng(booking.getDropoffLng())
-                .dropoffWardId(booking.getDropoffWardId())
-                .dropoffAddressText(booking.getDropoffAddressText())
-                .note(booking.getNote())
-                .reservedAt(booking.getReservedAt())
-                .expiresAt(booking.getExpiresAt())
-                .cancelledAt(booking.getCancelledAt())
-                .cancelReason(booking.getCancelReason())
-                .createdAt(booking.getCreatedAt())
-                .updatedAt(booking.getUpdatedAt())
+                .reason(reason)
+                .createdAt(LocalDateTime.now())
                 .build();
+        bookingServicePublisher.publishBookingCancellRequest(event);
     }
+
+
 }

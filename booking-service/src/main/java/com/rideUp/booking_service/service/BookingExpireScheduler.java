@@ -16,10 +16,10 @@ public class BookingExpireScheduler {
     BookingService bookingService;
 
 //    @Scheduled(fixedDelayString = "${booking.expire.fixed-delay-ms:30000}")
-    public void expirePendingBookings() {
-        int expiredCount = bookingService.expirePendingBookings();
-        if (expiredCount > 0) {
-            log.info("Expired {} pending bookings due to payment timeout", expiredCount);
-        }
-    }
+//    public void expirePendingBookings() {
+//        int expiredCount = bookingService.expirePendingBookings();
+//        if (expiredCount > 0) {
+//            log.info("Expired {} pending bookings due to payment timeout", expiredCount);
+//        }
+//    }
 }

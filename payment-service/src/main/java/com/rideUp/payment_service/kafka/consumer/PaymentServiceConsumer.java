@@ -1,12 +1,15 @@
 package com.rideUp.payment_service.kafka.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rideUp.payment_service.dto.event.BookingCancellRequestEvent;
 import com.rideUp.payment_service.dto.event.PaymentRequestedEvent;
 import com.rideUp.payment_service.dto.request.CreatePaymentRequest;
+import com.rideUp.payment_service.dto.request.RefundRequest;
 import com.rideUp.payment_service.enums.PaymentMethod;
 import com.rideUp.payment_service.exception.AppException;
 import com.rideUp.payment_service.exception.ErrorCode;
 import com.rideUp.payment_service.service.PaymentService;
+import com.rideUp.payment_service.service.RefundService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,10 +23,11 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class PaymentEvenConsumer {
+public class PaymentServiceConsumer {
 
     PaymentService paymentService;
     ObjectMapper objectMapper;
+    RefundService refundService;
 
     @KafkaListener(
             topics = "${app.kafka.topics.payment-requested}",
@@ -69,4 +73,36 @@ public class PaymentEvenConsumer {
             throw ex;
         }
     }
+
+
+    @KafkaListener(
+            topics = "${app.kafka.topics.booking-cancell-request}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onBookingCancelRequest(String payload) throws Exception {
+        BookingCancellRequestEvent event = objectMapper.readValue(payload, BookingCancellRequestEvent.class);
+        log.info("[BookingCancellRequest] eventId={}, bookingId={},  correlationId={}",
+                event.getEventId(), event.getBookingId(),event.getCorrelationId());
+        try {
+            refundService.refundPayment(
+                RefundRequest.builder()
+                    .bookingId(event.getBookingId())
+                    .correlationId(event.getCorrelationId())
+                    .build()
+            );
+        } catch (AppException ex) {
+            // Ignore non-refundable cases to keep cancel flow idempotent.
+            if (ex.getErrorCode() == ErrorCode.PAYMENT_NOT_FOUND
+                || ex.getErrorCode() == ErrorCode.PAYMENT_STATUS_INVALID
+                || ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_REFUNDED) {
+            log.info("Skip refund for bookingId={} due to {}, correlationId={}",
+                event.getBookingId(), ex.getErrorCode(), event.getCorrelationId());
+            return;
+            }
+            throw ex;
+        }
+
+    }
+
+
 }

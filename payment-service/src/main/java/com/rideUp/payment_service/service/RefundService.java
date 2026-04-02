@@ -1,6 +1,7 @@
 package com.rideUp.payment_service.service;
 
 import com.rideUp.payment_service.config.VnpayConfig;
+import com.rideUp.payment_service.dto.request.RefundRequest;
 import com.rideUp.payment_service.dto.response.PaymentResponse;
 import com.rideUp.payment_service.dto.response.RefundResponse;
 import com.rideUp.payment_service.entity.Payment;
@@ -9,6 +10,7 @@ import com.rideUp.payment_service.enums.PaymentStatus;
 import com.rideUp.payment_service.enums.RefundStatus;
 import com.rideUp.payment_service.exception.AppException;
 import com.rideUp.payment_service.exception.ErrorCode;
+import com.rideUp.payment_service.kafka.producer.PaymentServicePublisher;
 import com.rideUp.payment_service.repository.PaymentRepository;
 import com.rideUp.payment_service.repository.RefundRepository;
 import com.rideUp.payment_service.util.VnpayUtil;
@@ -38,18 +40,19 @@ public class RefundService {
     RefundRepository refundRepository;
     VnpayConfig vnpayConfig;
     ModelMapper modelMapper;
+    PaymentServicePublisher paymentServicePublisher;
 
     @Transactional
-    public RefundResponse refundPayment(String paymentId) {
+    public RefundResponse refundPayment(RefundRequest refundRequest ) {
 
-        Payment payment = paymentRepository.findById(paymentId)
+        Payment payment = paymentRepository.findByBookingId(refundRequest.getBookingId())
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
         if (payment.getStatus() != PaymentStatus.PAID) {
             throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
         }
 
-        if (refundRepository.existsByPayment_Id(paymentId)) {
+        if (refundRepository.existsByPayment_Id(payment.getId())) {
             throw new AppException(ErrorCode.PAYMENT_ALREADY_REFUNDED);
         }
 
@@ -60,6 +63,7 @@ public class RefundService {
                 .amount(payment.getAmount())
                 .status(RefundStatus.PENDING)
                 .requestId(requestId)
+                .correlationId(refundRequest.getCorrelationId())
                 .build();
 
         refund = refundRepository.save(refund);
@@ -71,7 +75,6 @@ public class RefundService {
             String secureHash = VnpayUtil.hmacSHA512(vnpayConfig.getSecretKey(), hashData);
 
             params.put("vnp_SecureHash", secureHash);
-
             String response = VnpayUtil.callApi(vnpayConfig.getRefundUrl(), params);
             Map<String, String> responseMap = VnpayUtil.parseResponse(response);
 
@@ -81,28 +84,22 @@ public class RefundService {
                 refund.setStatus(RefundStatus.SUCCESS);
                 refund.setResponseCode("00");
                 refund.setRefundedAt(LocalDateTime.now());
-
                 payment.setStatus(PaymentStatus.REFUNDED);
-
+                paymentServicePublisher.publishRefundCompleted(refund, refundRequest.getBookingId());
             } else {
                 refund.setStatus(RefundStatus.FAILED);
                 refund.setResponseCode(responseCode);
                 refund.setFailureReason("VNPay refund failed: " + responseCode);
             }
-
             refundRepository.save(refund);
             paymentRepository.save(payment);
-
         } catch (Exception ex) {
             refund.setStatus(RefundStatus.FAILED);
             refund.setFailureReason(ex.getMessage());
             refundRepository.save(refund);
-
             throw new AppException(ErrorCode.REFUND_FAILED);
         }
-
         return modelMapper.map(refund, RefundResponse.class);
-
     }
 
     private Map<String, String> buildRefundParams(Payment payment, String requestId) {

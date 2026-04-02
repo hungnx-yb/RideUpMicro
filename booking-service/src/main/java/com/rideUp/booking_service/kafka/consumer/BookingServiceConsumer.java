@@ -3,8 +3,10 @@ package com.rideUp.booking_service.kafka.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rideUp.booking_service.dto.event.PaymentCompletedEvent;
 import com.rideUp.booking_service.dto.event.PaymentFailedEvent;
+import com.rideUp.booking_service.dto.event.RefundCompletedEvent;
 import com.rideUp.booking_service.dto.request.PaymentCompletedRequest;
 import com.rideUp.booking_service.dto.request.PaymentFailedRequest;
+import com.rideUp.booking_service.dto.request.RefundCompletedRequest;
 import com.rideUp.booking_service.service.BookingService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +19,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class BookingPaymentEventConsumer {
+public class BookingServiceConsumer {
 
     BookingService bookingService;
     ObjectMapper objectMapper;
@@ -58,4 +60,5 @@ public class BookingPaymentEventConsumer {
                         .build()
         );
     }
+
 }

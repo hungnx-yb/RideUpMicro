@@ -46,6 +46,8 @@ public class Refund {
     @Column(nullable = false, updatable = false)
     LocalDateTime createdAt;
 
+    String correlationId;
+
     @UpdateTimestamp
     LocalDateTime updatedAt;
 }

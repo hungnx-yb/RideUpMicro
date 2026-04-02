@@ -58,7 +58,8 @@ app:
       payment-requested: ${KAFKA_TOPIC_PAYMENT_REQUESTED:booking.payment.requested}
       payment-completed: ${KAFKA_TOPIC_PAYMENT_COMPLETED:payment.completed}
       payment-failed: ${KAFKA_TOPIC_PAYMENT_FAILED:payment.failed}
-
+      booking-cancell-request: ${KAFKA_TOPIC_BOOKING_CANCELL_REQUEST:booking.cancell.request}
+      refund-completed: ${KAFKA_TOPIC_REFUND_COMPLETED:refund.completed}
 vnpay:
   pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
   return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payments/vnpay-result}

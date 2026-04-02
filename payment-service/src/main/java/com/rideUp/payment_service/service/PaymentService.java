@@ -10,7 +10,7 @@ import com.rideUp.payment_service.enums.PaymentMethod;
 import com.rideUp.payment_service.enums.PaymentStatus;
 import com.rideUp.payment_service.exception.AppException;
 import com.rideUp.payment_service.exception.ErrorCode;
-import com.rideUp.payment_service.kafka.producer.PaymentEventPublisher;
+import com.rideUp.payment_service.kafka.producer.PaymentServicePublisher;
 import com.rideUp.payment_service.repository.PaymentRepository;
 import com.rideUp.payment_service.util.VnpayUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,7 +38,7 @@ import java.util.UUID;
 public class PaymentService {
 
 	PaymentRepository paymentRepository;
-	PaymentEventPublisher paymentEventPublisher;
+	PaymentServicePublisher paymentServicePublisher;
 	VnpayConfig vnpayConfig;
 	ModelMapper modelMapper;
 
@@ -208,7 +208,7 @@ public class PaymentService {
 
 	private void publishPaymentCompleted(Payment payment) {
 		try {
-			paymentEventPublisher.publishPaymentCompleted(payment);
+			paymentServicePublisher.publishPaymentCompleted(payment);
 		} catch (Exception ex) {
 			log.error("Failed to publish payment-completed event for bookingId={}", payment.getBookingId(), ex);
 			throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
@@ -217,7 +217,7 @@ public class PaymentService {
 
 	private void publishPaymentFailed(Payment payment, String reason) {
 		try {
-			paymentEventPublisher.publishPaymentFailed(payment, reason);
+			paymentServicePublisher.publishPaymentFailed(payment, reason);
 		} catch (Exception ex) {
 			log.error("Failed to publish payment-failed event for bookingId={}", payment.getBookingId(), ex);
 			throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);

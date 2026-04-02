@@ -80,15 +80,15 @@ function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" })
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950 text-white backdrop-blur">
       <div className="flex w-full items-center justify-between px-4 py-3 lg:px-6 xl:px-8">
         <div className="flex items-center gap-6">
           <a href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white">
               <FaCarSide size={14} />
             </span>
-            <span className="text-xl font-extrabold text-slate-800">
-              Ride<span className="text-orange-500">Up</span>
+            <span className="text-xl font-extrabold text-white">
+              Ride<span className="text-emerald-400">Up</span>
             </span>
           </a>
 
@@ -102,8 +102,8 @@ function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" })
                   type="button"
                   className={`text-sm font-semibold transition-colors ${
                     item.active
-                      ? "rounded-2xl border-b-2 border-orange-500 bg-orange-50 px-4 py-2 text-orange-500"
-                      : "px-3 py-2 text-slate-600 hover:text-slate-900"
+                      ? "rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-emerald-300"
+                      : "px-3 py-2 text-slate-300 hover:text-white"
                   }`}
                 >
                   <span className="inline-flex items-center gap-2">
@@ -117,7 +117,7 @@ function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" })
         </div>
 
         <div className="flex items-center gap-3">
-          <button type="button" className="relative hidden text-slate-500 sm:block">
+          <button type="button" className="relative hidden text-slate-300 sm:block">
             <FaBell size={20} />
             <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
           </button>
@@ -126,14 +126,14 @@ function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" })
             <button
               type="button"
               onClick={() => setIsMenuOpen((previous) => !previous)}
-              className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm"
+              className="flex items-center gap-3 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1.5 shadow-sm"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-sm font-bold text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-sm font-bold text-white">
                 {displayInitial}
               </span>
               <span className="hidden text-left md:block">
-                <span className="block text-sm font-bold text-slate-800">{displayName}</span>
-                <span className="block text-xs text-orange-500">Tài xế {tripsToday}</span>
+                <span className="block text-sm font-bold text-white">{displayName}</span>
+                <span className="block text-xs text-emerald-300">Tài xế {tripsToday}</span>
               </span>
               <FaChevronDown className="text-slate-400" size={12} />
             </button>

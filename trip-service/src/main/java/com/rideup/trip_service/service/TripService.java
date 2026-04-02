@@ -74,7 +74,6 @@ public class TripService {
 
         Trip saved = tripRepository.save(trip);
         return modelMapper.map(saved, TripResponse.class);
-
     }
 
     @Transactional
@@ -141,9 +140,6 @@ public class TripService {
 
         return modelMapper.map(saved, SeatResponse.class);
     }
-
-
-
 
     public PageResponse<TripResponse> getAllTrips(String startWardId,
                                                   String endWardId,

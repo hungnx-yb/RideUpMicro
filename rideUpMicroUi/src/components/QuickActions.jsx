@@ -8,14 +8,14 @@ const iconByAction = {
 
 function QuickActions() {
   const actions = [
-    { title: "Tạo chuyến mới", subtitle: "Thêm chuyến xe", color: "bg-orange-500 text-white" },
-    { title: "Quản lý chuyến", subtitle: "Xem tất cả", color: "bg-sky-100 text-sky-500" },
-    { title: "Doanh thu", subtitle: "Thống kê chi tiết", color: "bg-emerald-100 text-emerald-500" },
+    { title: "Tạo chuyến mới", subtitle: "Thêm chuyến xe", color: "bg-emerald-500 text-white" },
+    { title: "Quản lý chuyến", subtitle: "Xem tất cả", color: "bg-slate-100 text-slate-700" },
+    { title: "Doanh thu", subtitle: "Thống kê chi tiết", color: "bg-emerald-100 text-emerald-600" },
   ];
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-md">
-      <h3 className="mb-4 text-3xl font-extrabold text-slate-800">Hành động nhanh</h3>
+    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className="mb-4 text-xl font-extrabold text-slate-800">Hành động nhanh</h3>
       <div className="space-y-3">
         {actions.map((action, index) => {
           const Icon = iconByAction[action.title];
@@ -36,7 +36,7 @@ function QuickActions() {
                 </span>
               </span>
               {index === 0 ? (
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-white shadow">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white shadow">
                   +
                 </span>
               ) : (

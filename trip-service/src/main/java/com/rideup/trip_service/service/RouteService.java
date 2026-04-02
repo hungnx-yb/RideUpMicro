@@ -70,7 +70,6 @@ public class RouteService {
 		String startProvinceId = request.getStartProvinceId().trim();
 		String endProvinceId = request.getEndProvinceId().trim();
 		validateRoute(startProvinceId, endProvinceId);
-		LocalDateTime now = LocalDateTime.now();
 		Route route = modelMapper.map(request, Route.class);
 		route.setCreatedBy(SecurityUtils.getCurrentUserId());
 		return modelMapper.map(routeRepository.save(route), RouteResponse.class);
@@ -138,7 +137,6 @@ public class RouteService {
 		pageResponse.setMeta(meta);
 		return pageResponse;
 	}
-
 
 	public Integer countRoute(Boolean isActive) {
 		return routeRepository.countByIsActive(isActive);

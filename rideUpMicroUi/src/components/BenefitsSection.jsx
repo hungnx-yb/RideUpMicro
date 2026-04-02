@@ -5,29 +5,29 @@ const benefits = [
     icon: FaShieldAlt,
     title: "An toàn và uy tín",
     description: "Tất cả tài xế được xác minh danh tính, xử lý sự cố nhanh chóng.",
-    iconBg: "bg-[#2f6ff1]",
-    iconShadow: "shadow-[#2f6ff1]/35",
+    iconBg: "bg-slate-800",
+    iconShadow: "shadow-slate-800/25",
   },
   {
     icon: FaCoins,
     title: "Giá cả hợp lý",
     description: "Tối ưu chi phí đi lại với hệ thống gợi ý giá minh bạch.",
-    iconBg: "bg-[#06b84f]",
-    iconShadow: "shadow-[#06b84f]/35",
+    iconBg: "bg-emerald-500",
+    iconShadow: "shadow-emerald-500/30",
   },
   {
     icon: FaRegClock,
     title: "Đúng giờ",
     description: "Cảnh báo và cập nhật thời gian xe đến theo thời gian thực.",
-    iconBg: "bg-gradient-to-r from-[#ff6b00] to-[#ff2d2d]",
-    iconShadow: "shadow-[#ff6b00]/35",
+    iconBg: "bg-gradient-to-r from-emerald-500 to-teal-500",
+    iconShadow: "shadow-emerald-500/30",
   },
   {
     icon: FaMobileAlt,
     title: "Dễ sử dụng",
     description: "Đặt chỗ, theo dõi, thanh toán chỉ trong vài thao tác trên điện thoại.",
-    iconBg: "bg-gradient-to-r from-[#a43cf4] to-[#7c3aed]",
-    iconShadow: "shadow-[#a43cf4]/35",
+    iconBg: "bg-gradient-to-r from-slate-700 to-slate-900",
+    iconShadow: "shadow-slate-800/25",
   },
 ];
 
@@ -51,7 +51,7 @@ function BenefitsSection() {
             return (
               <article
                 key={benefit.title}
-                className="reveal-on-scroll group rounded-2xl border border-slate-200 bg-slate-50/70 p-6 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-orange-200 hover:bg-white hover:shadow-lg"
+                  className="reveal-on-scroll group rounded-2xl border border-slate-200 bg-slate-50/70 p-6 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:bg-white hover:shadow-lg"
                 style={{ "--reveal-delay": `${120 + index * 90}ms` }}
               >
                 <span

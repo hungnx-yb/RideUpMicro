@@ -5,35 +5,35 @@ const statConfig = [
     key: "totalTrips",
     label: "Tổng chuyến xe",
     icon: FaCarSide,
-    iconClass: "bg-sky-100 text-sky-500",
-    accentClass: "bg-sky-50 text-sky-400",
+    iconClass: "bg-slate-900 text-white",
+    accentClass: "bg-slate-100 text-slate-500",
   },
   {
     key: "bookedCustomers",
     label: "Khách đã đặt",
     icon: FaUsers,
-    iconClass: "bg-fuchsia-100 text-fuchsia-500",
-    accentClass: "bg-fuchsia-50 text-fuchsia-400",
+    iconClass: "bg-emerald-100 text-emerald-600",
+    accentClass: "bg-emerald-50 text-emerald-500",
   },
   {
     key: "totalRevenue",
     label: "Tổng doanh thu",
     icon: FaDollarSign,
-    iconClass: "bg-emerald-100 text-emerald-500",
-    accentClass: "bg-emerald-50 text-emerald-400",
+    iconClass: "bg-emerald-100 text-emerald-600",
+    accentClass: "bg-emerald-50 text-emerald-500",
   },
   {
     key: "averageRating",
     label: "Đánh giá TB",
     icon: FaStar,
-    iconClass: "bg-amber-100 text-amber-500",
-    accentClass: "bg-amber-50 text-amber-400",
+    iconClass: "bg-slate-100 text-slate-700",
+    accentClass: "bg-slate-100 text-slate-500",
   },
 ];
 
 function DashboardStats({ statistics }) {
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
       {statConfig.map((item) => {
         const data = statistics[item.key];
         const Icon = item.icon;
@@ -41,17 +41,17 @@ function DashboardStats({ statistics }) {
         return (
           <article
             key={item.key}
-            className="rounded-[28px] border border-slate-200 bg-white px-7 py-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-md"
+            className="rounded-[14px] border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow"
           >
-            <div className="mb-6 flex items-center justify-between">
-              <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${item.iconClass}`}>
-                <Icon size={20} />
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${item.iconClass}`}>
+                <Icon size={12} />
               </span>
-              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${item.accentClass}`}>↗</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.accentClass}`}>↗</span>
             </div>
-            <p className="text-base font-semibold text-slate-600">{item.label}</p>
-            <p className="mt-1 text-5xl font-extrabold tracking-tight text-slate-900">{data.value}</p>
-            <p className="mt-2 text-sm font-medium text-slate-400">{data.description}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+            <p className="mt-1 text-xl leading-none font-extrabold tracking-tight text-slate-900">{data.value}</p>
+            <p className="mt-1 text-[10px] font-medium text-slate-400">{data.description}</p>
           </article>
         );
       })}

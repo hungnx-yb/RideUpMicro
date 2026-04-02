@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rideUp.booking_service.dto.event.BookingCancelledEvent;
 import com.rideUp.booking_service.dto.event.BookingConfirmedEvent;
 import com.rideUp.booking_service.dto.event.PaymentRequestedEvent;
-import com.rideUp.booking_service.dto.event.SeatReleaseEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -19,7 +18,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class BookingEventPublisher{
+public class BookingServicePublisher {
 
     KafkaTemplate<String, String> kafkaTemplate;
     ObjectMapper objectMapper;
@@ -37,8 +36,8 @@ public class BookingEventPublisher{
     String bookingCancelledTopic;
 
     @NonFinal
-    @Value("${app.kafka.topics.seat-release}")
-    String seatReleaseTopic;
+    @Value("${app.kafka.topics.booking-cancell-request}")
+    String bookingCancellRequestTopic;
 
     public void publishPaymentRequested(PaymentRequestedEvent event) {
         try {
@@ -73,14 +72,16 @@ public class BookingEventPublisher{
         }
     }
 
-    public void publishSeatRelease(SeatReleaseEvent event) {
-        try {
+    public void publishBookingCancellRequest(BookingCancelledEvent event) {
+        try{
             String payload = objectMapper.writeValueAsString(event);
-            kafkaTemplate.send(seatReleaseTopic, event.getBookingId(), payload);
-            log.info("Published SeatReleaseEvent eventId={}, bookingId={}, tripId={}, correlationId={}",
-                    event.getEventId(), event.getBookingId(), event.getTripId(), event.getCorrelationId());
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Failed to serialize SeatReleaseEvent", ex);
+            kafkaTemplate.send(bookingCancellRequestTopic, event.getBookingId(), payload);
+            log.info("Published BookingCancellRequestEvent eventId={}, bookingId={}, correlationId={}",
+                    event.getEventId(), event.getBookingId(), event.getCorrelationId());
+        }
+        catch (JsonProcessingException ex){
+            throw new IllegalStateException("Failed to serialize BookingCancelledEvent", ex);
         }
     }
+
 }

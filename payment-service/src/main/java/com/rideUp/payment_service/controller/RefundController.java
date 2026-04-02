@@ -18,15 +18,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class RefundController {
 
     RefundService refundService;
-
-    @PostMapping("/{paymentId}")
-    public ApiResponse<RefundResponse> refundPayment(
-            @PathVariable String paymentId
-    ) {
-        return ApiResponse.<RefundResponse>builder()
-                .message("Refund processed successfully")
-                .result(refundService.refundPayment(paymentId))
-                .build();
-    }
+//
+//    @PostMapping("/{paymentId}")
+//    public ApiResponse<RefundResponse> refundPayment(
+//            @PathVariable String paymentId
+//    ) {
+//        return ApiResponse.<RefundResponse>builder()
+//                .message("Refund processed successfully")
+//                .result(refundService.refundPayment(paymentId))
+//                .build();
+//    }
 
 }

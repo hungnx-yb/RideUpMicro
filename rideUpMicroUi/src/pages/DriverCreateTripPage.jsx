@@ -200,7 +200,7 @@ function DriverCreateTripPage() {
     ));
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_100%_-20%,#dcfce7_0%,#f8fafc_38%,#f1f5f9_100%)]">
       <DriverNavbar driverName={displayName} tripsToday="" />
 
       <main className="mx-auto max-w-5xl px-3 pb-10 pt-6 sm:px-5 lg:px-6">
@@ -214,7 +214,7 @@ function DriverCreateTripPage() {
             Quay lại
           </button>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-orange-500">Tài xế</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Tài xế</p>
             <h1 className="text-2xl font-bold text-slate-900">Tạo chuyến mới</h1>
           </div>
         </div>
@@ -237,14 +237,14 @@ function DriverCreateTripPage() {
             <div className="space-y-5">
               <section className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <FaRoute className="text-orange-500" />
+                  <FaRoute className="text-emerald-600" />
                   Tuyến đường
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="text-sm font-medium text-slate-700">
                     Tỉnh/Thành đi
                     <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                       value={form.startProvinceId}
                       onChange={(event) => handleChange("startProvinceId", event.target.value)}
                       required
@@ -257,7 +257,7 @@ function DriverCreateTripPage() {
                   <label className="text-sm font-medium text-slate-700">
                     Tỉnh/Thành đến
                     <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                       value={form.endProvinceId}
                       onChange={(event) => handleChange("endProvinceId", event.target.value)}
                       required
@@ -273,25 +273,25 @@ function DriverCreateTripPage() {
                 ) : null}
 
                 {routeDetail ? (
-                  <div className="mt-4 grid gap-3 rounded-lg border border-orange-100 bg-orange-50 p-3 text-sm text-slate-800 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-slate-800 sm:grid-cols-3">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-orange-500">Tuyến</p>
+                      <p className="text-xs uppercase tracking-wide text-emerald-600">Tuyến</p>
                       <p className="font-semibold">{routeDetail.routeName}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-orange-500">Quãng đường</p>
+                      <p className="text-xs uppercase tracking-wide text-emerald-600">Quãng đường</p>
                       <p className="font-semibold">{routeDetail.distanceKm} km</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-orange-500">Thời gian ước tính</p>
+                      <p className="text-xs uppercase tracking-wide text-emerald-600">Thời gian ước tính</p>
                       <p className="font-semibold">{routeDetail.estimatedDurationMin} phút</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-orange-500">Giá gợi ý</p>
+                      <p className="text-xs uppercase tracking-wide text-emerald-600">Giá gợi ý</p>
                       <p className="font-semibold">{routeDetail.basePriceVnd?.toLocaleString("vi-VN")} đ</p>
                     </div>
                     <div className="sm:col-span-2">
-                      <p className="text-xs uppercase tracking-wide text-orange-500">Người tạo</p>
+                      <p className="text-xs uppercase tracking-wide text-emerald-600">Người tạo</p>
                       <p className="font-semibold">{routeDetail.fullName || "Admin"}</p>
                     </div>
                   </div>
@@ -300,14 +300,14 @@ function DriverCreateTripPage() {
 
               <section className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <FaMapMarkedAlt className="text-orange-500" />
+                  <FaMapMarkedAlt className="text-emerald-600" />
                   Điểm đón / trả
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="text-sm font-medium text-slate-700">
                     Phường/Xã đón
                     <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                       value={form.startWardId}
                       onChange={(event) => handleChange("startWardId", event.target.value)}
                       required
@@ -320,7 +320,7 @@ function DriverCreateTripPage() {
                   <label className="text-sm font-medium text-slate-700">
                     Phường/Xã trả
                     <select
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                       value={form.endWardId}
                       onChange={(event) => handleChange("endWardId", event.target.value)}
                       required
@@ -336,7 +336,7 @@ function DriverCreateTripPage() {
                     Địa chỉ đón (tùy chọn)
                     <input
                       type="text"
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                       placeholder="Số nhà, tên đường..."
                       value={form.startAddressText}
                       onChange={(event) => handleChange("startAddressText", event.target.value)}
@@ -347,7 +347,7 @@ function DriverCreateTripPage() {
                     Địa chỉ trả (tùy chọn)
                     <input
                       type="text"
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                       placeholder="Số nhà, tên đường..."
                       value={form.endAddressText}
                       onChange={(event) => handleChange("endAddressText", event.target.value)}
