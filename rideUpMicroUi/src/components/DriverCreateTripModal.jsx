@@ -46,7 +46,7 @@ function SimpleDropdown({ label, placeholder, value, options, onChange }) {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm focus:border-orange-500 focus:outline-none"
+        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none"
       >
         <span className={selectedLabel ? "text-slate-800" : "text-slate-400"}>{selectedLabel || placeholder}</span>
         <FaChevronDown className="text-slate-400" size={12} />
@@ -67,8 +67,8 @@ function SimpleDropdown({ label, placeholder, value, options, onChange }) {
                     onChange(item.id);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-start px-3 py-2 text-left text-sm hover:bg-orange-50 ${
-                    item.id === value ? "bg-orange-50 text-orange-600" : "text-slate-800"
+                  className={`flex w-full items-start px-3 py-2 text-left text-sm hover:bg-emerald-50 ${
+                    item.id === value ? "bg-emerald-50 text-emerald-700" : "text-slate-800"
                   }`}
                 >
                   {item.name}
@@ -112,7 +112,7 @@ function MultiSelectDropdown({ placeholder, values, options, onChange }) {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm focus:border-orange-500 focus:outline-none"
+        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none"
       >
         <span className={selectedItems.length ? "text-slate-700" : "text-slate-400"}>
           {selectedItems.length ? `Đã chọn ${selectedItems.length} mục` : placeholder}
@@ -131,15 +131,15 @@ function MultiSelectDropdown({ placeholder, values, options, onChange }) {
                     key={item.id}
                     type="button"
                     onClick={() => toggleValue(item.id)}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-orange-50 ${
-                      checked ? "bg-orange-50 text-orange-600" : "text-slate-800"
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-emerald-50 ${
+                      checked ? "bg-emerald-50 text-emerald-700" : "text-slate-800"
                     }`}
                   >
                     <input
                       type="checkbox"
                       readOnly
                       checked={checked}
-                      className="h-4 w-4 rounded border-slate-300 text-orange-500"
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-500"
                     />
                     <span>{item.name}</span>
                   </button>
@@ -153,13 +153,13 @@ function MultiSelectDropdown({ placeholder, values, options, onChange }) {
       ) : null}
 
       {selectedItems.length ? (
-        <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50/70 p-2">
+        <div className="mt-2 rounded-lg border border-emerald-100 bg-emerald-50/70 p-2">
           <div className="mb-1 flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-600">Đã chọn</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Đã chọn</p>
             <button
               type="button"
               onClick={() => onChange([])}
-              className="text-[11px] font-semibold text-orange-600 transition-colors hover:text-orange-700"
+              className="text-[11px] font-semibold text-emerald-700 transition-colors hover:text-emerald-800"
             >
               Bỏ tất cả
             </button>
@@ -172,7 +172,7 @@ function MultiSelectDropdown({ placeholder, values, options, onChange }) {
                   key={item.id}
                   type="button"
                   onClick={() => toggleValue(item.id)}
-                  className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-white px-2 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100"
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
                 >
                   <span>{item.name}</span>
                   <span className="text-[10px]">x</span>
@@ -380,11 +380,11 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
       <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-sm">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
               <FaCarSide />
             </span>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-orange-500">Tài xế</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Tài xế</p>
               <h2 className="text-xl font-bold text-slate-900">Tạo chuyến mới</h2>
             </div>
           </div>
@@ -415,13 +415,13 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
           <div className="space-y-5">
             <section className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.2)]">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <FaRoute className="text-orange-500" />
+                <FaRoute className="text-emerald-600" />
                 Tuyến đường
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">
                   <span className="flex items-center gap-2">
-                    <FaMapMarkedAlt className="text-orange-500" />
+                    <FaMapMarkedAlt className="text-emerald-600" />
                     Tỉnh/Thành đi
                   </span>
                   <SimpleDropdown
@@ -434,7 +434,7 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
 
                 <label className="text-sm font-medium text-slate-700">
                   <span className="flex items-center gap-2">
-                    <FaMapMarkedAlt className="text-orange-500" />
+                    <FaMapMarkedAlt className="text-emerald-600" />
                     Tỉnh/Thành đến
                   </span>
                   <SimpleDropdown
@@ -451,25 +451,25 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
               ) : null}
 
               {routeDetail ? (
-                <div className="mt-4 grid gap-3 rounded-lg border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 p-3 text-sm text-slate-800 sm:grid-cols-3">
+                <div className="mt-4 grid gap-3 rounded-lg border border-emerald-100 bg-gradient-to-r from-emerald-50 to-teal-50 p-3 text-sm text-slate-800 sm:grid-cols-3">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-orange-500">Tuyến</p>
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">Tuyến</p>
                     <p className="font-semibold">{routeDetail.routeName}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-orange-500">Quãng đường</p>
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">Quãng đường</p>
                     <p className="font-semibold">{routeDetail.distanceKm} km</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-orange-500">Thời gian ước tính</p>
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">Thời gian ước tính</p>
                     <p className="font-semibold">{routeDetail.estimatedDurationMin} phút</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-orange-500">Giá gợi ý</p>
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">Giá gợi ý</p>
                     <p className="font-semibold">{routeDetail.basePriceVnd?.toLocaleString("vi-VN")} đ</p>
                   </div>
                   <div className="sm:col-span-2">
-                    <p className="text-xs uppercase tracking-wide text-orange-500">Người tạo</p>
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">Người tạo</p>
                     <p className="font-semibold">{routeDetail.fullName || "Admin"}</p>
                   </div>
                 </div>
@@ -478,13 +478,13 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
 
             <section className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.2)]">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <FaMapMarkedAlt className="text-orange-500" />
+                <FaMapMarkedAlt className="text-emerald-600" />
                 Điểm đón / trả
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">
                   <span className="flex items-center gap-2">
-                    <FaMapMarkedAlt className="text-orange-500" />
+                    <FaMapMarkedAlt className="text-emerald-600" />
                     Phường/Xã đón
                   </span>
                   <MultiSelectDropdown
@@ -497,7 +497,7 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
 
                 <label className="text-sm font-medium text-slate-700">
                   <span className="flex items-center gap-2">
-                    <FaMapMarkedAlt className="text-orange-500" />
+                    <FaMapMarkedAlt className="text-emerald-600" />
                     Phường/Xã trả
                   </span>
                   <MultiSelectDropdown
@@ -514,19 +514,19 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
 
             <section className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.2)]">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <FaCalendarAlt className="text-orange-500" />
+                <FaCalendarAlt className="text-emerald-600" />
                 Thời gian & giá
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">
                   <span className="flex items-center gap-2">
-                    <FaClock className="text-orange-500" />
+                    <FaClock className="text-emerald-600" />
                     Thời gian xuất phát
                   </span>
                   <input
                     type="datetime-local"
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-orange-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none"
                     value={form.departureTime}
                     onChange={(event) => handleChange("departureTime", event.target.value)}
                     required
@@ -538,7 +538,7 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
                   <input
                     type="number"
                     min="1"
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-orange-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none"
                     value={form.seatTotal}
                     onChange={(event) => handleChange("seatTotal", event.target.value)}
                     required
@@ -552,7 +552,7 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
                   <input
                     type="number"
                     min="1000"
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-orange-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none"
                     value={form.priceVnd}
                     onChange={(event) => handleChange("priceVnd", event.target.value)}
                     required
@@ -589,7 +589,7 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
                   Ghi chú (tùy chọn)
                   <textarea
                     rows={3}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-orange-500 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none"
                     placeholder="Ví dụ: Xe có trung chuyển, không hút thuốc, mang hành lý gọn..."
                     value={form.note}
                     onChange={(event) => handleChange("note", event.target.value)}
@@ -617,7 +617,7 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
                 className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all ${
                   !canSubmit || isSubmitting
                     ? "cursor-not-allowed bg-slate-300"
-                    : "bg-orange-500 hover:bg-orange-600"
+                    : "bg-slate-900 hover:bg-black"
                 }`}
               >
                 {isSubmitting ? "Đang tạo..." : "Tạo chuyến"}

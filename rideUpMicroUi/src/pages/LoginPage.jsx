@@ -5,11 +5,11 @@ import FloatingSupportMenu from "../components/FloatingSupportMenu";
 
 function LoginPage() {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fff7ed_0%,#f8fafc_55%)]">
-      <header className="border-b border-orange-100/80 bg-white/90 backdrop-blur-md">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#dcfce7_0%,#f8fafc_55%)]">
+      <header className="border-b border-emerald-100/80 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2 text-lg font-extrabold text-slate-900">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-xs text-white">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs text-white">
               <FaCarSide />
             </span>
             <span>RideUp</span>
@@ -24,7 +24,7 @@ function LoginPage() {
             </Link>
             <Link
               to="/auth/register"
-              className="rounded-full bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-orange-500/25"
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-slate-900/25"
             >
               Đăng ký
             </Link>
@@ -35,7 +35,7 @@ function LoginPage() {
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center px-4 py-10 sm:px-6 lg:px-8">
         <div className="mb-6 text-center">
           <div className="inline-flex items-center gap-2 text-2xl font-extrabold text-slate-900">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-sm text-white">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm text-white">
               <FaCarSide />
             </span>
             <span>RideUp</span>

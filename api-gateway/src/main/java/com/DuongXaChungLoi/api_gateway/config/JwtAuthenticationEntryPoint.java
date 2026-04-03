@@ -2,7 +2,6 @@ package com.DuongXaChungLoi.api_gateway.config;
 
 import com.DuongXaChungLoi.api_gateway.dto.ApiResponse;
 import com.DuongXaChungLoi.api_gateway.exception.ErrorCode;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
 import org.springframework.http.HttpStatus;
@@ -12,8 +11,6 @@ import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-
-import java.nio.charset.StandardCharsets;
 
 @Component
 public class JwtAuthenticationEntryPoint implements ServerAuthenticationEntryPoint {

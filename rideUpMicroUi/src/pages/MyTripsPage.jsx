@@ -24,6 +24,13 @@ const STATUS_TABS = [
   { key: "EXPIRED", label: "Đã hết hạn" },
 ];
 
+const CANCEL_REASON_OPTIONS = [
+  "Thay đổi kế hoạch",
+  "Đặt nhầm chuyến",
+  "Thời gian không còn phù hợp",
+  "Tìm được phương án di chuyển khác",
+];
+
 function formatMoneyVnd(value) {
   const amount = Number(value || 0);
   return `${amount.toLocaleString("vi-VN")} đ`;
@@ -99,12 +106,56 @@ function getStatusMeta(status) {
   };
 }
 
+function getPaymentStatusMeta(status) {
+  const normalized = String(status || "").toUpperCase();
+
+  if (normalized === "PAID" || normalized === "SUCCESS") {
+    return {
+      label: "Đã thanh toán",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      icon: <FaCheckCircle className="text-[11px]" />,
+    };
+  }
+
+  if (normalized === "PENDING" || normalized === "PENDING_PAYMENT") {
+    return {
+      label: "Chờ thanh toán",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+      icon: <FaRegClock className="text-[11px]" />,
+    };
+  }
+
+  if (normalized === "FAILED" || normalized === "CANCELLED" || normalized === "EXPIRED") {
+    return {
+      label: "Thanh toán thất bại",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
+      icon: <FaTimesCircle className="text-[11px]" />,
+    };
+  }
+
+  return {
+    label: "Chưa rõ",
+    className: "border-slate-200 bg-slate-50 text-slate-700",
+    icon: <FaExclamationCircle className="text-[11px]" />,
+  };
+}
+
 function mapBookingToView(booking) {
+  const bookingStatus = booking?.status || "UNKNOWN";
+  const normalizedBookingStatus = String(bookingStatus).toUpperCase();
+  const fallbackPaymentStatus =
+    normalizedBookingStatus === "CONFIRMED" || normalizedBookingStatus === "RESERVED"
+      ? "PAID"
+      : normalizedBookingStatus === "PENDING_PAYMENT"
+        ? "PENDING"
+        : normalizedBookingStatus === "CANCELLED" || normalizedBookingStatus === "EXPIRED"
+          ? "FAILED"
+          : "UNKNOWN";
+
   return {
     id: booking?.id || "",
-    bookingCode: booking?.bookingCode || "--",
-    tripId: booking?.tripId || "--",
-    status: booking?.status || "UNKNOWN",
+    status: bookingStatus,
+    paymentStatus: booking?.paymentStatus || booking?.paymentState || booking?.payment?.status || fallbackPaymentStatus,
     seatCount: Number(booking?.seatCount || 0),
     totalAmount: booking?.totalAmount,
     pickupAddressText: booking?.pickupAddressText || "Chưa có điểm đón",
@@ -121,6 +172,10 @@ function MyTripsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelTargetBookingId, setCancelTargetBookingId] = useState("");
+  const [selectedCancelReason, setSelectedCancelReason] = useState("");
+  const [customCancelReason, setCustomCancelReason] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
@@ -154,6 +209,14 @@ function MyTripsPage() {
     return bookings.filter((item) => String(item.status || "").toUpperCase() === selectedStatus);
   }, [bookings, selectedStatus]);
 
+  const cancelTargetBooking = useMemo(() => {
+    if (!cancelTargetBookingId) {
+      return null;
+    }
+
+    return bookings.find((item) => item.id === cancelTargetBookingId) || null;
+  }, [bookings, cancelTargetBookingId]);
+
   const stats = useMemo(() => {
     const pending = bookings.filter((item) => String(item.status || "").toUpperCase() === "PENDING_PAYMENT").length;
     const confirmed = bookings.filter((item) => ["RESERVED", "CONFIRMED"].includes(String(item.status || "").toUpperCase())).length;
@@ -167,19 +230,45 @@ function MyTripsPage() {
 
   const canCancelBooking = (status) => {
     const normalized = String(status || "").toUpperCase();
-    return normalized === "PENDING_PAYMENT" || normalized === "RESERVED";
+    return normalized === "PENDING_PAYMENT" || normalized === "RESERVED" || normalized === "CONFIRMED";
   };
 
-  const handleCancelBooking = async (bookingId) => {
-    if (!bookingId || isCancelling) {
+  const openCancelModal = (bookingId) => {
+    if (!bookingId) {
+      return;
+    }
+
+    setCancelTargetBookingId(bookingId);
+    setSelectedCancelReason("");
+    setCustomCancelReason("");
+    setIsCancelModalOpen(true);
+  };
+
+  const closeCancelModal = () => {
+    setIsCancelModalOpen(false);
+    setCancelTargetBookingId("");
+    setSelectedCancelReason("");
+    setCustomCancelReason("");
+  };
+
+  const handleCancelBooking = async () => {
+    if (!cancelTargetBookingId || isCancelling) {
+      return;
+    }
+
+    const finalReason = customCancelReason.trim() || selectedCancelReason.trim();
+    if (!finalReason) {
+      setErrorModalMessage("Vui lòng chọn hoặc nhập lý do hủy vé.");
+      setIsErrorModalOpen(true);
       return;
     }
 
     try {
       setIsCancelling(true);
       setSuccessMessage("");
-      await cancelBookingApi(bookingId, "Khách hàng hủy booking");
+      await cancelBookingApi(cancelTargetBookingId, finalReason);
       setSuccessMessage("Hủy chuyến thành công. Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.");
+      closeCancelModal();
       await loadBookings();
     } catch (error) {
       const message = getApiErrorMessage(error, "Không thể hủy chuyến lúc này");
@@ -190,6 +279,8 @@ function MyTripsPage() {
       setIsCancelling(false);
     }
   };
+
+  const canSubmitCancel = Boolean(customCancelReason.trim() || selectedCancelReason.trim()) && !isCancelling;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_100%_-20%,#dcfce7_0%,#f8fafc_38%,#f1f5f9_100%)]">
@@ -276,80 +367,68 @@ function MyTripsPage() {
           {!isLoading
             ? filteredBookings.map((booking) => {
                 const statusMeta = getStatusMeta(booking.status);
+                const paymentMeta = getPaymentStatusMeta(booking.paymentStatus);
 
                 return (
                   <article key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Booking</p>
-                        <h3 className="text-lg font-extrabold text-slate-900">{booking.bookingCode}</h3>
-                        <p className="text-xs text-slate-500">Trip ID: {booking.tripId}</p>
-                      </div>
-                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
-                        {statusMeta.icon}
-                        {statusMeta.label}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
-                      <div className="space-y-2 rounded-xl bg-slate-50 p-3">
-                        <div className="flex items-start gap-2 text-sm text-slate-700">
-                          <FaMapMarkerAlt className="mt-0.5 text-emerald-600" />
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Điểm đón</p>
-                            <p>{booking.pickupAddressText}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-2 text-sm text-slate-700">
-                          <FaMapMarkerAlt className="mt-0.5 text-rose-500" />
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Điểm trả</p>
-                            <p>{booking.dropoffAddressText}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <aside className="rounded-xl border border-slate-200 bg-white p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-500">Tổng tiền</p>
-                        <p className="text-lg font-extrabold text-emerald-600">{formatMoneyVnd(booking.totalAmount)}</p>
-
-                        <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">Số chỗ</p>
-                        <p className="text-sm font-semibold text-slate-800">{booking.seatCount} chỗ</p>
-
-                        <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">Đặt lúc</p>
-                        <p className="text-sm font-semibold text-slate-800">{formatDateTime(booking.reservedAt)}</p>
-                      </aside>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs text-slate-500">
-                        <span className="inline-flex items-center gap-1.5">
-                          <FaCalendarAlt className="text-[11px]" />
-                          Hạn thanh toán: {formatDateTime(booking.expiresAt)}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                          {statusMeta.icon}
+                          {statusMeta.label}
+                        </span>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${paymentMeta.className}`}>
+                          {paymentMeta.icon}
+                          {paymentMeta.label}
                         </span>
                       </div>
 
                       {canCancelBooking(booking.status) ? (
                         <button
                           type="button"
-                          onClick={() => handleCancelBooking(booking.id)}
+                          onClick={() => openCancelModal(booking.id)}
                           disabled={isCancelling}
-                          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                          {isCancelling ? "Dang huy..." : "Huy booking"}
+                          {isCancelling ? "Đang hủy vé..." : "Hủy vé"}
                         </button>
                       ) : null}
                     </div>
 
-                    {booking.cancelReason ? (
-                      <div className="mt-2 rounded-lg border border-rose-100 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700">
+                    <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                      <div className="rounded-lg bg-slate-50 px-3 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Điểm đón</p>
+                        <p className="mt-1 font-medium text-slate-900">{booking.pickupAddressText}</p>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 px-3 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Điểm trả</p>
+                        <p className="mt-1 font-medium text-slate-900">{booking.dropoffAddressText}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+                      <div className="rounded-lg border border-slate-200 px-3 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Giá</p>
+                        <p className="mt-1 font-bold text-emerald-600">{formatMoneyVnd(booking.totalAmount)}</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 px-3 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Số ghế</p>
+                        <p className="mt-1 font-semibold text-slate-900">{booking.seatCount} chỗ</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 px-3 py-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hạn thanh toán</p>
+                        <p className="mt-1 font-semibold text-slate-900">{formatDateTime(booking.expiresAt)}</p>
+                      </div>
+                    </div>
+
+                    {String(booking.status || "").toUpperCase() === "CANCELLED" && booking.cancelReason ? (
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                         Lý do hủy: {booking.cancelReason}
                       </div>
                     ) : null}
 
                     {booking.note ? (
-                      <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                         Ghi chú: {booking.note}
                       </div>
                     ) : null}
@@ -360,11 +439,88 @@ function MyTripsPage() {
         </section>
       </main>
 
-      <Modal title="Co loi xay ra" isOpen={isErrorModalOpen} onClose={() => setIsErrorModalOpen(false)} isTopPriority>
+      <Modal title="Hủy vé" isOpen={isCancelModalOpen} onClose={closeCancelModal} isTopPriority>
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Chọn một lý do hủy phổ biến hoặc nhập lý do riêng.</p>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Lưu ý: vé đã thanh toán có thể được xử lý hoàn tiền theo chính sách hiện hành.
+          </div>
+
+          {cancelTargetBooking ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Chuyến sẽ hủy</p>
+              <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-900">
+                {cancelTargetBooking.pickupAddressText} {"->"} {cancelTargetBooking.dropoffAddressText}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {CANCEL_REASON_OPTIONS.map((reason) => {
+              const isSelected = selectedCancelReason === reason;
+              return (
+                <button
+                  key={reason}
+                  type="button"
+                  onClick={() => setSelectedCancelReason(reason)}
+                  className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
+                    isSelected
+                      ? "border-emerald-400 bg-emerald-50 text-emerald-700 shadow-sm"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span
+                      className={`h-3.5 w-3.5 rounded-full border ${
+                        isSelected ? "border-emerald-600 bg-emerald-600" : "border-slate-300"
+                      }`}
+                    />
+                    {reason}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Lý do khác (tuỳ chọn)</label>
+            <textarea
+              rows={3}
+              value={customCancelReason}
+              onChange={(event) => setCustomCancelReason(event.target.value)}
+              placeholder="Nhập lý do của bạn..."
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-emerald-300"
+            />
+            <p className="mt-1 text-xs text-slate-500">Lý do đã nhập sẽ được gửi cho hệ thống khi hủy vé.</p>
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={closeCancelModal}
+              disabled={isCancelling}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-70"
+            >
+              Đóng
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelBooking}
+              disabled={!canSubmitCancel}
+              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isCancelling ? "Đang hủy..." : "Xác nhận hủy vé"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal title="Có lỗi xảy ra" isOpen={isErrorModalOpen} onClose={() => setIsErrorModalOpen(false)} isTopPriority>
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
           <div className="inline-flex items-start gap-2">
             <FaExclamationCircle className="mt-0.5 text-red-500" />
-            <span>{errorModalMessage || "Da co loi xay ra. Vui long thu lai."}</span>
+            <span>{errorModalMessage || "Đã có lỗi xảy ra. Vui lòng thử lại."}</span>
           </div>
         </div>
       </Modal>

@@ -65,7 +65,7 @@ function LoginForm() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="Nhập email"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
             />
           </span>
           {errors.email ? <p className="mt-1 text-xs text-red-600">{errors.email}</p> : null}
@@ -80,7 +80,7 @@ function LoginForm() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Nhập mật khẩu"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-10 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-10 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
             />
             <button
               type="button"
@@ -107,7 +107,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-black hover:shadow-xl"
         >
           <FaSignInAlt className="text-xs" />
           {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
@@ -116,7 +116,7 @@ function LoginForm() {
 
       <p className="mt-4 text-center text-sm text-slate-500">
         Chưa có tài khoản?{" "}
-        <Link to="/auth/register" className="font-semibold text-orange-600 hover:text-orange-700">
+        <Link to="/auth/register" className="font-semibold text-emerald-700 hover:text-emerald-800">
           Đăng ký ngay
         </Link>
       </p>

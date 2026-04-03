@@ -80,9 +80,9 @@ public class RefundService {
 
             String responseCode = responseMap.get("vnp_ResponseCode");
 
-            if ("00".equals(responseCode) ||"99".equals(responseCode)) {
+            if ("00".equals(responseCode) ) {
                 refund.setStatus(RefundStatus.SUCCESS);
-                refund.setResponseCode("00");
+                refund.setResponseCode(responseCode);
                 refund.setRefundedAt(LocalDateTime.now());
                 payment.setStatus(PaymentStatus.REFUNDED);
                 paymentServicePublisher.publishRefundCompleted(refund, refundRequest.getBookingId());

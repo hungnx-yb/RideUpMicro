@@ -24,15 +24,15 @@ function RoleCard({ role, selectedRole, onSelect }) {
       onClick={() => onSelect(role)}
       className={`group flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-all duration-300 ${
         isSelected
-          ? "border-orange-300 bg-orange-50 shadow-md shadow-orange-500/15"
-          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md"
+          ? "border-emerald-300 bg-emerald-50 shadow-md shadow-emerald-500/15"
+          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md"
       }`}
     >
       <span
         className={`mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-lg text-sm transition-all duration-300 ${
           isSelected
-            ? "bg-gradient-to-r from-orange-500 to-red-500 text-white"
-            : "bg-slate-100 text-slate-600 group-hover:bg-orange-100 group-hover:text-orange-600"
+            ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white"
+            : "bg-slate-100 text-slate-600 group-hover:bg-emerald-100 group-hover:text-emerald-700"
         }`}
       >
         <Icon />

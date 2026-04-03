@@ -6,11 +6,26 @@ const iconByAction = {
   "Doanh thu": FaChartLine,
 };
 
-function QuickActions() {
+function QuickActions({ onCreateTrip, onManageTrips, onRevenue }) {
   const actions = [
-    { title: "Tạo chuyến mới", subtitle: "Thêm chuyến xe", color: "bg-emerald-500 text-white" },
-    { title: "Quản lý chuyến", subtitle: "Xem tất cả", color: "bg-slate-100 text-slate-700" },
-    { title: "Doanh thu", subtitle: "Thống kê chi tiết", color: "bg-emerald-100 text-emerald-600" },
+    {
+      title: "Tạo chuyến mới",
+      subtitle: "Thêm chuyến xe",
+      color: "bg-emerald-500 text-white",
+      onClick: onCreateTrip,
+    },
+    {
+      title: "Quản lý chuyến",
+      subtitle: "Xem tất cả",
+      color: "bg-slate-100 text-slate-700",
+      onClick: onManageTrips,
+    },
+    {
+      title: "Doanh thu",
+      subtitle: "Thống kê chi tiết",
+      color: "bg-emerald-100 text-emerald-600",
+      onClick: onRevenue,
+    },
   ];
 
   return (
@@ -24,6 +39,7 @@ function QuickActions() {
             <button
               key={action.title}
               type="button"
+              onClick={action.onClick}
               className="flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow"
             >
               <span className="flex items-center gap-3">

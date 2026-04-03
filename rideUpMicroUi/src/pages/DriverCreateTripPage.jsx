@@ -358,7 +358,7 @@ function DriverCreateTripPage() {
 
               <section className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <FaCalendarAlt className="text-orange-500" />
+                  <FaCalendarAlt className="text-emerald-600" />
                   Thời gian & giá
                 </div>
 
@@ -368,7 +368,7 @@ function DriverCreateTripPage() {
                     <div className="relative mt-1">
                       <input
                         type="datetime-local"
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                         value={form.departureTime}
                         onChange={(event) => handleChange("departureTime", event.target.value)}
                         required
@@ -382,7 +382,7 @@ function DriverCreateTripPage() {
                     <input
                       type="number"
                       min="1"
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                       value={form.seatTotal}
                       onChange={(event) => handleChange("seatTotal", event.target.value)}
                       required
@@ -396,7 +396,7 @@ function DriverCreateTripPage() {
                     <input
                       type="number"
                       min="1000"
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-orange-500 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
                       value={form.priceVnd}
                       onChange={(event) => handleChange("priceVnd", event.target.value)}
                       required
@@ -433,7 +433,7 @@ function DriverCreateTripPage() {
             <aside className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <FaMapMarkedAlt className="text-orange-500" />
+                  <FaMapMarkedAlt className="text-emerald-600" />
                   Tóm tắt chuyến
                 </div>
                 <div className="mt-3 space-y-2 text-sm text-slate-700">
@@ -454,7 +454,7 @@ function DriverCreateTripPage() {
 
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <FaCheckCircle className="text-orange-500" />
+                  <FaCheckCircle className="text-emerald-600" />
                   Hướng dẫn nhanh
                 </div>
                 <ul className="mt-3 space-y-2 text-sm text-slate-700">
@@ -487,7 +487,7 @@ function DriverCreateTripPage() {
                 className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all ${
                   !canSubmit || isSubmitting
                     ? "cursor-not-allowed bg-slate-300"
-                    : "bg-orange-500 hover:bg-orange-600"
+                    : "bg-slate-900 hover:bg-black"
                 }`}
               >
                 {isSubmitting ? "Đang tạo..." : "Tạo chuyến"}

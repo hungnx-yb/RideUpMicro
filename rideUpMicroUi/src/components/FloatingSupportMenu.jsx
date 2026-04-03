@@ -55,10 +55,10 @@ function FloatingSupportMenu() {
       <button
         type="button"
         onClick={() => setIsOpen((previous) => !previous)}
-        className="ml-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-2xl shadow-orange-500/35 transition-all duration-300 hover:scale-105"
+        className="ml-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-emerald-900 text-white shadow-xl shadow-emerald-900/25 transition-all duration-300 hover:scale-105 hover:bg-emerald-800"
         aria-label={isOpen ? "Đóng menu hỗ trợ" : "Mở menu hỗ trợ"}
       >
-        <FaPlus className={`text-3xl transition-transform duration-300 ${isOpen ? "rotate-45" : ""}`} />
+        <FaPlus className={`text-2xl transition-transform duration-300 ${isOpen ? "rotate-45" : ""}`} />
       </button>
     </div>
   );

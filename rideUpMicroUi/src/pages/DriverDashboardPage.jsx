@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FaCarSide, FaPlusCircle } from "react-icons/fa";
 import DashboardStats from "../components/DashboardStats";
 import DriverNavbar from "../components/DriverNavbar";
@@ -11,6 +12,7 @@ import DriverCreateTripModal from "../components/DriverCreateTripModal";
 import useAuth from "../hooks/useAuth";
 
 function DriverDashboardPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [statistics] = useState({
@@ -112,7 +114,11 @@ function DriverDashboardPage() {
           </div>
 
           <div className="space-y-5">
-            <QuickActions />
+            <QuickActions
+              onCreateTrip={() => setShowCreateModal(true)}
+              onManageTrips={() => navigate("/driver-dashboard")}
+              onRevenue={() => navigate("/driver-dashboard")}
+            />
             <MonthlyStats monthlyStats={monthlyStats} />
             <RatingCard
               rating={statistics.averageRating.value}

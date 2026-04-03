@@ -91,15 +91,18 @@ public class PaymentServiceConsumer {
                     .build()
             );
         } catch (AppException ex) {
-            // Ignore non-refundable cases to keep cancel flow idempotent.
             if (ex.getErrorCode() == ErrorCode.PAYMENT_NOT_FOUND
                 || ex.getErrorCode() == ErrorCode.PAYMENT_STATUS_INVALID
-                || ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_REFUNDED) {
+                || ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_REFUNDED
+                || ex.getErrorCode() == ErrorCode.REFUND_FAILED) {
             log.info("Skip refund for bookingId={} due to {}, correlationId={}",
                 event.getBookingId(), ex.getErrorCode(), event.getCorrelationId());
             return;
             }
             throw ex;
+        } catch (Exception ex) {
+            log.error("Skip refund processing for bookingId={} due to unexpected error, correlationId={}",
+                event.getBookingId(), event.getCorrelationId(), ex);
         }
 
     }

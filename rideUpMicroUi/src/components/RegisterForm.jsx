@@ -53,7 +53,7 @@ function RegisterForm() {
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               placeholder="Nguyễn Văn A"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
               required
             />
           </span>
@@ -68,7 +68,7 @@ function RegisterForm() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="example@example.com"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
               required
             />
           </span>
@@ -84,7 +84,7 @@ function RegisterForm() {
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Ít nhất 6 ký tự"
               minLength={6}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
               required
             />
           </span>
@@ -107,7 +107,7 @@ function RegisterForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+          className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-black hover:shadow-xl"
         >
           {isSubmitting ? "Đang tạo tài khoản..." : "Tiếp theo"}
         </button>
@@ -115,7 +115,7 @@ function RegisterForm() {
 
       <p className="mt-4 text-center text-sm text-slate-500">
         Đã có tài khoản?{" "}
-        <Link to="/auth/login" className="font-semibold text-orange-600 hover:text-orange-700">
+        <Link to="/auth/login" className="font-semibold text-emerald-700 hover:text-emerald-800">
           Đăng nhập
         </Link>
       </p>
