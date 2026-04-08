@@ -84,11 +84,6 @@ public class PaymentService {
 			savedPayment = paymentRepository.save(savedPayment);
 		}
 
-		if (savedPayment.getStatus() == PaymentStatus.PAID || (savedPayment.getStatus() == PaymentStatus.PENDING
-				&& savedPayment.getMethod() == PaymentMethod.CASH)) {
-			publishPaymentCompleted(savedPayment);
-		}
-
 		return modelMapper.map(savedPayment, PaymentResponse.class);
 	}
 
@@ -165,6 +160,10 @@ public class PaymentService {
 	public PaymentResponse markPaymentPaid(String paymentId, MarkPaymentPaidRequest request) {
 		Payment payment = paymentRepository.findById(paymentId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+
+		if (payment.getMethod() != PaymentMethod.CASH) {
+			throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+		}
 
 		if (payment.getStatus() == PaymentStatus.PAID) {
 			return modelMapper.map(payment, PaymentResponse.class);

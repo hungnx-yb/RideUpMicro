@@ -54,16 +54,22 @@ public class BookingService {
     public BookingResponse createBooking(CreateBookingRequest request) {
         BigDecimal tripPricePerSeat = reserveTripSeats(request.getTripId(), request.getSeatCount());
         LocalDateTime now = LocalDateTime.now();
+        String correlationId = UUID.randomUUID().toString();
         Booking booking = modelMapper.map(request, Booking.class);
         booking.setBookingCode(generateBookingCode());
-        booking.setStatus(BookingStatus.PENDING);
+        booking.setStatus(request.getPaymentMethod() == PaymentMethod.CASH ? BookingStatus.CONFIRMED : BookingStatus.PENDING);
         booking.setPaymentStatus(PaymentStatus.PENDING);
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
         booking.setReservedAt(now);
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
         booking.setExpiresAt(request.getPaymentMethod() == PaymentMethod.VNPAY ? now.plusSeconds(expirySeconds) : null);
         Booking saved = bookingRepository.save(booking);
-        publishPaymentRequested(saved, request.getPaymentMethod(), now);
+        publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId);
+
+        if (request.getPaymentMethod() == PaymentMethod.CASH) {
+            publishBookingConfirmed(saved, correlationId);
+        }
+
         return modelMapper.map(saved, BookingResponse.class);
     }
 
@@ -75,24 +81,26 @@ public class BookingService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+        if (booking.getStatus() != BookingStatus.PENDING
+                && booking.getStatus() != BookingStatus.CONFIRMED) {
             return modelMapper.map(booking, BookingResponse.class);
         }
 
-        if (booking.getStatus() != BookingStatus.PENDING) {
-            return modelMapper.map(booking, BookingResponse.class);
-        }
+        boolean wasPending = booking.getStatus() == BookingStatus.PENDING;
 
         booking.setPaymentId(request.getPaymentId());
-        booking.setStatus(BookingStatus.CONFIRMED);
+        if (wasPending) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+        }
         booking.setPaymentStatus(PaymentStatus.PAID);
         booking.setExpiresAt(null);
         booking.setCancelReason(null);
         booking.setCancelledAt(null);
 
         Booking saved = bookingRepository.save(booking);
-        publishBookingConfirmed(saved, request.getCorrelationId());
-
+        if (wasPending) {
+            publishBookingConfirmed(saved, request.getCorrelationId());
+        }
         return modelMapper.map(saved, BookingResponse.class);
     }
 
@@ -163,7 +171,6 @@ public class BookingService {
         String cancelReason = saved.getCancelReason() == null || saved.getCancelReason().isBlank()
                 ? "Cancelled by user"
                 : saved.getCancelReason();
-
         publishBookingCancelled(saved, correlationId, cancelReason);
 
         if (saved.getPaymentStatus() == PaymentStatus.PAID) {
@@ -171,7 +178,6 @@ public class BookingService {
         }
         return modelMapper.map(saved, BookingResponse.class);
     }
-
     @Transactional
     public int expirePendingBookings() {
         LocalDateTime now = LocalDateTime.now();
@@ -247,9 +253,7 @@ public class BookingService {
     }
 
 
-    private void publishPaymentRequested(Booking booking, PaymentMethod paymentMethod, LocalDateTime now) {
-        String correlationId = UUID.randomUUID().toString();
-
+    private void publishPaymentRequested(Booking booking, PaymentMethod paymentMethod, LocalDateTime now, String correlationId) {
         PaymentRequestedEvent event = PaymentRequestedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .correlationId(correlationId)
