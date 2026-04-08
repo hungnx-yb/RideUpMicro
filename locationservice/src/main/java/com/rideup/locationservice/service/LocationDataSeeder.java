@@ -27,20 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
-
-/**
- * Cào dữ liệu tỉnh/thành phố (province) và xã/phường/thị trấn (ward) từ
- * Overpass API – cùng nguồn dữ liệu với FE (locationService.js).
- *
- * <p>Chỉ chạy một lần khi bảng province trống.  Nếu muốn chạy lại, xóa
- * toàn bộ dữ liệu trong province + ward trước, rồi restart ứng dụng.</p>
- *
- * <p>Chiến lược query:</p>
- * <ul>
- *   <li>Tỉnh: Overpass admin_level=4 bên trong Vietnam (admin_level=2)</li>
- *   <li>Ward: Overpass admin_level=8 bên trong từng tỉnh (theo OSM relation id)</li>
- * </ul>
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -250,10 +236,8 @@ public class LocationDataSeeder {
     public int fetchAndSaveWards(RestTemplate http, Province province) {
         if (province.getOsmId() == null) return 0;
 
-        // Thử admin_level=8 trước (xã/phường/thị trấn truyền thống)
         int saved = doFetchWards(http, province, 8);
         if (saved == 0) {
-            // Fallback: sau cải cách 2025, nhiều tỉnh dùng level 6 cho đơn vị trực thuộc
             log.debug("[LocationSeeder]  ↳ Retrying {} with admin_level=6", province.getName());
             saved = doFetchWards(http, province, 6);
         }
