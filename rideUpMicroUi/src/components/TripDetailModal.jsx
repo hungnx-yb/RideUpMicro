@@ -14,14 +14,15 @@ import { resolveImageUrl } from "../utils/imageUrl";
 function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting = false }) {
   const submitLockRef = useRef(false);
   const [selectedPickupWardId, setSelectedPickupWardId] = useState("");
-    useEffect(() => {
-      if (!isSubmitting) {
-        submitLockRef.current = false;
-      }
-    }, [isSubmitting]);
+  useEffect(() => {
+    if (!isSubmitting) {
+      submitLockRef.current = false;
+    }
+  }, [isSubmitting]);
 
   const [selectedDropoffWardId, setSelectedDropoffWardId] = useState("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("CASH");
+  const [selectedSeatCount, setSelectedSeatCount] = useState(1);
   const [pickupLocation, setPickupLocation] = useState({ lat: NaN, lng: NaN, addressText: "" });
   const [dropoffLocation, setDropoffLocation] = useState({ lat: NaN, lng: NaN, addressText: "" });
   const vehicleImageSrc = resolveImageUrl(trip?.vehicleImage);
@@ -49,6 +50,7 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
     setPickupLocation(mapStopToLocation(defaultPickupStop));
     setDropoffLocation(mapStopToLocation(defaultDropoffStop));
     setSelectedPaymentMethod("CASH");
+    setSelectedSeatCount(1);
   }, [trip]);
 
   const pickupStopOptions = trip?.pickupStopOptions || [];
@@ -58,7 +60,16 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
   const isPickupLocationValid = isValidCoordinate(Number(pickupLocation?.lat), Number(pickupLocation?.lng));
   const isDropoffLocationValid = isValidCoordinate(Number(dropoffLocation?.lat), Number(dropoffLocation?.lng));
   const hasAddressDetail = Boolean(pickupLocation?.addressText?.trim()) && Boolean(dropoffLocation?.addressText?.trim());
-  const canSubmit = Boolean(selectedPickupStop && selectedDropoffStop && isPickupLocationValid && isDropoffLocationValid && hasAddressDetail);
+  const maxSeats = Math.max(1, Number(trip?.availableSeats || 1));
+  const canSubmit = Boolean(
+    selectedPickupStop &&
+      selectedDropoffStop &&
+      isPickupLocationValid &&
+      isDropoffLocationValid &&
+      hasAddressDetail &&
+      selectedSeatCount >= 1 &&
+      selectedSeatCount <= maxSeats
+  );
 
   useEffect(() => {
     if (!selectedPickupStop) {
@@ -87,6 +98,7 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
 
     onConfirmBooking({
       paymentMethod: selectedPaymentMethod,
+      seatCount: selectedSeatCount,
       pickupStop: selectedPickupStop,
       dropoffStop: selectedDropoffStop,
       pickupLocation: {
@@ -301,6 +313,27 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
                   </button>
                 );
               })}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
+            <p className="mb-2 text-sm font-bold uppercase tracking-wide text-emerald-800">Số ghế đặt</p>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={maxSeats}
+                value={selectedSeatCount}
+                onChange={(event) => {
+                  const nextValue = Number(event.target.value);
+                  if (!Number.isFinite(nextValue)) {
+                    return;
+                  }
+                  setSelectedSeatCount(Math.min(Math.max(nextValue, 1), maxSeats));
+                }}
+                className="w-24 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-slate-700"
+              />
+              <span className="text-xs text-emerald-700">Tối đa {maxSeats} ghế</span>
             </div>
           </section>
 

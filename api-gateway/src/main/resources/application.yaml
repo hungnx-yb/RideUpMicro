@@ -84,15 +84,22 @@ spring:
       globalcors:
         cors-configurations:
           "[/**]":
-            allowedOrigins: "*"
+            allowedOrigins:
+              - "http://localhost:5173"
+              - "http://localhost:3000"
             allowedMethods:
               - GET
               - POST
               - PUT
               - DELETE
+              - PATCH
               - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: false
+            allowedHeaders:
+              - "Authorization"
+              - "Content-Type"
+              - "Idempotency-Key"
+              - "X-Idempotency-Key"
+            allowCredentials: true
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
 
