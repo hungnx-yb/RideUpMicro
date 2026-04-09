@@ -10,8 +10,21 @@ function unwrapApiResponse(response) {
   return response?.data?.result;
 }
 
-export async function createBookingApi(payload) {
-  const response = await axiosClient.post(`${bookingBaseUrl}/bookings`, payload);
+export function generateBookingIdempotencyKey() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `booking-${crypto.randomUUID()}`;
+  }
+
+  return `booking-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export async function createBookingApi(payload, options = {}) {
+  const idempotencyKey = options.idempotencyKey || generateBookingIdempotencyKey();
+  const response = await axiosClient.post(`${bookingBaseUrl}/bookings`, payload, {
+    headers: {
+      "Idempotency-Key": idempotencyKey,
+    },
+  });
   return unwrapApiResponse(response);
 }
 

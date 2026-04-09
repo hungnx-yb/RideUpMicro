@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FaCarSide,
   FaCheckCircle,
@@ -12,7 +12,14 @@ import LocationMapPicker, { isValidCoordinate } from "./common/LocationMapPicker
 import { resolveImageUrl } from "../utils/imageUrl";
 
 function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting = false }) {
+  const submitLockRef = useRef(false);
   const [selectedPickupWardId, setSelectedPickupWardId] = useState("");
+    useEffect(() => {
+      if (!isSubmitting) {
+        submitLockRef.current = false;
+      }
+    }, [isSubmitting]);
+
   const [selectedDropoffWardId, setSelectedDropoffWardId] = useState("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("CASH");
   const [pickupLocation, setPickupLocation] = useState({ lat: NaN, lng: NaN, addressText: "" });
@@ -72,9 +79,11 @@ function TripDetailModal({ open, trip, onClose, onConfirmBooking, isSubmitting =
   if (!open || !trip) return null;
 
   const handleConfirm = () => {
-    if (!canSubmit || !onConfirmBooking || isSubmitting) {
+    if (!canSubmit || !onConfirmBooking || isSubmitting || submitLockRef.current) {
       return;
     }
+
+    submitLockRef.current = true;
 
     onConfirmBooking({
       paymentMethod: selectedPaymentMethod,

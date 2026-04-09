@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaBolt,
   FaCalendarCheck,
@@ -17,7 +17,7 @@ import TripList from "../components/TripList";
 import Modal from "../components/common/Modal";
 import superCarBanner from "../assets/anh-nen-sieu-xe_020255797.jpg";
 import { getApiErrorMessage } from "../services/authApi";
-import { createBookingApi } from "../services/bookingApi";
+import { createBookingApi, generateBookingIdempotencyKey } from "../services/bookingApi";
 import { getAllProvinces, getAllWards } from "../services/locationApi";
 import { getPaymentUrlByBookingId } from "../services/paymentApi";
 import { getAllTripsApi } from "../services/tripApi";
@@ -157,6 +157,7 @@ function SearchTripPage() {
   const [successBookingId, setSuccessBookingId] = useState("");
   const [successPaymentMethod, setSuccessPaymentMethod] = useState("");
   const [selectedTrip, setSelectedTrip] = useState(null);
+  const bookingIdempotencyRef = useRef({ fingerprint: "", key: "" });
 
   const openApiErrorModal = (error, fallbackMessage) => {
     const resolvedMessage = getApiErrorMessage(error, fallbackMessage);
@@ -315,7 +316,7 @@ function SearchTripPage() {
   };
 
   const handleConfirmBooking = async ({ paymentMethod, pickupStop, dropoffStop, pickupLocation, dropoffLocation }) => {
-    if (!selectedTrip) {
+    if (!selectedTrip || isBooking) {
       return;
     }
 
@@ -323,7 +324,7 @@ function SearchTripPage() {
       setIsBooking(true);
       setErrorMessage("");
 
-      const bookingResult = await createBookingApi({
+      const bookingPayload = {
         tripId: selectedTrip.id,
         seatCount: 1,
         paymentMethod,
@@ -336,6 +337,18 @@ function SearchTripPage() {
         dropoffWardId: dropoffStop?.wardId || "",
         dropoffAddressText: dropoffLocation?.addressText || "",
         note: selectedTrip.note || "",
+      };
+
+      const bookingFingerprint = JSON.stringify(bookingPayload);
+      if (bookingIdempotencyRef.current.fingerprint !== bookingFingerprint) {
+        bookingIdempotencyRef.current = {
+          fingerprint: bookingFingerprint,
+          key: generateBookingIdempotencyKey(),
+        };
+      }
+
+      const bookingResult = await createBookingApi(bookingPayload, {
+        idempotencyKey: bookingIdempotencyRef.current.key,
       });
 
       const bookingCode = bookingResult?.bookingCode || bookingResult?.id || "";
@@ -349,6 +362,7 @@ function SearchTripPage() {
       setSuccessPaymentMethod(paymentMethod);
       setIsSuccessModalOpen(true);
       setSelectedTrip(null);
+      bookingIdempotencyRef.current = { fingerprint: "", key: "" };
       await fetchTrips({
         startWardId: searchForm.startWardId,
         endWardId: searchForm.endWardId,
