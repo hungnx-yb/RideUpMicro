@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: chat_service
+
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/notification_service_db
+    redis:
+      host: rideupmicroredis-hung2307xuan-bff7.f.aivencloud.com
+      port: 27742
+      username: default
+      password: AVNS_w8vWRSdFiTovQJ277R8
+      timeout: 10s
+      ssl:
+        enabled: true
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+  cache:
+    type: redis
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: hungabc2307@gmail.com
+    password: kblwzwaamhqyokjc
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+server:
+  port: 8087
+  servlet:
+    context-path: /api/chat
+
+jwt:
+  signerKey: S5eUx6DQSJ3ce3Dokj+qZmVlpj3hG7M841wX3NEj3oMcPwx6+oOA9AdHzbZE3Nb84
+  valid-duration: 36000
+  refreshable-duration: 360000
+
+expiryTime: 3600
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+
+supabase:
+  url: https://tgbtragwxkulpittcjzw.supabase.co
+  api-key: sb_secret_J_fc93TeUV2CNFWJPh0aVQ_fYGfDwnZ
+  bucket: Ride_Up_Micro
+
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+
+
+

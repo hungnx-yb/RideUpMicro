@@ -22,3 +22,11 @@ export async function getAllTripsApi(params) {
     count: response?.data?.count || 0,
   };
 }
+
+export async function searchAllDriveTripApi(params) {
+  const response = await axiosClient.get(`${tripBaseUrl}/trip/driver`, { params });
+  return {
+    items: response?.data?.result || [],
+    count: response?.data?.count || 0,
+  };
+}

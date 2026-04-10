@@ -1,9 +1,6 @@
 package com.rideup.trip_service.service;
 
-import com.rideup.trip_service.dto.request.CreateTripRequest;
-import com.rideup.trip_service.dto.request.SeatReleaseRequest;
-import com.rideup.trip_service.dto.request.SeatReserveRequest;
-import com.rideup.trip_service.dto.request.TripStatusChangeRequest;
+import com.rideup.trip_service.dto.request.*;
 import com.rideup.trip_service.dto.response.*;
 import com.rideup.trip_service.entity.Route;
 import com.rideup.trip_service.entity.Trip;
@@ -198,5 +195,11 @@ public class TripService {
         pageResponse.setMeta(meta);
 
         return pageResponse;
+    }
+
+
+    public Page<TripResponse> searchDriveTrip(SearchTripDriveRequest request) {
+        Page<Trip> page = tripRepository.searchDriveTrip(request);
+        return page.map(trip -> modelMapper.map(trip, TripResponse.class));
     }
 }

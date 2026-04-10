@@ -93,6 +93,20 @@ spring:
                 redis-rate-limiter.burstCapacity: 20
                 redis-rate-limiter.requestedTokens: 1
 
+        - id: chat-service
+          uri: lb://chat-service
+          predicates:
+            - Path=/api/chat/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userKeyResolver}"
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+
+
+
       globalcors:
         cors-configurations:
           "[/**]":

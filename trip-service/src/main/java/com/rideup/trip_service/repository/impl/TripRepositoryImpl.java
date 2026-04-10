@@ -1,6 +1,8 @@
 package com.rideup.trip_service.repository.impl;
+import com.rideup.trip_service.dto.request.SearchTripDriveRequest;
 import com.rideup.trip_service.entity.Trip;
 import com.rideup.trip_service.repository.TripRepositoryCustom;
+import com.rideup.trip_service.utils.SecurityUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import lombok.AccessLevel;
@@ -88,6 +90,78 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
         return new PageImpl<>(
                 result,
                 pageable != null ? pageable : Pageable.unpaged(),
+                total.longValue()
+        );
+    }
+
+    @Override
+    public Page<Trip> searchDriveTrip(SearchTripDriveRequest filter) {
+        String driverId= SecurityUtils.getCurrentUserId();
+        StringBuilder baseQuery = new StringBuilder("""
+            FROM trip t
+            WHERE 1=1
+            AND t.driver_id = :driverId 
+        """);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("driverId", driverId);
+        if (filter.getStartProvinceId() != null && !filter.getStartProvinceId().isBlank()) {
+            params.put("startProvinceId", filter.getStartProvinceId());
+            baseQuery.append("""
+                AND t.start_province_id = :startProvinceId
+            """);
+        }
+
+
+        if (filter.getEndProvinceId() != null && !filter.getEndProvinceId().isBlank()) {
+            params.put("endProvinceId", filter.getEndProvinceId());
+            baseQuery.append("""
+                AND t.end_province_id = :endProvinceId
+            """);
+        }
+        LocalDate startDate = filter.getStartDate();
+        LocalDate endDate = filter.getEndDate();
+
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            LocalDate temp = startDate;
+            startDate = endDate;
+            endDate = temp;
+        }
+
+        if (startDate != null) {
+            LocalDateTime startOfDay = startDate.atStartOfDay();
+            params.put("startDate", startOfDay);
+            baseQuery.append("""
+                AND t.departure_time >= :startDate
+            """);
+        }
+
+        if (endDate != null) {
+            LocalDateTime endExclusive = endDate.plusDays(1).atStartOfDay();
+            params.put("endDate", endExclusive);
+            baseQuery.append("""
+                AND t.departure_time < :endDate
+            """);
+        }
+        String countSql = "SELECT COUNT(*) " + baseQuery;
+        Query countQuery = entityManager.createNativeQuery(countSql);
+        params.forEach(countQuery::setParameter);
+
+        Number total = (Number) countQuery.getSingleResult();
+
+        String dataSql = "SELECT * " + baseQuery + " ORDER BY t.departure_time DESC";
+        Query dataQuery = entityManager.createNativeQuery(dataSql, Trip.class);
+        params.forEach(dataQuery::setParameter);
+
+        if (filter.getPageable() != null) {
+            dataQuery.setFirstResult((int) filter.getPageable().getOffset());
+            dataQuery.setMaxResults(filter.getPageable().getPageSize());
+        }
+
+        List<Trip> result = dataQuery.getResultList();
+        return new PageImpl<>(
+                result,
+                filter.getPageable() != null ? filter.getPageable() : Pageable.unpaged(),
                 total.longValue()
         );
     }

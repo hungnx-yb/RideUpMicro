@@ -1,8 +1,8 @@
 package com.rideup.notification_service.kafka.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rideup.notification_service.client.BookingFeignClient;
-import com.rideup.notification_service.client.TripFeignClient;
+import com.rideup.notification_service.feignClient.BookingFeignClient;
+import com.rideup.notification_service.feignClient.TripFeignClient;
 import com.rideup.notification_service.dto.event.BookingCancelledEvent;
 import com.rideup.notification_service.dto.event.BookingConfirmedEvent;
 import com.rideup.notification_service.dto.response.BookingResponse;

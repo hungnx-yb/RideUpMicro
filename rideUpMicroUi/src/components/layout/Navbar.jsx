@@ -1,10 +1,16 @@
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { FaCarSide, FaSignOutAlt, FaUserCircle } from "react-icons/fa";
 import Button from "../common/Button";
 import useAuth from "../../hooks/useAuth";
 
 function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
+  };
 
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -38,7 +44,7 @@ function Navbar() {
                 <FaUserCircle />
                 <span>{user?.name || "User"}</span>
               </div>
-              <Button variant="secondary" className="gap-2" onClick={logout}>
+              <Button variant="secondary" className="gap-2" onClick={handleLogout}>
                 <FaSignOutAlt />
                 Logout
               </Button>

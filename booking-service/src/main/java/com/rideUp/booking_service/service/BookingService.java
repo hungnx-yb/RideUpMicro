@@ -6,12 +6,14 @@ import com.rideUp.booking_service.dto.event.BookingConfirmedEvent;
 import com.rideUp.booking_service.dto.event.PaymentRequestedEvent;
 import com.rideUp.booking_service.dto.response.BookingResponse;
 import com.rideUp.booking_service.dto.response.ApiResponse;
+import com.rideUp.booking_service.dto.response.UserResponse;
 import com.rideUp.booking_service.entity.Booking;
 import com.rideUp.booking_service.enums.BookingStatus;
 import com.rideUp.booking_service.enums.PaymentMethod;
 import com.rideUp.booking_service.enums.PaymentStatus;
 import com.rideUp.booking_service.exception.AppException;
 import com.rideUp.booking_service.exception.ErrorCode;
+import com.rideUp.booking_service.feignClient.IdentityServiceClient;
 import com.rideUp.booking_service.feignClient.TripServiceClient;
 import com.rideUp.booking_service.kafka.producer.BookingServicePublisher;
 import com.rideUp.booking_service.repository.BookingRepository;
@@ -31,8 +33,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -45,6 +49,7 @@ public class BookingService {
     TripServiceClient tripServiceClient;
     BookingServicePublisher bookingServicePublisher;
     ModelMapper modelMapper;
+    IdentityServiceClient identityServiceClient;
 
     @NonFinal
     @Value("${expiryTime:3600}")
@@ -149,6 +154,41 @@ public class BookingService {
         return bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)
                 .stream()
                 .map(booking -> modelMapper.map(booking, BookingResponse.class))
+                .toList();
+    }
+
+    public List<BookingResponse> getBookingsByTripId(String tripId) {
+        if (tripId == null || tripId.isBlank()) {
+            return List.of();
+        }
+
+        List<Booking> bookingList = bookingRepository.findByTripIdOrderByCreatedAtDesc(tripId);
+        if (bookingList.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> userIds = bookingList.stream()
+                .map(Booking::getCustomerId)
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+
+
+        List<UserResponse> response = identityServiceClient.getUsersInfoByIds(userIds).getResult();
+        Map<String, UserResponse> userMap = response.stream()
+                .filter(user -> user.getId() != null)
+                .collect(Collectors.toMap(UserResponse::getId, user -> user, (a, b) -> a));
+
+        return bookingList.stream()
+                .map(booking -> {
+                    BookingResponse responseItem = modelMapper.map(booking, BookingResponse.class);
+                    UserResponse user = userMap.get(booking.getCustomerId());
+                    if (user != null) {
+                        responseItem.setUserName(user.getFullName());
+                        responseItem.setUserAvatar(user.getAvatarUrl());
+                    }
+                    return responseItem;
+                })
                 .toList();
     }
 

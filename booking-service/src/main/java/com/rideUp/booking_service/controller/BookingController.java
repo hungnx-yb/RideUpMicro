@@ -54,6 +54,16 @@ public class BookingController {
                 .build();
     }
 
+    @GetMapping("/trip/{tripId}")
+    public ApiResponse<List<BookingResponse>> getBookingsByTripId(@PathVariable String tripId) {
+        List<BookingResponse> responses = bookingService.getBookingsByTripId(tripId);
+        return ApiResponse.<List<BookingResponse>>builder()
+                .message("Bookings retrieved successfully")
+                .count((long) responses.size())
+                .result(responses)
+                .build();
+    }
+
     @PostMapping("/{id}/cancel")
     public ApiResponse<BookingResponse> cancelBooking(
             @PathVariable String id,

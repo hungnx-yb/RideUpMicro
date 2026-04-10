@@ -43,6 +43,9 @@ public class BookingResponse {
     String dropoffWardId;
     String dropoffAddressText;
 
+    String userAvatar;
+    String userName;
+
     String note;
     LocalDateTime reservedAt;
     LocalDateTime expiresAt;

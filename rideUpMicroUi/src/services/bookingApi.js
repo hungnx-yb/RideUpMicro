@@ -33,6 +33,14 @@ export async function getMyBookingsApi() {
   return unwrapApiResponse(response) || [];
 }
 
+export async function getBookingsByTripIdApi(tripId) {
+  if (!tripId) {
+    return [];
+  }
+  const response = await axiosClient.get(`${bookingBaseUrl}/bookings/trip/${tripId}`);
+  return unwrapApiResponse(response) || [];
+}
+
 export async function cancelBookingApi(bookingId, cancelReason = "") {
   const payload = cancelReason ? { reason: cancelReason } : {};
   const response = await axiosClient.post(`${bookingBaseUrl}/bookings/${bookingId}/cancel`, payload);

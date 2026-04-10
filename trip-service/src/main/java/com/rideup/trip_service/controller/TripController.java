@@ -1,9 +1,6 @@
 package com.rideup.trip_service.controller;
 
-import com.rideup.trip_service.dto.request.CreateTripRequest;
-import com.rideup.trip_service.dto.request.SeatReleaseRequest;
-import com.rideup.trip_service.dto.request.SeatReserveRequest;
-import com.rideup.trip_service.dto.request.TripStatusChangeRequest;
+import com.rideup.trip_service.dto.request.*;
 import com.rideup.trip_service.dto.response.ApiResponse;
 import com.rideup.trip_service.dto.response.PageResponse;
 import com.rideup.trip_service.dto.response.SeatResponse;
@@ -13,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
@@ -55,9 +53,6 @@ public class TripController {
         }
 
 
-
-
-
     @PatchMapping("/{id}/status")
     public ApiResponse<TripResponse> changeStatus(@PathVariable String id,
                                                   @Valid @RequestBody TripStatusChangeRequest request) {
@@ -88,6 +83,16 @@ public class TripController {
                .result(pageResponse.getItems())
                .message("Trips retrieved successfully")
                .count(pageResponse.getMeta().getTotalElements())
+               .build();
+    }
+
+
+    @GetMapping("/driver")
+    public ApiResponse<List<TripResponse>> searchAllDriveTrip(@ModelAttribute SearchTripDriveRequest request){
+        Page<TripResponse> tripResponses = tripService.searchDriveTrip(request);
+       return ApiResponse.<List<TripResponse>>builder()
+               .count(tripResponses.getTotalElements())
+               .result(tripResponses.getContent())
                .build();
     }
 }

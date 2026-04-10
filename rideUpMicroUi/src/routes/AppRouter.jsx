@@ -16,6 +16,8 @@ import AuthVerifyAccountPage from "../pages/AuthVerifyAccountPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
 import DriverOnboardingPage from "../pages/DriverOnboardingPage";
 import PaymentVnpayResultPage from "../pages/PaymentVnpayResultPage";
+import BookingChatPage from "../pages/chat/BookingChatPage";
+import DriverTripsPage from "../pages/driver/DriverTripsPage";
 import ProtectedRoute from "./ProtectedRoute";
 import useAuth from "../hooks/useAuth";
 import { getMyDriverProfileApi, getMyVehicleApi } from "../services/driverOnboardingApi";
@@ -155,6 +157,14 @@ function AppRouter() {
         <Route path="/dashboard" element={<DashboardRouteByRole />} />
         <Route path="/driver-dashboard" element={<DriverOnlyRoute />} />
         <Route
+          path="/driver/trips"
+          element={(
+            <DriverAccessWrapper>
+              <DriverTripsPage />
+            </DriverAccessWrapper>
+          )}
+        />
+        <Route
           path="/admin-dashboard"
           element={(
             <AdminOnlyRoute>
@@ -204,6 +214,7 @@ function AppRouter() {
           )}
         />
         <Route path="/driver/onboarding" element={<DriverOnboardingPage />} />
+        <Route path="/chat/:bookingId" element={<BookingChatPage />} />
         <Route path="/auth/change-password" element={<ChangePasswordPage />} />
       </Route>
 

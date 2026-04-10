@@ -16,20 +16,21 @@ import {
   FaTripadvisor,
 } from "react-icons/fa";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
 
 const menuItems = [
-  { label: "Bảng điều khiển", icon: FaThLarge, active: true },
-  { label: "Chuyến xe", icon: FaTripadvisor },
-  { label: "Khách hàng", icon: FaUsers },
-  { label: "Theo dõi", icon: FaLocationArrow },
-  { label: "Doanh thu", icon: FaChartBar },
+  { label: "Bảng điều khiển", icon: FaThLarge, path: "/driver-dashboard" },
+  { label: "Chuyến xe", icon: FaTripadvisor, path: "/driver/trips" },
+  { label: "Khách hàng", icon: FaUsers, disabled: true },
+  { label: "Theo dõi", icon: FaLocationArrow, disabled: true },
+  { label: "Doanh thu", icon: FaChartBar, disabled: true },
 ];
 
 function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" }) {
   const { logout, roles, activeRole, switchRole, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const profileMenuRef = useRef(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -72,7 +73,7 @@ function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" })
     try {
       setIsLoggingOut(true);
       await logout();
-      navigate("/auth/login", { replace: true });
+      navigate("/", { replace: true });
     } finally {
       setIsLoggingOut(false);
       setIsMenuOpen(false);
@@ -95,16 +96,24 @@ function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" })
           <nav className="hidden items-center gap-1 lg:flex xl:gap-2">
             {menuItems.map((item) => {
               const Icon = item.icon;
+              const isActive = item.path && location.pathname.startsWith(item.path);
+              const isDisabled = item.disabled;
 
               return (
                 <button
                   key={item.label}
                   type="button"
+                  onClick={() => {
+                    if (isDisabled || !item.path) {
+                      return;
+                    }
+                    navigate(item.path);
+                  }}
                   className={`text-sm font-semibold transition-colors ${
-                    item.active
+                    isActive
                       ? "rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-emerald-300"
                       : "px-3 py-2 text-slate-300 hover:text-white"
-                  }`}
+                  } ${isDisabled ? "cursor-not-allowed opacity-40" : ""}`}
                 >
                   <span className="inline-flex items-center gap-2">
                     <Icon size={14} />

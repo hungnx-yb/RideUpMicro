@@ -4,11 +4,13 @@ import {
   FaCheckCircle,
   FaClock,
   FaExclamationCircle,
+  FaCommentDots,
   FaMapMarkerAlt,
   FaRegClock,
   FaSuitcase,
   FaTimesCircle,
 } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 import CustomerNavbar from "../components/CustomerNavbar";
 import FloatingSupportMenu from "../components/FloatingSupportMenu";
 import Modal from "../components/common/Modal";
@@ -168,6 +170,7 @@ function mapBookingToView(booking) {
 }
 
 function MyTripsPage() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -382,6 +385,17 @@ function MyTripsPage() {
                           {paymentMeta.label}
                         </span>
                       </div>
+
+                      {String(booking.status || "").toUpperCase() === "CONFIRMED" ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/chat/${booking.id}`)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                          <FaCommentDots className="text-[12px]" />
+                          Chat ngay
+                        </button>
+                      ) : null}
 
                       {canCancelBooking(booking.status) ? (
                         <button

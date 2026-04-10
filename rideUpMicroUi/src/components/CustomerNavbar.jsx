@@ -69,7 +69,7 @@ function CustomerNavbar() {
     try {
       setIsLoggingOut(true);
       await logout();
-      navigate("/auth/login", { replace: true });
+      navigate("/", { replace: true });
     } finally {
       setIsLoggingOut(false);
       setIsOpen(false);

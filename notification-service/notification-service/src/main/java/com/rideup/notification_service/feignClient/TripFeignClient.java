@@ -1,12 +1,16 @@
-package com.rideup.notification_service.client;
+package com.rideup.notification_service.feignClient;
 
+import com.rideup.notification_service.config.FeignClientConfig;
 import com.rideup.notification_service.dto.response.ApiResponse;
 import com.rideup.notification_service.dto.response.TripResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
-@FeignClient(name = "trip-service", url = "${app.clients.trip.base-url:http://localhost:8083/api/trip}")
+@FeignClient(name = "trip-service",
+            path = "/api/trip/trip",
+            configuration = FeignClientConfig.class
+)
 public interface TripFeignClient {
 
     @GetMapping("/{id}")
