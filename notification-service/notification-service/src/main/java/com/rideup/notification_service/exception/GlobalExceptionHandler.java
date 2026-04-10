@@ -1,20 +1,11 @@
 package com.rideup.notification_service.exception;
-
-
 import com.rideup.notification_service.dto.response.ApiResponse;
-import jakarta.validation.ConstraintViolation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
-import org.springframework.validation.BindException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-
-import java.util.Map;
-import java.util.Objects;
-
 @Slf4j
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -22,7 +13,7 @@ public class GlobalExceptionHandler {
 
 
     @ExceptionHandler(value = Exception.class)
-    ResponseEntity<ApiResponse<?>> handlingRuntimeException(Exception  exception) {
+    ResponseEntity<ApiResponse<?>> handlingRuntimeException(Exception exception) {
         ApiResponse<?> apiResponse = new ApiResponse<>();
         apiResponse.setCode(ErrorCode.UNCATEGOEIZED_EXCEPTION.getCode());
         apiResponse.setMessage(ErrorCode.UNCATEGOEIZED_EXCEPTION.getMessage());
@@ -58,49 +49,4 @@ public class GlobalExceptionHandler {
                         .message(errorCode.getMessage())
                         .build());
     }
-
-    @ExceptionHandler(value = MethodArgumentNotValidException.class)
-    ResponseEntity<ApiResponse<?>> handlingMethodArgumentNotValidException(MethodArgumentNotValidException exception) {
-        String enumKey = exception.getFieldError().getDefaultMessage();
-        ApiResponse<?> apiResponse = new ApiResponse<>();
-        ErrorCode errorCode = ErrorCode.INVALID_KEY;
-        Map<String, Object> attributes = null;
-        var allErrors = exception.getBindingResult().getAllErrors();
-        if (!allErrors.isEmpty()) {
-            var contraintVioation = allErrors.get(0).unwrap(ConstraintViolation.class);
-            attributes = contraintVioation.getConstraintDescriptor().getAttributes();
-            log.info(attributes.toString());
-        }
-        try {
-            errorCode = ErrorCode.valueOf(enumKey);
-        } catch (IllegalArgumentException e) {
-
-        }
-        apiResponse.setCode(errorCode.getCode());
-        apiResponse.setMessage(
-                Objects.nonNull(attributes)
-                        ? mapAttributes(errorCode.getMessage(), attributes)
-                        : errorCode.getMessage());
-        return ResponseEntity.status(errorCode.getHttpStatus()).body(apiResponse);
-    }
-
-    @ExceptionHandler(value = BindException.class)
-    ResponseEntity<ApiResponse<?>> handlingBindException(BindException exception) {
-        ErrorCode errorCode = ErrorCode.INVALID_KEY;
-        String message = exception.getBindingResult().getFieldError() != null
-                ? exception.getBindingResult().getFieldError().getDefaultMessage()
-                : errorCode.getMessage();
-
-        return ResponseEntity.status(errorCode.getHttpStatus())
-                .body(ApiResponse.builder()
-                        .code(errorCode.getCode())
-                        .message(message)
-                        .build());
-    }
-
-    private String mapAttributes(String message, Map<String, Object> attributes) {
-        String minValue = attributes.get(MIN_ATTRIBUTE).toString();
-        return message.replace("{" + MIN_ATTRIBUTE + "}", minValue);
-    }
 }
-

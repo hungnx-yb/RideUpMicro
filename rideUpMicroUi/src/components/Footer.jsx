@@ -56,7 +56,7 @@ function Footer() {
           <div>
             <h3 className="text-sm font-bold uppercase tracking-[0.14em] text-white">Liên hệ và hỗ trợ</h3>
             <div className="mt-4 space-y-3 text-sm text-slate-400">
-              <p className="inline-flex items-center gap-2"><FaPhoneAlt className="text-emerald-400" /> 1900 6868</p>
+              <p className="inline-flex items-center gap-2"><FaPhoneAlt className="text-emerald-400" /> 0399897208</p>
               <p className="inline-flex items-center gap-2"><FaEnvelope className="text-emerald-400" /> support@rideup.vn</p>
             </div>
 

@@ -2,9 +2,17 @@ package com.rideup.notification_service.entity;
 import com.rideup.notification_service.enums.NotificationStatus;
 import com.rideup.notification_service.enums.NotificationType;
 import jakarta.persistence.*;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 @Entity
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class Notification {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

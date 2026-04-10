@@ -45,6 +45,16 @@ spring:
           auth: true
           starttls:
             enable: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    consumer:
+      group-id: ${KAFKA_GROUP_NOTIFICATION:notification-service-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 server:
   port: 8086
@@ -74,3 +84,16 @@ eureka:
     service-url:
       defaultZone: http://localhost:8761/eureka
 
+
+
+app:
+  frontend-base-url: http://localhost:5173
+  clients:
+    booking:
+      base-url: http://localhost:8084/api/booking
+    trip:
+      base-url: http://localhost:8083/api/trip
+  kafka:
+    topics:
+      booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
+      booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}

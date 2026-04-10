@@ -7,7 +7,7 @@ public class RedisKeyTTL {
     public static final Duration OTP_CHANGE_PASSWORD_TTL = Duration.ofMinutes(5);  // OTP sống 5 phút
     public static final Duration ACTIVE_ACCOUNT_TTL = Duration.ofHours(24); // Link kích hoạt sống 24 giờ
     public static final Duration USER_INFO_TTL = Duration.ofHours(1);       // Cache thông tin user 1 giờ
-
+    public static final Duration UNRED_NOTIFICATION_TTL = Duration.ofMinutes(30);
     private RedisKeyTTL() {
     }
 }
