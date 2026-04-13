@@ -27,7 +27,11 @@ public class Conversation {
     @Indexed
     List<String> participants;
 
+    @Indexed(unique = true)
+    String bookingId;
+
     String lastMessagePreview;
+    String lastMessageSenderId;
 
     LocalDateTime lastMessageAt;
     @CreatedDate

@@ -1,10 +1,10 @@
 spring:
   application:
-    name: chat_service
+    name: chat-service
 
   data:
     mongodb:
-      uri: mongodb://localhost:27017/notification_service_db
+      uri: mongodb://localhost:27017/chat_service_db
     redis:
       host: rideupmicroredis-hung2307xuan-bff7.f.aivencloud.com
       port: 27742

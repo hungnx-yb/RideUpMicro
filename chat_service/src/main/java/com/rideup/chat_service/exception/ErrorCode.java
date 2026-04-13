@@ -33,7 +33,14 @@ public enum ErrorCode {
     // Payment related errors
     PAYMENT_SERVICE_ERROR(7001, "Payment service error occurred", HttpStatus.SERVICE_UNAVAILABLE),
     PAYMENT_FAILED(7002, "Payment processing failed", HttpStatus.BAD_REQUEST),
-    INVALID_TRANSACTION_ID(7003, "Invalid transaction ID", HttpStatus.BAD_REQUEST);
+    INVALID_TRANSACTION_ID(7003, "Invalid transaction ID", HttpStatus.BAD_REQUEST),
+
+    // Chat related errors
+    CHAT_CONVERSATION_NOT_FOUND(8001, "Conversation not found", HttpStatus.NOT_FOUND),
+    CHAT_CONVERSATION_FORBIDDEN(8002, "No access to this conversation", HttpStatus.FORBIDDEN),
+    CHAT_BOOKING_NOT_FOUND(8003, "Booking not found for conversation", HttpStatus.NOT_FOUND),
+    CHAT_TRIP_NOT_FOUND(8004, "Trip not found for conversation", HttpStatus.NOT_FOUND),
+    CHAT_MESSAGE_INVALID(8005, "Message content is invalid", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

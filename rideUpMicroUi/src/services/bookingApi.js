@@ -41,6 +41,14 @@ export async function getBookingsByTripIdApi(tripId) {
   return unwrapApiResponse(response) || [];
 }
 
+export async function getBookingDetailApi(bookingId) {
+  if (!bookingId) {
+    return null;
+  }
+  const response = await axiosClient.get(`${bookingBaseUrl}/bookings/${bookingId}`);
+  return unwrapApiResponse(response);
+}
+
 export async function cancelBookingApi(bookingId, cancelReason = "") {
   const payload = cancelReason ? { reason: cancelReason } : {};
   const response = await axiosClient.post(`${bookingBaseUrl}/bookings/${bookingId}/cancel`, payload);

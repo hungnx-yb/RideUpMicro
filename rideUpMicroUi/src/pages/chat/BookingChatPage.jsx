@@ -1,45 +1,249 @@
-import { useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaPhone, FaReply, FaMapMarkerAlt, FaPaperclip, FaPaperPlane, FaUserCircle } from "react-icons/fa";
+import { FaPhone, FaReply, FaMapMarkerAlt, FaPaperclip, FaPaperPlane } from "react-icons/fa";
 import CustomerNavbar from "../../components/CustomerNavbar";
 import DriverNavbar from "../../components/DriverNavbar";
 import useAuth from "../../hooks/useAuth";
+import {
+  createConversationByBookingIdApi,
+  listConversationMessagesApi,
+  markConversationReadApi,
+  uploadChatFileApi,
+} from "../../services/chatApi";
+import { getBookingDetailApi } from "../../services/bookingApi";
+import { useChatSocket } from "../../context/ChatSocketContext";
+import { getApiErrorMessage } from "../../services/authApi";
+import { resolveImageUrl } from "../../utils/imageUrl";
 
 function BookingChatPage() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
   const { activeRole, user } = useAuth();
   const displayName = user?.fullName?.trim() || user?.email || "Tài xế";
+  const currentUserId = user?.id || user?.userId || user?.sub || "";
+  const [conversation, setConversation] = useState(null);
+  const [bookingDetail, setBookingDetail] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState("");
+  const { client: chatClient, isConnected: isSocketConnected } = useChatSocket() || {};
+  const messageSubRef = useRef(null);
+  const readSubRef = useRef(null);
+  const messagesRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  const messages = useMemo(
-    () => [
-      {
-        id: 1,
-        sender: "driver",
-        text: "Tôi đã đến điểm đón, đang đứng cổng chính.",
-        time: "09:12",
-      },
-      {
-        id: 2,
-        sender: "customer",
-        text: "Em đang ra, khoảng 3 phút tới.",
-        time: "09:13",
-      },
-      {
-        id: 3,
-        sender: "driver",
-        text: "Ok em, anh chờ ở cổng. Em đi cẩn thận.",
-        time: "09:14",
-      },
-      {
-        id: 4,
-        sender: "customer",
-        text: "Em thấy xe rồi, em lại ngay.",
-        time: "09:15",
-      },
-    ],
-    []
-  );
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadConversation = async () => {
+      if (!bookingId) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setErrorMessage("");
+
+      try {
+        const [booking, convo] = await Promise.all([
+          getBookingDetailApi(bookingId),
+          createConversationByBookingIdApi(bookingId),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setBookingDetail(booking);
+        setConversation(convo);
+
+        if (convo?.id) {
+          const history = await listConversationMessagesApi(convo.id, 0, 50);
+          if (!isMounted) {
+            return;
+          }
+          setMessages(history?.items || []);
+          await markConversationReadApi(convo.id);
+        }
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+        setErrorMessage(getApiErrorMessage(error, "Không tải được cuộc hội thoại."));
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadConversation();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [bookingId]);
+
+  useEffect(() => {
+    if (!chatClient || !isSocketConnected || !conversation?.id) {
+      return undefined;
+    }
+
+    const messageSub = chatClient.subscribe("/user/queue/messages", (frame) => {
+      if (!frame?.body) {
+        return;
+      }
+      try {
+        const payload = JSON.parse(frame.body);
+        if (!payload || payload.conversationId !== conversation.id) {
+          return;
+        }
+        setMessages((prev) => [...prev, payload]);
+        if (payload.senderId && payload.senderId !== currentUserId) {
+          markConversationReadApi(conversation.id).catch(() => {});
+        }
+      } catch {
+        // ignore parse errors
+      }
+    });
+
+    const readSub = chatClient.subscribe("/user/queue/read", (frame) => {
+      if (!frame?.body) {
+        return;
+      }
+      try {
+        JSON.parse(frame.body);
+      } catch {
+        // ignore parse errors
+      }
+    });
+
+    messageSubRef.current = messageSub;
+    readSubRef.current = readSub;
+
+    return () => {
+      messageSubRef.current?.unsubscribe();
+      readSubRef.current?.unsubscribe();
+      messageSubRef.current = null;
+      readSubRef.current = null;
+    };
+  }, [chatClient, isSocketConnected, conversation?.id, currentUserId]);
+
+  useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (!pendingFile) {
+      if (pendingPreviewUrl) {
+        URL.revokeObjectURL(pendingPreviewUrl);
+      }
+      setPendingPreviewUrl("");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(pendingFile);
+    setPendingPreviewUrl(previewUrl);
+
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [pendingFile]);
+
+  const handleSendMessage = async (content) => {
+    const trimmed = (content || messageInput).trim();
+    if (!conversation?.id) {
+      return;
+    }
+
+    if (pendingFile) {
+      try {
+        setIsUploading(true);
+        setErrorMessage("");
+        const objectPath = await uploadChatFileApi(pendingFile);
+        if (!objectPath) {
+          throw new Error("Upload failed");
+        }
+
+        chatClient?.publish({
+          destination: "/app/chat.send",
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            type: resolveMessageTypeFromFile(pendingFile),
+            mediaUrl: objectPath,
+            content: trimmed || undefined,
+          }),
+        });
+      } catch (error) {
+        setErrorMessage(getApiErrorMessage(error, "Không tải được tệp đính kèm."));
+        return;
+      } finally {
+        setIsUploading(false);
+        setPendingFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    }
+
+    if (!trimmed) {
+      return;
+    }
+
+    chatClient?.publish({
+      destination: "/app/chat.send",
+      body: JSON.stringify({
+        conversationId: conversation.id,
+        type: "TEXT",
+        content: trimmed,
+      }),
+    });
+
+    setMessageInput("");
+  };
+
+  const resolveMessageTypeFromFile = (file) => {
+    const mimeType = file?.type || "";
+    if (mimeType.startsWith("video/")) {
+      return "VIDEO";
+    }
+    if (mimeType.startsWith("audio/")) {
+      return "AUDIO";
+    }
+    return "IMAGE";
+  };
+
+  const handleUploadFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    setPendingFile(file);
+  };
+
+  const clearPendingFile = () => {
+    setPendingFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const formatMessageTime = (timestamp) => {
+    if (!timestamp) {
+      return "";
+    }
+    const parsed = new Date(timestamp);
+    if (Number.isNaN(parsed.getTime())) {
+      return "";
+    }
+    return parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  };
 
   const quickReplies = [
     "Em sẽ tới sau 5 phút",
@@ -90,25 +294,25 @@ function BookingChatPage() {
                 <div className="flex h-full w-full items-center justify-center">D</div>
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-900">Duy Tran</p>
-                <p className="text-[11px] text-slate-500">Hyundai Solati · 16 chỗ</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {activeRole === "DRIVER" ? "Hành khách" : "Tài xế"}
+                </p>
+                <p className="text-[11px] text-slate-500">Đang cập nhật thông tin</p>
               </div>
             </div>
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">Điểm đón</p>
               <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <FaMapMarkerAlt className="text-emerald-500" />
-                Lotus Parking, Gate 2
+                {bookingDetail?.pickupAddressText || "Đang cập nhật điểm đón"}
               </p>
-              <p className="text-[11px] text-slate-500">ETA 4 phút</p>
             </div>
             <div className="rounded-2xl border border-rose-100 bg-rose-50/40 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">Điểm trả</p>
               <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <FaMapMarkerAlt className="text-rose-400" />
-                Tân Sơn Nhất
+                {bookingDetail?.dropoffAddressText || "Đang cập nhật điểm trả"}
               </p>
-              <p className="text-[11px] text-slate-500">Hôm nay · 09:30 AM</p>
             </div>
           </aside>
 
@@ -116,7 +320,9 @@ function BookingChatPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">Cuộc hội thoại</h2>
               <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Hôm nay</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  {isSocketConnected ? "Đang kết nối" : "Đang chờ kết nối"}
+                </span>
                 <button
                   type="button"
                   className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
@@ -127,29 +333,53 @@ function BookingChatPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex flex-1 flex-col gap-4 overflow-y-auto pr-2">
+            <div ref={messagesRef} className="mt-6 flex flex-1 flex-col gap-4 overflow-y-auto pr-2">
+              {isLoading ? (
+                <div className="text-sm text-slate-500">Đang tải hội thoại...</div>
+              ) : null}
+              {errorMessage ? <div className="text-sm text-rose-500">{errorMessage}</div> : null}
               {messages.map((message, index) => {
-                const isCustomer = message.sender === "customer";
+                const isMine = message.senderId && message.senderId === currentUserId;
                 return (
                   <div
-                    key={message.id}
-                    className={`flex ${isCustomer ? "justify-end" : "justify-start"}`}
+                    key={message.id || `${message.senderId}-${index}`}
+                    className={`flex ${isMine ? "justify-end" : "justify-start"}`}
                     style={{ animationDelay: `${index * 80}ms` }}
                   >
                     <div
                       className={`max-w-[78%] rounded-2xl px-3 py-2 text-sm shadow-md chat-rise ${
-                        isCustomer
+                        isMine
                           ? "bg-[color:var(--chat-accent)] text-white"
                           : "bg-slate-100 text-slate-800"
                       }`}
                     >
-                      <p className="leading-relaxed">{message.text}</p>
+                      {message.mediaUrl ? (
+                        message.type === "IMAGE" ? (
+                          <img
+                            src={resolveImageUrl(message.mediaUrl)}
+                            alt="attachment"
+                            className="mb-2 max-h-60 rounded-xl object-cover"
+                          />
+                        ) : (
+                          <a
+                            href={resolveImageUrl(message.mediaUrl)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`mb-2 inline-flex break-all text-xs font-semibold underline ${
+                              isMine ? "text-white" : "text-emerald-700"
+                            }`}
+                          >
+                            Tệp đính kèm
+                          </a>
+                        )
+                      ) : null}
+                      {message.content ? <p className="leading-relaxed">{message.content}</p> : null}
                       <p
                         className={`mt-2 text-right text-[10px] ${
-                          isCustomer ? "text-white/70" : "text-slate-400"
+                          isMine ? "text-white/70" : "text-slate-400"
                         }`}
                       >
-                        {message.time}
+                        {formatMessageTime(message.createdAt)}
                       </p>
                     </div>
                   </div>
@@ -162,6 +392,7 @@ function BookingChatPage() {
                 <button
                   key={reply}
                   type="button"
+                  onClick={() => handleSendMessage(reply)}
                   className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:-translate-y-0.5 hover:border-emerald-200"
                 >
                   <FaReply className="text-[10px]" />
@@ -175,20 +406,56 @@ function BookingChatPage() {
                 <span>Gửi cập nhật nhanh</span>
                 <span>1 file đính kèm</span>
               </div>
+              {pendingPreviewUrl ? (
+                <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-white p-3">
+                  <img
+                    src={pendingPreviewUrl}
+                    alt="preview"
+                    className="h-20 w-24 rounded-xl object-cover"
+                  />
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-slate-700">Ảnh đính kèm</p>
+                    <button
+                      type="button"
+                      onClick={clearPendingFile}
+                      className="mt-2 text-xs font-semibold text-rose-500"
+                    >
+                      Bỏ ảnh
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <div className="flex flex-col gap-3 sm:flex-row">
                 <input
                   type="text"
                   placeholder="Nhập tin nhắn"
+                  value={messageInput}
+                  onChange={(event) => setMessageInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
                   className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-400 focus:outline-none"
                 />
                 <div className="flex items-center gap-3">
                   <label className="cursor-pointer inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600 transition hover:border-emerald-200">
                     <FaPaperclip className="text-[11px]" />
-                    Đính kèm
-                    <input type="file" className="hidden" />
+                    {isUploading ? "Đang tải..." : "Đính kèm"}
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={handleUploadFile}
+                      accept="image/*,video/*,audio/*"
+                      ref={fileInputRef}
+                      disabled={isUploading}
+                    />
                   </label>
                   <button
                     type="button"
+                    onClick={() => handleSendMessage()}
+                    disabled={isUploading}
                     className="rounded-2xl bg-[color:var(--chat-accent)] px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-emerald-200/60 transition hover:-translate-y-0.5"
                   >
                     <span className="inline-flex items-center gap-2">
