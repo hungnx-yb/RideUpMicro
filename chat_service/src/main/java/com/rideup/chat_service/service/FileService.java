@@ -1,7 +1,9 @@
 package com.rideup.chat_service.service;
 
 import com.rideup.chat_service.config.SupabaseStorageConfig;
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -10,14 +12,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class FileService {
 
-    private final SupabaseStorageConfig supabaseConfig;
-    private final RestTemplate restTemplate;
-
+    SupabaseStorageConfig supabaseConfig;
+    RestTemplate restTemplate;
 
     public String upload(MultipartFile file, String prefix) {
         try {

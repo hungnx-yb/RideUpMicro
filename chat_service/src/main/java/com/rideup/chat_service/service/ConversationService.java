@@ -3,7 +3,6 @@ package com.rideup.chat_service.service;
 import com.rideup.chat_service.dto.response.ApiResponse;
 import com.rideup.chat_service.dto.response.BookingResponse;
 import com.rideup.chat_service.dto.response.ConversationResponse;
-import com.rideup.chat_service.dto.response.ConversationSummaryResponse;
 import com.rideup.chat_service.dto.response.ReadReceiptResponse;
 import com.rideup.chat_service.dto.response.TripResponse;
 import com.rideup.chat_service.dto.response.UserResponse;
@@ -39,7 +38,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ConversationService {
-    LocalDateTime DEFAULT_READ_AT = LocalDateTime.of(1970, 1, 1, 0, 0);
     ConversationRepository conversationRepository;
     ConversationMemberRepository conversationMemberRepository;
     MessageRepository messageRepository;
@@ -55,7 +53,8 @@ public class ConversationService {
         if (existing.isPresent()) {
             Conversation conversation = existing.get();
             ensureParticipant(conversation, currentUserId);
-            return modelMapper.map(conversationRepository.save(conversation), ConversationResponse.class);
+            Conversation saved = conversationRepository.save(conversation);
+            return toConversationResponse(saved, resolveOtherUser(saved, currentUserId));
         }
 
         BookingResponse booking = fetchBooking(bookingId);
@@ -77,7 +76,7 @@ public class ConversationService {
                     .orElseGet(() -> conversationMemberRepository.save(new ConversationMember(null, saved.getId(), participant, null)));
         }
 
-        return modelMapper.map(saved, ConversationResponse.class);
+        return toConversationResponse(saved, resolveOtherUser(saved, currentUserId));
     }
 
     public ConversationResponse getByBookingId(String bookingId) {
@@ -85,60 +84,9 @@ public class ConversationService {
         Conversation conversation = conversationRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.CHAT_CONVERSATION_NOT_FOUND));
         ensureParticipant(conversation, currentUserId);
-        return modelMapper.map(conversation, ConversationResponse.class);
+        return toConversationResponse(conversation, resolveOtherUser(conversation, currentUserId));
     }
 
-    public ConversationResponse getById(String conversationId) {
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        Conversation conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new AppException(ErrorCode.CHAT_CONVERSATION_NOT_FOUND));
-        ensureParticipant(conversation, currentUserId);
-        return modelMapper.map(conversation, ConversationResponse.class);
-    }
-
-    public List<ConversationSummaryResponse> listConversations() {
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        List<Conversation> conversations = conversationRepository
-                .findByParticipantsContainingOrderByUpdatedAtDesc(currentUserId);
-
-        Map<String, UserResponse> userMap = resolveOtherUsers(conversations, currentUserId);
-
-        List<ConversationSummaryResponse> responses = new ArrayList<>();
-        for (Conversation conversation : conversations) {
-            String otherUserId = resolveOtherUserId(conversation, currentUserId);
-            UserResponse otherUser = otherUserId == null ? null : userMap.get(otherUserId);
-
-            LocalDateTime lastReadAt = conversationMemberRepository
-                    .findByConversationIdAndUserId(conversation.getId(), currentUserId)
-                    .map(ConversationMember::getLastReadAt)
-                    .orElse(null);
-
-            if (lastReadAt == null) {
-                lastReadAt = DEFAULT_READ_AT;
-            }
-
-            long unreadCount = messageRepository.countByConversationIdAndCreatedAtAfterAndSenderIdNot(
-                    conversation.getId(),
-                    lastReadAt,
-                    currentUserId
-            );
-
-            responses.add(ConversationSummaryResponse.builder()
-                    .id(conversation.getId())
-                    .bookingId(conversation.getBookingId())
-                    .otherUserId(otherUserId)
-                    .otherUserName(otherUser == null ? null : otherUser.getFullName())
-                    .otherUserAvatar(otherUser == null ? null : otherUser.getAvatarUrl())
-                    .lastMessagePreview(conversation.getLastMessagePreview())
-                    .lastMessageSenderId(conversation.getLastMessageSenderId())
-                    .lastMessageAt(conversation.getLastMessageAt())
-                    .updatedAt(conversation.getUpdatedAt())
-                    .unreadCount(unreadCount)
-                    .build());
-        }
-
-        return responses;
-    }
 
     public void deleteConversation(String conversationId) {
         String currentUserId = SecurityUtils.getCurrentUserId();
@@ -211,26 +159,29 @@ public class ConversationService {
                 .orElse(null);
     }
 
-    private Map<String, UserResponse> resolveOtherUsers(List<Conversation> conversations, String currentUserId) {
-        List<String> otherIds = conversations.stream()
-                .map(conversation -> resolveOtherUserId(conversation, currentUserId))
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
 
-        if (otherIds.isEmpty()) {
-            return new HashMap<>();
+    private UserResponse resolveOtherUser(Conversation conversation, String currentUserId) {
+        String otherUserId = resolveOtherUserId(conversation, currentUserId);
+        if (otherUserId == null) {
+            return null;
         }
+
         try {
-            ApiResponse<List<UserResponse>> response = identityServiceClient.getUsersInfoByIds(otherIds);
+            ApiResponse<List<UserResponse>> response = identityServiceClient.getUsersInfoByIds(List.of(otherUserId));
             List<UserResponse> users = response == null ? null : response.getResult();
-            if (users == null) {
-                return new HashMap<>();
+            if (users == null || users.isEmpty()) {
+                return null;
             }
-            return users.stream().collect(Collectors.toMap(UserResponse::getId, user -> user));
+            return users.get(0);
         } catch (Exception ignored) {
-            return new HashMap<>();
+            return null;
         }
+    }
+
+    private ConversationResponse toConversationResponse(Conversation conversation, UserResponse otherUser) {
+        ConversationResponse conversationResponse = modelMapper.map(conversation, ConversationResponse.class);
+        conversationResponse.setOtherUser(otherUser);
+        return conversationResponse;
     }
 
     private void ensureParticipant(Conversation conversation, String userId) {
@@ -238,7 +189,6 @@ public class ConversationService {
             throw new AppException(ErrorCode.CHAT_CONVERSATION_FORBIDDEN);
         }
     }
-
 
 
 }

@@ -12,7 +12,6 @@ import DriverNavbar from "../components/DriverNavbar";
 import useAuth from "../hooks/useAuth";
 import { getApiErrorMessage } from "../services/authApi";
 import { getAllProvinces, getAllWards } from "../services/locationApi";
-import { getRouteDetailByStartAndEndApi } from "../services/routeAdminApi";
 import { createTripApi } from "../services/tripApi";
 
 const initialForm = {
@@ -36,8 +35,6 @@ function DriverCreateTripPage() {
   const [provinces, setProvinces] = useState([]);
   const [startWards, setStartWards] = useState([]);
   const [endWards, setEndWards] = useState([]);
-  const [routeDetail, setRouteDetail] = useState(null);
-  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -93,35 +90,8 @@ function DriverCreateTripPage() {
     fetchWards();
   }, [form.endProvinceId]);
 
-  useEffect(() => {
-    const fetchRoute = async () => {
-      if (!form.startProvinceId || !form.endProvinceId) {
-        setRouteDetail(null);
-        setForm((previous) => ({ ...previous, priceVnd: "", seatTotal: previous.seatTotal }));
-        return;
-      }
-
-      try {
-        setIsLoadingRoute(true);
-        const route = await getRouteDetailByStartAndEndApi(form.startProvinceId, form.endProvinceId);
-        setRouteDetail(route);
-        if (route?.basePriceVnd) {
-          setForm((previous) => ({ ...previous, priceVnd: route.basePriceVnd?.toString() || "" }));
-        }
-      } catch (error) {
-        setRouteDetail(null);
-        setErrorMessage(getApiErrorMessage(error, "Không tìm thấy tuyến giữa hai tỉnh đã chọn"));
-      } finally {
-        setIsLoadingRoute(false);
-      }
-    };
-
-    fetchRoute();
-  }, [form.startProvinceId, form.endProvinceId]);
-
   const canSubmit = useMemo(() => {
     return (
-      !!routeDetail &&
       form.startProvinceId &&
       form.endProvinceId &&
       form.startWardId &&
@@ -130,15 +100,7 @@ function DriverCreateTripPage() {
       Number(form.seatTotal) > 0 &&
       Number(form.priceVnd) > 0
     );
-  }, [form, routeDetail]);
-
-  const estimatedArrivalTimeIso = useMemo(() => {
-    if (!routeDetail?.estimatedDurationMin || !form.departureTime) return null;
-    const departure = new Date(form.departureTime);
-    if (Number.isNaN(departure.getTime())) return null;
-    const arrival = new Date(departure.getTime() + routeDetail.estimatedDurationMin * 60 * 1000);
-    return arrival.toISOString();
-  }, [form.departureTime, routeDetail]);
+  }, [form]);
 
   const handleChange = (field, value) => {
     setForm((previous) => ({ ...previous, [field]: value }));
@@ -151,21 +113,14 @@ function DriverCreateTripPage() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    if (!routeDetail?.id) {
-      setErrorMessage("Vui lòng chọn tuyến hợp lệ để tạo chuyến.");
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       const payload = {
-        routeId: routeDetail.id,
         startProvinceId: form.startProvinceId,
         endProvinceId: form.endProvinceId,
         startAddressText: form.startAddressText?.trim() || undefined,
         endAddressText: form.endAddressText?.trim() || undefined,
         departureTime: form.departureTime ? new Date(form.departureTime).toISOString() : null,
-        estimatedArrivalTime: estimatedArrivalTimeIso,
         seatTotal: Number(form.seatTotal),
         priceVnd: Number(form.priceVnd),
         stops: [
@@ -268,34 +223,6 @@ function DriverCreateTripPage() {
                   </label>
                 </div>
 
-                {isLoadingRoute ? (
-                  <p className="mt-3 text-xs text-slate-500">Đang lấy thông tin tuyến...</p>
-                ) : null}
-
-                {routeDetail ? (
-                  <div className="mt-4 grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-slate-800 sm:grid-cols-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-emerald-600">Tuyến</p>
-                      <p className="font-semibold">{routeDetail.routeName}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-emerald-600">Quãng đường</p>
-                      <p className="font-semibold">{routeDetail.distanceKm} km</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-emerald-600">Thời gian ước tính</p>
-                      <p className="font-semibold">{routeDetail.estimatedDurationMin} phút</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-emerald-600">Giá gợi ý</p>
-                      <p className="font-semibold">{routeDetail.basePriceVnd?.toLocaleString("vi-VN")} đ</p>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <p className="text-xs uppercase tracking-wide text-emerald-600">Người tạo</p>
-                      <p className="font-semibold">{routeDetail.fullName || "Admin"}</p>
-                    </div>
-                  </div>
-                ) : null}
               </section>
 
               <section className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
@@ -390,7 +317,7 @@ function DriverCreateTripPage() {
                   </label>
                 </div>
 
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="mt-3">
                   <label className="text-sm font-medium text-slate-700">
                     Giá vé (VND)
                     <input
@@ -401,31 +328,7 @@ function DriverCreateTripPage() {
                       onChange={(event) => handleChange("priceVnd", event.target.value)}
                       required
                     />
-                    {routeDetail?.basePriceVnd ? (
-                      <p className="mt-1 text-xs text-slate-500">
-                        Gợi ý từ tuyến: {routeDetail.basePriceVnd.toLocaleString("vi-VN")} đ
-                      </p>
-                    ) : null}
                   </label>
-
-                  {estimatedArrivalTimeIso ? (
-                    <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-slate-800">
-                      <p className="text-xs uppercase tracking-wide text-emerald-600">Dự kiến kết thúc</p>
-                      <p className="font-semibold">
-                        {new Date(estimatedArrivalTimeIso).toLocaleString("vi-VN", {
-                          hour12: false,
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          day: "2-digit",
-                          month: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
-                      Nhập giờ xuất phát để xem giờ dự kiến kết thúc.
-                    </div>
-                  )}
                 </div>
               </section>
             </div>
@@ -459,8 +362,8 @@ function DriverCreateTripPage() {
                 </div>
                 <ul className="mt-3 space-y-2 text-sm text-slate-700">
                   <li>1. Chọn tỉnh đi và đến từ dữ liệu location-service.</li>
-                  <li>2. Hệ thống tự lấy tuyến (getRouteDetailByStartAndEnd) và điền giá gợi ý.</li>
-                  <li>3. Chọn phường/xã đón và trả, nhập giờ xuất phát.</li>
+                  <li>2. Chọn phường/xã đón và trả, nhập giờ xuất phát.</li>
+                  <li>3. Nhập số ghế và giá vé.</li>
                   <li>4. Bấm "Tạo chuyến" để gửi lên trip-service.</li>
                 </ul>
               </div>
@@ -469,7 +372,7 @@ function DriverCreateTripPage() {
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs text-slate-500">
-              Dữ liệu tỉnh/thành & phường/xã lấy từ location-service. Tuyến được tự động tra cứu.
+              Dữ liệu tỉnh/thành & phường/xã lấy từ location-service.
             </div>
 
             <div className="flex gap-3">

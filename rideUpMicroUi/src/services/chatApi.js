@@ -36,12 +36,17 @@ export async function getConversationByIdApi(conversationId) {
 
 export async function listConversationMessagesApi(conversationId, page = 0, size = 20) {
   if (!conversationId) {
-    return { items: [], hasMore: false, page: 0, size };
+    return { items: [], count: 0, page: 0, size };
   }
   const response = await axiosClient.get(`${chatBaseUrl}/conversations/${conversationId}/messages`, {
     params: { page, size },
   });
-  return unwrapApiResponse(response) || { items: [], hasMore: false, page: 0, size };
+  return {
+    items: unwrapApiResponse(response) || [],
+    count: Number(response?.data?.count || 0),
+    page,
+    size,
+  };
 }
 
 export async function markConversationReadApi(conversationId) {

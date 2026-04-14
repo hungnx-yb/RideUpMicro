@@ -10,7 +10,6 @@ import DriverDashboardPage from "../pages/DriverDashboardPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import AdminDriverApprovalPage from "../pages/AdminDriverApprovalPage";
 import AdminVehicleApprovalPage from "../pages/AdminVehicleApprovalPage";
-import AdminRouteManagementPage from "../pages/AdminRouteManagementPage";
 import AuthVerifyNoticePage from "../pages/AuthVerifyNoticePage";
 import AuthVerifyAccountPage from "../pages/AuthVerifyAccountPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
@@ -185,14 +184,6 @@ function AppRouter() {
           element={(
             <AdminOnlyRoute>
               <AdminVehicleApprovalPage />
-            </AdminOnlyRoute>
-          )}
-        />
-        <Route
-          path="/admin-dashboard/routes"
-          element={(
-            <AdminOnlyRoute>
-              <AdminRouteManagementPage />
             </AdminOnlyRoute>
           )}
         />

@@ -2,14 +2,12 @@ package com.rideup.trip_service.service;
 
 import com.rideup.trip_service.dto.request.*;
 import com.rideup.trip_service.dto.response.*;
-import com.rideup.trip_service.entity.Route;
 import com.rideup.trip_service.entity.Trip;
 import com.rideup.trip_service.entity.TripStop;
 import com.rideup.trip_service.enums.TripStatus;
 import com.rideup.trip_service.exception.AppException;
 import com.rideup.trip_service.exception.ErrorCode;
 import com.rideup.trip_service.feignClient.IdentityServiceClient;
-import com.rideup.trip_service.repository.RouteRepository;
 import com.rideup.trip_service.repository.TripRepository;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.transaction.Transactional;
@@ -39,11 +37,9 @@ public class TripService {
     TripRepository tripRepository;
     ModelMapper modelMapper;
     IdentityServiceClient  identityServiceClient;
-    RouteRepository routeRepository;
 
     @Transactional
     public TripResponse createTrip(CreateTripRequest request) {
-        Route route = routeRepository.findById(request.getRouteId()).orElseThrow(() -> new AppException(ErrorCode.ROUTE_NOT_FOUND));
         UserResponse userResponse = identityServiceClient.getUserInfo().getResult();
         List<String> userIds = List.of(userResponse.getId());
         List<DriverResponse> driverResponses = identityServiceClient.getDriverDetail(userIds).getResult();
@@ -57,7 +53,6 @@ public class TripService {
         trip.setStops(null);
         trip.setDriverId(userResponse.getId());
         trip.setVehicleId(driverMap.get(userResponse.getId()).getVehicleId());
-        trip.setRoute(route);
         trip.setStatus(TripStatus.STARTED);
         trip.setSeatAvailable(request.getSeatTotal());
 

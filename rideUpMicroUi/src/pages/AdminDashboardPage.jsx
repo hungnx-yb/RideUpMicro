@@ -10,7 +10,6 @@ import {
   FaEye,
   FaExclamationTriangle,
   FaIdBadge,
-  FaLocationArrow,
   FaMapMarkedAlt,
   FaPhoneAlt,
   FaPlus,
@@ -43,7 +42,6 @@ const topMenus = [
   { label: "Thống kê", icon: FaRegChartBar, active: true, path: "/admin-dashboard" },
   { label: "Phân tích", icon: FaChartBar, active: false },
   { label: "Người dùng", icon: FaUserFriends, active: false },
-  { label: "Tuyến đường", icon: FaLocationArrow, active: false, path: "/admin-dashboard/routes" },
   { label: "Hỗ trợ", icon: FaComments, active: false },
 ];
 

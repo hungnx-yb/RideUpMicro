@@ -1,15 +1,12 @@
 package com.rideup.chat_service.controller;
 
-import com.rideup.chat_service.dto.response.ApiResponse;
-import com.rideup.chat_service.dto.response.ConversationResponse;
-import com.rideup.chat_service.dto.response.ConversationSummaryResponse;
-import com.rideup.chat_service.dto.response.MessageListResponse;
-import com.rideup.chat_service.dto.response.ReadReceiptResponse;
+import com.rideup.chat_service.dto.response.*;
 import com.rideup.chat_service.service.ConversationService;
 import com.rideup.chat_service.service.MessageService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.HandlerMapping;
 
 import java.util.List;
 
@@ -27,6 +25,7 @@ import java.util.List;
 public class ConversationController {
     ConversationService conversationService;
     MessageService messageService;
+    private final HandlerMapping resourceHandlerMapping;
 
 
     @PostMapping("/booking/{bookingId}")
@@ -47,24 +46,7 @@ public class ConversationController {
                 .build();
     }
 
-//    @GetMapping
-//    public ApiResponse<List<ConversationSummaryResponse>> listConversations() {
-//        List<ConversationSummaryResponse> responses = conversationService.listConversations();
-//        return ApiResponse.<List<ConversationSummaryResponse>>builder()
-//                .message("Conversations retrieved successfully")
-//                .count((long) responses.size())
-//                .result(responses)
-//                .build();
-//    }
 
-//    @GetMapping("/{conversationId}")
-//    public ApiResponse<ConversationResponse> getConversation(@PathVariable String conversationId) {
-//        ConversationResponse response = conversationService.getById(conversationId);
-//        return ApiResponse.<ConversationResponse>builder()
-//                .message("Conversation retrieved successfully")
-//                .result(response)
-//                .build();
-//    }
 
     @DeleteMapping("/{conversationId}")
     public ApiResponse<Void> deleteConversation(@PathVariable String conversationId) {
@@ -84,25 +66,15 @@ public class ConversationController {
     }
 
         @GetMapping("/{conversationId}/messages")
-        public ApiResponse<MessageListResponse> listMessages(
+        public ApiResponse<List<MessageResponse>> listMessages(
             @PathVariable String conversationId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "10") int size
         ) {
-        var result = messageService.listMessages(conversationId, page, size);
-        MessageListResponse response = MessageListResponse.builder()
-            .items(result.getContent())
-            .hasMore(result.hasNext())
-            .page(result.getNumber())
-            .size(result.getSize())
-            .build();
-
-        return ApiResponse.<MessageListResponse>builder()
-            .message("Messages retrieved successfully")
-            .result(response)
-            .build();
+        Page<MessageResponse> result = messageService.listMessages(conversationId, page, size);
+        return ApiResponse.<List<MessageResponse>>builder()
+                .result(result.getContent())
+                .count(result.getTotalElements())
+                .build();
         }
-
-
-
 }

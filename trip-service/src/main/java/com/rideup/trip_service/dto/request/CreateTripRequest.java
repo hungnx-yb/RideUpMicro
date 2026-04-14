@@ -26,8 +26,6 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CreateTripRequest {
 
-    @NotBlank(message = "Route is required")
-    String routeId;
 
     @NotBlank(message = "Start province is required")
     String startProvinceId;

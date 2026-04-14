@@ -21,6 +21,7 @@ public class ConversationResponse {
     String id;
     String bookingId;
     List<String> participants;
+    UserResponse otherUser;
     String lastMessagePreview;
     String lastMessageSenderId;
     LocalDateTime lastMessageAt;

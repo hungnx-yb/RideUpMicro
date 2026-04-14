@@ -3,18 +3,20 @@ package com.rideup.chat_service.service;
 import com.rideup.chat_service.dto.response.MessageResponse;
 import com.rideup.chat_service.dto.response.ReadReceiptResponse;
 import com.rideup.chat_service.model.Conversation;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ChatSocketService {
 
-    private final SimpMessagingTemplate messagingTemplate;
-
-    public ChatSocketService(SimpMessagingTemplate messagingTemplate) {
-        this.messagingTemplate = messagingTemplate;
-    }
-
+    SimpMessagingTemplate messagingTemplate;
     public void sendMessageToParticipants(Conversation conversation, MessageResponse message) {
         if (conversation.getParticipants() == null) {
             return;

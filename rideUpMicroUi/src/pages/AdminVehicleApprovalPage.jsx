@@ -13,7 +13,6 @@ import {
   FaEye,
   FaImage,
   FaIdBadge,
-  FaLocationArrow,
   FaRegChartBar,
   FaSignOutAlt,
   FaTaxi,
@@ -38,7 +37,6 @@ const topMenus = [
   { label: "Thống kê", icon: FaRegChartBar, active: false, path: "/admin-dashboard" },
   { label: "Phân tích", icon: FaChartBar, active: false },
   { label: "Người dùng", icon: FaUserFriends, active: true, path: "/admin-dashboard/vehicles-approval" },
-  { label: "Tuyến đường", icon: FaLocationArrow, active: false, path: "/admin-dashboard/routes" },
   { label: "Hỗ trợ", icon: FaComments, active: false },
 ];
 

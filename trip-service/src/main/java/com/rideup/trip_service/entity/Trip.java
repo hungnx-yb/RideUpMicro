@@ -27,9 +27,6 @@ public class Trip {
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "route_id", nullable = false)
-    Route route;
 
     String driverId;
     String vehicleId;
