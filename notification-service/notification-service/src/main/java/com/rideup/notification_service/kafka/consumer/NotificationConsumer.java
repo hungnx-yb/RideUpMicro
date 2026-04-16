@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -34,11 +35,12 @@ public class NotificationConsumer {
 			topics = "${app.kafka.topics.booking-confirmed}",
 			groupId = "${spring.kafka.consumer.group-id}"
 	)
-	public void onBookingConfirmed(String payload) throws Exception {
+	public void onBookingConfirmed(String payload, Acknowledgment ack) throws Exception {
 		BookingConfirmedEvent event = objectMapper.readValue(payload, BookingConfirmedEvent.class);
 		BookingResponse booking = resolveBooking(event.getBookingId());
 		if (booking == null || booking.getCustomerId() == null) {
 			log.warn("Skip booking-confirmed notification, booking not found for {}", event.getBookingId());
+			ack.acknowledge();
 			return;
 		}
 
@@ -69,14 +71,16 @@ public class NotificationConsumer {
 					buildMetadata("bookingId", event.getBookingId(), "tripId", tripId)
 			);
 		}
+		ack.acknowledge();
 	}
 
 	@KafkaListener(topics = "${app.kafka.topics.booking-cancelled}", groupId = "${spring.kafka.consumer.group-id}")
-	public void onBookingCancelled(String payload) throws Exception {
+	public void onBookingCancelled(String payload, Acknowledgment ack) throws Exception {
 		BookingCancelledEvent event = objectMapper.readValue(payload, BookingCancelledEvent.class);
 		BookingResponse booking = resolveBooking(event.getBookingId());
 		if (booking == null || booking.getCustomerId() == null) {
 			log.warn("Skip booking-cancelled notification, booking not found for {}", event.getBookingId());
+			ack.acknowledge();
 			return;
 		}
 
@@ -92,6 +96,7 @@ public class NotificationConsumer {
 				NotificationType.BOOKING_CANCELLED,
 				buildMetadata("bookingId", event.getBookingId(), "tripId", booking.getTripId())
 		);
+		ack.acknowledge();
 	}
 
 	private String buildMetadata(String key, String value) {

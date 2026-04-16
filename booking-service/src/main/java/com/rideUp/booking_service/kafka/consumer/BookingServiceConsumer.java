@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -28,7 +29,7 @@ public class BookingServiceConsumer {
             topics = "${app.kafka.topics.payment-completed}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void onPaymentCompleted(String payload) throws Exception {
+    public void onPaymentCompleted(String payload, Acknowledgment ack) throws Exception {
         PaymentCompletedEvent event = objectMapper.readValue(payload, PaymentCompletedEvent.class);
         log.info("[PaymentCompletedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
                 event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
@@ -40,13 +41,14 @@ public class BookingServiceConsumer {
                         .correlationId(event.getCorrelationId())
                         .build()
         );
+                ack.acknowledge();
     }
 
     @KafkaListener(
             topics = "${app.kafka.topics.payment-failed}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void onPaymentFailed(String payload) throws Exception {
+    public void onPaymentFailed(String payload, Acknowledgment ack) throws Exception {
         PaymentFailedEvent event = objectMapper.readValue(payload, PaymentFailedEvent.class);
         log.info("[PaymentFailedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
                 event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
@@ -59,6 +61,7 @@ public class BookingServiceConsumer {
                         .correlationId(event.getCorrelationId())
                         .build()
         );
+                ack.acknowledge();
     }
 
 }

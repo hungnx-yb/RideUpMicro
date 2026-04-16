@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +27,7 @@ public class TripServiceConsumer {
             groupId = "${spring.kafka.consumer.group-id}"
     )
     @Transactional
-    public void onBookingCancelled(String payload) throws Exception {
+    public void onBookingCancelled(String payload, Acknowledgment ack) throws Exception {
         BookingCancelledEvent event = objectMapper.readValue(payload, BookingCancelledEvent.class);
         log.info("[BookingCancelledEvent] eventId={}, bookingId={}, tripId={}, correlationId={}",
                 event.getEventId(), event.getBookingId(), event.getTripId(), event.getCorrelationId());
@@ -36,6 +37,7 @@ public class TripServiceConsumer {
                         .seatCount(event.getSeatCount())
                         .build()
         );
+        ack.acknowledge();
     }
 
 }

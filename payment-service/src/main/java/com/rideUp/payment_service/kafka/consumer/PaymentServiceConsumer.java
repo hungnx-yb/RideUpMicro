@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -33,7 +34,7 @@ public class PaymentServiceConsumer {
             topics = "${app.kafka.topics.payment-requested}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void onPaymentRequested(String payload) throws Exception {
+    public void onPaymentRequested(String payload, Acknowledgment ack) throws Exception {
         PaymentRequestedEvent event = objectMapper.readValue(payload, PaymentRequestedEvent.class);
         String correlationId = event.getCorrelationId();
         if (correlationId == null || correlationId.isBlank()) {
@@ -51,6 +52,7 @@ public class PaymentServiceConsumer {
         } catch (Exception ex) {
             log.error("Invalid payment method in PaymentRequestedEvent eventId={}, method={}",
                     event.getEventId(), event.getPaymentMethod());
+            ack.acknowledge();
             return;
         }
 
@@ -68,10 +70,12 @@ public class PaymentServiceConsumer {
             if (ex.getErrorCode() == ErrorCode.INVALID_PAYMENT_AMOUNT) {
                 log.error("Invalid amount in PaymentRequestedEvent eventId={}, bookingId={}, amount={}",
                         event.getEventId(), event.getBookingId(), event.getAmount());
+                ack.acknowledge();
                 return;
             }
             throw ex;
         }
+        ack.acknowledge();
     }
 
 
@@ -79,7 +83,7 @@ public class PaymentServiceConsumer {
             topics = "${app.kafka.topics.booking-cancell-request}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void onBookingCancelRequest(String payload) throws Exception {
+        public void onBookingCancelRequest(String payload, Acknowledgment ack) throws Exception {
         BookingCancellRequestEvent event = objectMapper.readValue(payload, BookingCancellRequestEvent.class);
         log.info("[BookingCancellRequest] eventId={}, bookingId={},  correlationId={}",
                 event.getEventId(), event.getBookingId(),event.getCorrelationId());
@@ -97,13 +101,18 @@ public class PaymentServiceConsumer {
                 || ex.getErrorCode() == ErrorCode.REFUND_FAILED) {
             log.info("Skip refund for bookingId={} due to {}, correlationId={}",
                 event.getBookingId(), ex.getErrorCode(), event.getCorrelationId());
+            ack.acknowledge();
             return;
             }
             throw ex;
         } catch (Exception ex) {
             log.error("Skip refund processing for bookingId={} due to unexpected error, correlationId={}",
                 event.getBookingId(), event.getCorrelationId(), ex);
+            ack.acknowledge();
+            return;
         }
+
+        ack.acknowledge();
 
     }
 
