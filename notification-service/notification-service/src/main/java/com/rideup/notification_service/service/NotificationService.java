@@ -77,13 +77,18 @@ public class NotificationService {
     public long getUnreadCount() {
         String userId = SecurityUtils.getCurrentUserId();
         String key = RedisPrefixKeyConstant.UNRED_NOTIFICATION + userId;
-        if(redisTemplate.hasKey(key)){
-            return (long) redisTemplate.opsForValue().get(key);
+        if (redisTemplate.hasKey(key)) {
+            Object value = redisTemplate.opsForValue().get(key);
+            if (value instanceof Number count) {
+                return count.longValue();
+            }
         }
         long count= notificationRepository.countByUserIdAndStatus(userId, NotificationStatus.UNREAD);
         redisTemplate.opsForValue().set(key,count, RedisKeyTTL.UNRED_NOTIFICATION_TTL);
         return count;
     }
+
+
     @Transactional
     public NotificationResponse markRead(String notificationId) {
         String userId = SecurityUtils.getCurrentUserId();
@@ -106,6 +111,7 @@ public class NotificationService {
         return modelMapper.map(notification, NotificationResponse.class);
     }
 
+
     @Transactional
     public int markAllRead() {
         String userId = SecurityUtils.getCurrentUserId();
@@ -126,4 +132,6 @@ public class NotificationService {
         }
         return notifications.size();
     }
+
+
 }

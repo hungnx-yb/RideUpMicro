@@ -15,16 +15,11 @@ import {
   FaWallet,
 } from "react-icons/fa";
 import useAuth from "../hooks/useAuth";
-
-const menuItems = [
-  { to: "/trips/search", label: "Tìm chuyến xe", icon: FaSearch },
-  { to: "/trips/my", label: "Chuyến của tôi", icon: FaSuitcase },
-  { to: "/notifications", label: "Thông báo", icon: FaBell },
-  { to: "/payments", label: "Thanh toán", icon: FaWallet },
-];
+import { useNotificationSocket } from "../context/NotificationSocketContext";
 
 function CustomerNavbar() {
   const { user, logout, roles, activeRole, switchRole } = useAuth();
+  const { unreadCount } = useNotificationSocket() || {};
   const navigate = useNavigate();
   const menuRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -33,6 +28,13 @@ function CustomerNavbar() {
   const displayName = user?.fullName?.trim() || user?.email || "RideUp User";
   const displayInitial = displayName.charAt(0).toUpperCase();
   const canSwitchRole = roles.length >= 2;
+  const safeUnreadCount = Number.isFinite(unreadCount) ? unreadCount : 0;
+  const unreadBadge = safeUnreadCount > 5 ? "5+" : `${safeUnreadCount}`;
+  const menuItems = [
+    { to: "/trips/search", label: "Tìm chuyến xe", icon: FaSearch },
+    { to: "/trips/my", label: "Chuyến của tôi", icon: FaSuitcase },
+    { to: "/payments", label: "Thanh toán", icon: FaWallet },
+  ];
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -103,14 +105,34 @@ function CustomerNavbar() {
                   }
                 >
                   <Icon className="text-xs" />
-                  <span>{item.label}</span>
+                  <span className="relative">
+                    {item.label}
+                    {item.badge > 0 ? (
+                      <span className="absolute -right-6 -top-2 inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {unreadBadge}
+                      </span>
+                    ) : null}
+                  </span>
                 </NavLink>
               </li>
             );
           })}
         </ul>
 
-        <div className="relative ml-auto shrink-0" ref={menuRef}>
+        <div className="relative ml-auto flex shrink-0 items-center gap-3" ref={menuRef}>
+          <Link
+            to="/notifications"
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+            aria-label="Thông báo"
+          >
+            <FaBell className="text-sm" />
+            {safeUnreadCount > 0 ? (
+              <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {unreadBadge}
+              </span>
+            ) : null}
+          </Link>
+
           <button
             type="button"
             onClick={() => setIsOpen((previous) => !previous)}

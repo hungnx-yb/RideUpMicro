@@ -15,6 +15,7 @@ import AuthVerifyAccountPage from "../pages/AuthVerifyAccountPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
 import DriverOnboardingPage from "../pages/DriverOnboardingPage";
 import PaymentVnpayResultPage from "../pages/PaymentVnpayResultPage";
+import NotificationsPage from "../pages/NotificationsPage";
 import BookingChatPage from "../pages/chat/BookingChatPage";
 import DriverTripsPage from "../pages/driver/DriverTripsPage";
 import ProtectedRoute from "./ProtectedRoute";
@@ -164,6 +165,14 @@ function AppRouter() {
           )}
         />
         <Route
+          path="/driver/notifications"
+          element={(
+            <DriverAccessWrapper>
+              <NotificationsPage />
+            </DriverAccessWrapper>
+          )}
+        />
+        <Route
           path="/admin-dashboard"
           element={(
             <AdminOnlyRoute>
@@ -201,6 +210,14 @@ function AppRouter() {
           element={(
             <CustomerOnlyRoute>
               <MyTripsPage />
+            </CustomerOnlyRoute>
+          )}
+        />
+        <Route
+          path="/notifications"
+          element={(
+            <CustomerOnlyRoute>
+              <NotificationsPage />
             </CustomerOnlyRoute>
           )}
         />

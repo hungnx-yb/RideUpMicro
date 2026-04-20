@@ -1,10 +1,13 @@
 import AppRouter from "./routes/AppRouter";
 import { ChatSocketProvider } from "./context/ChatSocketContext";
+import { NotificationSocketProvider } from "./context/NotificationSocketContext";
 
 function App() {
   return (
     <ChatSocketProvider>
-      <AppRouter />
+      <NotificationSocketProvider>
+        <AppRouter />
+      </NotificationSocketProvider>
     </ChatSocketProvider>
   );
 }

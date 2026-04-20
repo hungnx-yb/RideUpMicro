@@ -16,8 +16,9 @@ import {
   FaTripadvisor,
 } from "react-icons/fa";
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
+import { useNotificationSocket } from "../context/NotificationSocketContext";
 
 const menuItems = [
   { label: "Bảng điều khiển", icon: FaThLarge, path: "/driver-dashboard" },
@@ -29,6 +30,7 @@ const menuItems = [
 
 function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" }) {
   const { logout, roles, activeRole, switchRole, user } = useAuth();
+  const { unreadCount } = useNotificationSocket() || {};
   const navigate = useNavigate();
   const location = useLocation();
   const profileMenuRef = useRef(null);
@@ -38,6 +40,8 @@ function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" })
   const displayName = user?.fullName?.trim() || user?.email || driverName;
   const displayInitial = displayName.charAt(0).toUpperCase();
   const canSwitchRole = roles.length >= 2;
+  const safeUnreadCount = Number.isFinite(unreadCount) ? unreadCount : 0;
+  const unreadBadge = safeUnreadCount > 5 ? "5+" : `${safeUnreadCount}`;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -126,10 +130,18 @@ function DriverNavbar({ driverName = "Nguyễn Văn Hùng", tripsToday = "1x" })
         </div>
 
         <div className="flex items-center gap-3">
-          <button type="button" className="relative hidden text-slate-300 sm:block">
-            <FaBell size={20} />
-            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
-          </button>
+          <Link
+            to="/driver/notifications"
+            className="relative hidden h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-300 shadow-sm transition hover:border-emerald-400/60 hover:bg-slate-800 hover:text-white sm:inline-flex"
+            aria-label="Thông báo"
+          >
+            <FaBell size={18} />
+            {safeUnreadCount > 0 ? (
+              <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {unreadBadge}
+              </span>
+            ) : null}
+          </Link>
 
           <div className="relative" ref={profileMenuRef}>
             <button

@@ -24,7 +24,6 @@ public class BookingResponse {
     String customerId;
     String tripId;
     String paymentId;
-    NotificationStatus paymentStatus;
     Integer seatCount;
     BigDecimal pricePerSeat;
     BigDecimal totalAmount;

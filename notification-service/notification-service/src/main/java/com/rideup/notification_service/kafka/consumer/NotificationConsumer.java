@@ -99,9 +99,6 @@ public class NotificationConsumer {
 		ack.acknowledge();
 	}
 
-	private String buildMetadata(String key, String value) {
-		return buildMetadata(key, value, null, null);
-	}
 
 	private String buildMetadata(String key1, String value1, String key2, String value2) {
 		try {
