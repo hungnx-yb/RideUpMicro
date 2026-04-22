@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaPhone, FaReply, FaMapMarkerAlt, FaPaperclip, FaPaperPlane } from "react-icons/fa";
 import CustomerNavbar from "../../components/CustomerNavbar";
@@ -34,9 +34,22 @@ function BookingChatPage() {
   const [pendingFile, setPendingFile] = useState(null);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState("");
   const [lightboxUrl, setLightboxUrl] = useState("");
+  const [callStatus, setCallStatus] = useState("IDLE");
+  const [callId, setCallId] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [callError, setCallError] = useState("");
   const { client: chatClient, isConnected: isSocketConnected } = useChatSocket() || {};
   const messageSubRef = useRef(null);
   const readSubRef = useRef(null);
+  const callSubRef = useRef(null);
+  const callErrorSubRef = useRef(null);
+  const callSnapshotRef = useRef({ callId: null, callStatus: "IDLE" });
+  const chatClientRef = useRef(null);
+  const peerRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
+  const localAudioRef = useRef(null);
+  const remoteAudioRef = useRef(null);
   const messagesRef = useRef(null);
   const prependStateRef = useRef({ active: false, scrollTop: 0, scrollHeight: 0 });
   const fileInputRef = useRef(null);
@@ -45,6 +58,12 @@ function BookingChatPage() {
   const otherUserName = otherUser?.fullName?.trim() || otherUser?.email || "Đối tác";
   const otherUserAvatar = resolveImageUrl(otherUser?.avatarUrl);
   const otherUserInitial = otherUserName.charAt(0).toUpperCase();
+  const otherUserId = otherUser?.id || "";
+
+  const canStartCall = useMemo(
+    () => Boolean(isSocketConnected && chatClient && conversation?.id && otherUserId),
+    [isSocketConnected, chatClient, conversation?.id, otherUserId]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -149,6 +168,105 @@ function BookingChatPage() {
   }, [chatClient, isSocketConnected, conversation?.id, currentUserId]);
 
   useEffect(() => {
+    if (!chatClient || !isSocketConnected) {
+      return undefined;
+    }
+
+    const callSub = chatClient.subscribe("/user/queue/call", (frame) => {
+      if (!frame?.body) {
+        return;
+      }
+      try {
+        const payload = JSON.parse(frame.body);
+        if (!payload?.callId) {
+          return;
+        }
+
+        if (payload.conversationId && conversation?.id && payload.conversationId !== conversation.id) {
+          return;
+        }
+
+        const action = payload.action;
+        if (action === "CALL_RINGING") {
+          setCallId(payload.callId);
+          if (payload.fromUserId && payload.fromUserId !== currentUserId) {
+            setIncomingCall({
+              callId: payload.callId,
+              fromUserId: payload.fromUserId,
+              conversationId: payload.conversationId,
+            });
+            setCallStatus("RINGING");
+          } else {
+            setCallStatus("CALLING");
+          }
+        }
+
+        if (action === "CALL_INIT") {
+          setCallId(payload.callId);
+        }
+
+        if (action === "CALL_ACCEPT") {
+          setIncomingCall(null);
+          setCallStatus("IN_CALL");
+          if (payload.fromUserId && payload.fromUserId !== currentUserId) {
+            return;
+          }
+          startOffer(payload.callId).catch(() => {});
+        }
+
+        if (action === "CALL_REJECT" || action === "CALL_CANCEL" || action === "CALL_END") {
+          finalizeCall();
+        }
+
+        if (action === "SDP_OFFER") {
+          handleRemoteOffer(payload.callId, payload.sdp).catch(() => {});
+        }
+
+        if (action === "SDP_ANSWER") {
+          handleRemoteAnswer(payload.sdp).catch(() => {});
+        }
+
+        if (action === "ICE_CANDIDATE") {
+          handleRemoteCandidate(payload.candidate).catch(() => {});
+        }
+      } catch {
+        // ignore parse errors
+      }
+    });
+
+    const callErrorSub = chatClient.subscribe("/user/queue/call-errors", (frame) => {
+      if (!frame?.body) {
+        return;
+      }
+      try {
+        const payload = JSON.parse(frame.body);
+        setCallError(payload?.message || "Cuộc gọi gặp lỗi.");
+        finalizeCall();
+      } catch {
+        // ignore parse errors
+      }
+    });
+
+    callSubRef.current = callSub;
+    callErrorSubRef.current = callErrorSub;
+
+    return () => {
+      callSubRef.current?.unsubscribe();
+      callErrorSubRef.current?.unsubscribe();
+      callSubRef.current = null;
+      callErrorSubRef.current = null;
+    };
+  }, [chatClient, isSocketConnected, currentUserId, conversation?.id]);
+
+  useEffect(() => {
+    callSnapshotRef.current = { callId, callStatus };
+  }, [callId, callStatus]);
+
+  useEffect(() => {
+    chatClientRef.current = chatClient || null;
+  }, [chatClient]);
+
+  useEffect(() => {
     const container = messagesRef.current;
     if (!container) {
       return;
@@ -224,6 +342,22 @@ function BookingChatPage() {
       URL.revokeObjectURL(previewUrl);
     };
   }, [pendingFile]);
+
+  useEffect(() => {
+    return () => {
+      const snapshot = callSnapshotRef.current;
+      if (snapshot.callId && snapshot.callStatus !== "IDLE" && chatClientRef.current) {
+        chatClientRef.current.publish({
+          destination: "/app/call.signal",
+          body: JSON.stringify({
+            action: "CALL_END",
+            callId: snapshot.callId,
+          }),
+        });
+      }
+      finalizeCall();
+    };
+  }, []);
 
   const handleSendMessage = async (content) => {
     const trimmed = (content || messageInput).trim();
@@ -325,6 +459,175 @@ function BookingChatPage() {
     return parsed.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   };
 
+  const sendCallSignal = (payload) => {
+    if (!chatClient) {
+      return;
+    }
+    chatClient.publish({
+      destination: "/app/call.signal",
+      body: JSON.stringify(payload),
+    });
+  };
+
+  const ensurePeerConnection = async () => {
+    if (peerRef.current) {
+      return peerRef.current;
+    }
+
+    const peer = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
+    peer.onicecandidate = (event) => {
+      if (!event.candidate || !callId) {
+        return;
+      }
+      sendCallSignal({
+        action: "ICE_CANDIDATE",
+        callId,
+        candidate: JSON.stringify(event.candidate),
+      });
+    };
+
+    peer.ontrack = (event) => {
+      const stream = event.streams?.[0];
+      if (!stream) {
+        return;
+      }
+      remoteStreamRef.current = stream;
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = stream;
+      }
+    };
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      localStreamRef.current = stream;
+      if (localAudioRef.current) {
+        localAudioRef.current.srcObject = stream;
+      }
+      stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+    } catch {
+      setCallError("Không thể truy cập micro.");
+      throw new Error("getUserMedia failed");
+    }
+
+    peerRef.current = peer;
+    return peer;
+  };
+
+  const startOffer = async (nextCallId) => {
+    if (nextCallId) {
+      setCallId(nextCallId);
+    }
+    const peer = await ensurePeerConnection();
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    sendCallSignal({
+      action: "SDP_OFFER",
+      callId: nextCallId || callId,
+      sdp: JSON.stringify(offer),
+    });
+  };
+
+  const handleRemoteOffer = async (incomingCallId, sdp) => {
+    if (!incomingCallId || !sdp) {
+      return;
+    }
+    setCallId(incomingCallId);
+    const peer = await ensurePeerConnection();
+    await peer.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdp)));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    sendCallSignal({
+      action: "SDP_ANSWER",
+      callId: incomingCallId,
+      sdp: JSON.stringify(answer),
+    });
+  };
+
+  const handleRemoteAnswer = async (sdp) => {
+    if (!sdp || !peerRef.current) {
+      return;
+    }
+    await peerRef.current.setRemoteDescription(new RTCSessionDescription(JSON.parse(sdp)));
+  };
+
+  const handleRemoteCandidate = async (candidate) => {
+    if (!candidate || !peerRef.current) {
+      return;
+    }
+    await peerRef.current.addIceCandidate(new RTCIceCandidate(JSON.parse(candidate)));
+  };
+
+  const finalizeCall = () => {
+    setCallStatus("IDLE");
+    setCallId(null);
+    setIncomingCall(null);
+    if (peerRef.current) {
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+    }
+    remoteStreamRef.current = null;
+    if (localAudioRef.current) {
+      localAudioRef.current.srcObject = null;
+    }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+    }
+  };
+
+  const handleStartCall = async () => {
+    if (!canStartCall) {
+      return;
+    }
+    setCallError("");
+    setCallStatus("CALLING");
+    sendCallSignal({
+      action: "CALL_INIT",
+      conversationId: conversation.id,
+      targetUserId: otherUserId,
+    });
+  };
+
+  const handleAcceptCall = () => {
+    if (!incomingCall?.callId) {
+      return;
+    }
+    setCallError("");
+    sendCallSignal({
+      action: "CALL_ACCEPT",
+      callId: incomingCall.callId,
+    });
+    setCallStatus("IN_CALL");
+  };
+
+  const handleRejectCall = () => {
+    if (!incomingCall?.callId) {
+      return;
+    }
+    sendCallSignal({
+      action: "CALL_REJECT",
+      callId: incomingCall.callId,
+    });
+    finalizeCall();
+  };
+
+  const handleHangUp = () => {
+    if (!callId) {
+      return;
+    }
+    sendCallSignal({
+      action: callStatus === "CALLING" ? "CALL_CANCEL" : "CALL_END",
+      callId,
+    });
+    finalizeCall();
+  };
+
 
   return (
     <div
@@ -336,6 +639,49 @@ function BookingChatPage() {
         "--chat-surface": "#ffffff",
       }}
     >
+      {incomingCall ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">
+              Cuộc gọi đến
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-900">{otherUserName}</p>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleRejectCall}
+                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Từ chối
+              </button>
+              <button
+                type="button"
+                onClick={handleAcceptCall}
+                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
+              >
+                Chấp nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {callStatus === "IN_CALL" || callStatus === "CALLING" ? (
+        <div className="absolute left-1/2 top-24 z-40 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-emerald-700 shadow-lg">
+          {callStatus === "CALLING" ? "Đang gọi..." : "Đang trong cuộc gọi"}
+          <button
+            type="button"
+            onClick={handleHangUp}
+            className="ml-3 rounded-full bg-rose-500 px-3 py-1 text-[10px] font-semibold text-white"
+          >
+            Kết thúc
+          </button>
+        </div>
+      ) : null}
+      {callError ? (
+        <div className="absolute left-1/2 top-10 z-40 -translate-x-1/2 rounded-full bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-600 shadow">
+          {callError}
+        </div>
+      ) : null}
       {activeRole === "DRIVER" ? (
         <DriverNavbar driverName={displayName} tripsToday="" />
       ) : (
@@ -436,10 +782,12 @@ function BookingChatPage() {
                 </span>
                 <button
                   type="button"
+                  onClick={handleStartCall}
+                  disabled={!canStartCall || callStatus === "CALLING" || callStatus === "IN_CALL"}
                   className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
                 >
                   <FaPhone className="text-[11px]" />
-                  Gọi
+                  {callStatus === "CALLING" ? "Đang gọi" : "Gọi"}
                 </button>
               </div>
             </div>
@@ -513,6 +861,11 @@ function BookingChatPage() {
                   </div>
                 );
               })}
+            </div>
+
+            <div className="sr-only">
+              <audio ref={localAudioRef} autoPlay muted playsInline />
+              <audio ref={remoteAudioRef} autoPlay playsInline />
             </div>
 
 

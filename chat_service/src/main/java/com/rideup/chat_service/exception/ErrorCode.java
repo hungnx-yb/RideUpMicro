@@ -40,7 +40,15 @@ public enum ErrorCode {
     CHAT_CONVERSATION_FORBIDDEN(8002, "No access to this conversation", HttpStatus.FORBIDDEN),
     CHAT_BOOKING_NOT_FOUND(8003, "Booking not found for conversation", HttpStatus.NOT_FOUND),
     CHAT_TRIP_NOT_FOUND(8004, "Trip not found for conversation", HttpStatus.NOT_FOUND),
-    CHAT_MESSAGE_INVALID(8005, "Message content is invalid", HttpStatus.BAD_REQUEST);
+    CHAT_MESSAGE_INVALID(8005, "Message content is invalid", HttpStatus.BAD_REQUEST),
+
+    // Call signaling errors
+    CALL_CONVERSATION_NOT_FOUND(8101, "Conversation not found for call", HttpStatus.NOT_FOUND),
+    CALL_FORBIDDEN(8102, "No access to this call", HttpStatus.FORBIDDEN),
+    CALL_ALREADY_ACTIVE(8103, "User already has an active call", HttpStatus.CONFLICT),
+    CALL_NOT_FOUND(8104, "Call not found", HttpStatus.NOT_FOUND),
+    CALL_INVALID_STATE(8105, "Call is in invalid state", HttpStatus.BAD_REQUEST),
+    CALL_TARGET_NOT_FOUND(8106, "Call target not found", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

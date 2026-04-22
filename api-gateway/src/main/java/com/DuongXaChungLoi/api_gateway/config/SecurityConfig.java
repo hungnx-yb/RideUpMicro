@@ -38,7 +38,6 @@ public class SecurityConfig {
     @Autowired
     private JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
-    // Public endpoints - không cần authentication
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/**",
             "/actuator/**",
