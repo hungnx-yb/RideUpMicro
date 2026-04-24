@@ -36,6 +36,8 @@ public class CallService {
             sendError(userId, null, null, ErrorCode.CALL_INVALID_STATE);
             return;
         }
+        log.info("Processing signal: action={}, userId={}, callId={}", 
+            request.getAction(), userId, request.getCallId());
         try {
             switch (request.getAction()) {
                 case CALL_INIT -> handleInit(request, userId);
@@ -44,10 +46,17 @@ public class CallService {
                 case CALL_CANCEL -> cancelCall(request.getCallId(), userId);
                 case CALL_END -> endCall(request.getCallId(), userId);
                 case SDP_OFFER, SDP_ANSWER, ICE_CANDIDATE -> relaySignal(request, userId);
-                default -> sendError(userId, request.getAction(), request.getCallId(), ErrorCode.CALL_INVALID_STATE);
+                default -> {
+                    log.warn("Unknown call action: {}", request.getAction());
+                    sendError(userId, request.getAction(), request.getCallId(), ErrorCode.CALL_INVALID_STATE);
+                }
             }
         } catch (AppException ex) {
+            log.error("AppException in handleSignal: {}", ex.getErrorCode().getMessage());
             sendError(userId, request.getAction(), request.getCallId(), ex.getErrorCode());
+        } catch (Exception ex) {
+            log.error("Unexpected error in handleSignal", ex);
+            sendError(userId, request.getAction(), request.getCallId(), ErrorCode.CALL_INVALID_STATE);
         }
     }
 
@@ -68,11 +77,16 @@ public class CallService {
         call.setCalleeId(request.getTargetUserId());
         call.setCallerId(callerId);
         call.setStatus(CallStatus.RINGING);
+        
         CallSession callSave =  callSessionRepository.save(call);
+        log.info("Created new call session: id={}, caller={}, callee={}", 
+            callSave.getId(), callerId, request.getTargetUserId());
+            
         callStateStore.saveState(callSave, RedisKeyTTL.RINGING_TTL);
-        callStateStore.setActiveCallId(callerId, call.getId(),RedisKeyTTL.ACTIVE_CALL_TTL);
-        callStateStore.setActiveCallId(request.getTargetUserId(), call.getId(), RedisKeyTTL.ACTIVE_CALL_TTL);
-        CallSignalResponse response = buildResponse(CallAction.CALL_RINGING, call, callerId, null, null);
+        callStateStore.setActiveCallId(callerId, callSave.getId(), RedisKeyTTL.ACTIVE_CALL_TTL);
+        callStateStore.setActiveCallId(request.getTargetUserId(), callSave.getId(), RedisKeyTTL.ACTIVE_CALL_TTL);
+        
+        CallSignalResponse response = buildResponse(CallAction.CALL_RINGING, callSave, callerId, null, null);
         sendToUser(request.getTargetUserId(), response);
         sendToUser(callerId, response);
     }

@@ -69,6 +69,7 @@ public class UserService {
             return Collections.emptyList();
         }
 
+
         return userRepository.findAllByIdIn(userIds).stream()
                 .map(user -> modelMapper.map(user, UserResponse.class))
                 .toList();

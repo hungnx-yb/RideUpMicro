@@ -8,6 +8,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 @Builder
@@ -17,7 +20,10 @@ import lombok.experimental.FieldDefaults;
 public class UserResponse {
     String id;
     String fullName;
-    String avatarUrl;
-    String email;
     String phoneNumber;
+    String email;
+    LocalDate dateOfBirth;
+    String avatarUrl;
+    Boolean verified;
+    LocalDateTime createdAt;
 }
