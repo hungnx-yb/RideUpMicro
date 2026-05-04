@@ -2,6 +2,12 @@ spring:
   application:
     name: booking-service
 
+
+  cloud:
+    openfeign:
+      micrometer:
+        enabled: true
+
   datasource:
     url: jdbc:mysql://localhost:3306/booking_service_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
     username: root
@@ -46,6 +52,9 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
     listener:
       ack-mode: manual_immediate
+      observation-enabled: true
+    template:
+      observation-enabled: true
     retry:
       topic:
         enabled: true

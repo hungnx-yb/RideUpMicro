@@ -33,6 +33,18 @@ spring:
       properties:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.trusted.packages: "*"
+    listener:
+      ack-mode: manual_immediate
+      observation-enabled: true
+    template:
+      observation-enabled: true
+    retry:
+      topic:
+        enabled: true
+        attempts: 4
+        delay: 2000
+        multiplier: 1.5
+        dlt-enabled: true
 
 app:
   kafka:
