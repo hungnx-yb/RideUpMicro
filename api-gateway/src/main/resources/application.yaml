@@ -138,7 +138,18 @@ eureka:
     service-url:
       defaultZone: http://localhost:8761/eureka
 
+logging:
+  level:
+    root: INFO
+    org.springframework: WARN
+    org.springframework.cloud.gateway: INFO
+    com.netflix: WARN
+    org.hibernate: WARN
+
 management:
+  tracing:
+    sampling:
+      probability: 1.0
   endpoints:
     web:
       exposure:

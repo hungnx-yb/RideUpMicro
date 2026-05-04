@@ -12,7 +12,9 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -25,6 +27,7 @@ public class AuthenticationController {
 
     @PostMapping("/register")
     public ApiResponse<UserResponse> registerAccount(@RequestBody AccountRegisterRequest request) throws Exception {
+        log.info("Processing registration request for email: {}", request.getEmail());
         return ApiResponse.<UserResponse>builder()
                 .result(authenticationService.registerAccount(request))
                 .message("Register account successfully")
@@ -41,6 +44,7 @@ public class AuthenticationController {
 
     @PostMapping("/authentication")
     public ApiResponse<AuthenticationResponse> login(@RequestBody AuthenticationRequest request){
+        log.info("Processing login request for user: {}", request.getEmail());
         return ApiResponse.<AuthenticationResponse>builder()
                 .result(authenticationService.authenticate(request))
                 .message("Login successfully")

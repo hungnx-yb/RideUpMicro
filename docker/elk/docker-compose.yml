@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # 1. Elasticsearch: Lưu trữ và tìm kiếm log
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    networks:
+      - rideup-network
+
+  # 2. Logstash: Tiếp nhận và xử lý log từ Spring Boot
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.10
+    container_name: logstash
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    ports:
+      - "5044:5044" # Cổng nhận log từ ứng dụng
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+    networks:
+      - rideup-network
+    depends_on:
+      - elasticsearch
+
+  # 3. Kibana: Giao diện quan sát log
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.10
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - rideup-network
+    depends_on:
+      - elasticsearch
+
+    # 4. Zipkin: Thu thập và hiển thị biểu đồ truy vết
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - rideup-network
+
+networks:
+  rideup-network:
+    driver: bridge

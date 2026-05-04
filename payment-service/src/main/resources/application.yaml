@@ -1,4 +1,4 @@
-﻿spring:
+spring:
   application:
     name: payment-service
 
@@ -55,7 +55,19 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
 
+logging:
+  level:
+    root: INFO
+    org.springframework: WARN
+    org.springframework.security: WARN
+    org.hibernate: WARN
+    com.netflix: WARN
+    org.apache.kafka: WARN
+
 management:
+  tracing:
+    sampling:
+      probability: 1.0
   endpoints:
     web:
       exposure:

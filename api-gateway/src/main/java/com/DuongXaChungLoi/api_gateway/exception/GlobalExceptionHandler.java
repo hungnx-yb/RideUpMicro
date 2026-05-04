@@ -22,6 +22,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = Exception.class)
     ResponseEntity<ApiResponse> handlingRuntimeException(Exception  exception) {
+        log.error("Unhandled Exception: ", exception);
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setCode(ErrorCode.UNCATEGOEIZED_EXCEPTION.getCode());
         apiResponse.setMessage(ErrorCode.UNAUTHENTICATED.getMessage());
@@ -30,6 +31,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AppException.class)
     ResponseEntity<ApiResponse> handlingAppException(AppException exception) {
+        log.warn("AppException occurred: Code={}, Message={}", exception.getErrorCode().getCode(), exception.getMessage());
         ErrorCode errorCode = exception.getErrorCode();
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setCode(errorCode.getCode());
@@ -39,6 +41,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AccessDeniedException.class)
     ResponseEntity<ApiResponse> handlingAccessDeniedException(AccessDeniedException exception) {
+        log.warn("Access Denied: {}", exception.getMessage());
         ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
 
         return ResponseEntity.status(errorCode.getHttpStatus())

@@ -65,7 +65,7 @@ public class UserService {
     }
 
     public List<UserResponse> getUserByIds(List<String> userIds) {
-        if (userIds == null || userIds.isEmpty()) {
+         if (userIds == null || userIds.isEmpty()) {
             return Collections.emptyList();
         }
 
