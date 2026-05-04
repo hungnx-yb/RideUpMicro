@@ -65,7 +65,8 @@ logging:
     org.springframework: WARN
     org.springframework.security: WARN
     org.hibernate: WARN
-    com.netflix: WARN
+    org.hibernate.orm.deprecation: ERROR
+    com.netflix: ERROR
     org.apache.kafka: WARN
 
 

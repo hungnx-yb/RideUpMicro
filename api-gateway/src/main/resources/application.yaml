@@ -143,8 +143,9 @@ logging:
     root: INFO
     org.springframework: WARN
     org.springframework.cloud.gateway: INFO
-    com.netflix: WARN
+    com.netflix: ERROR
     org.hibernate: WARN
+    org.hibernate.orm.deprecation: ERROR
 
 management:
   tracing:
@@ -160,3 +161,4 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+

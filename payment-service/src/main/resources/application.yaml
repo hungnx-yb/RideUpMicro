@@ -61,7 +61,8 @@ logging:
     org.springframework: WARN
     org.springframework.security: WARN
     org.hibernate: WARN
-    com.netflix: WARN
+    org.hibernate.orm.deprecation: ERROR
+    com.netflix: ERROR
     org.apache.kafka: WARN
 
 management:
@@ -99,3 +100,4 @@ vnpay:
   currency: ${VNPAY_CURRENCY:VND}
   expire-minutes: ${VNPAY_EXPIRE_MINUTES:15}
   refund-url: ${VNPAY_REFUND_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
+

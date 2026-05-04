@@ -77,7 +77,8 @@ logging:
     org.springframework: WARN
     org.springframework.security: WARN
     org.hibernate: WARN
-    com.netflix: WARN
+    org.hibernate.orm.deprecation: ERROR
+    com.netflix: ERROR
     org.apache.kafka: WARN
 
 management:
@@ -121,3 +122,4 @@ app:
     topics:
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
+

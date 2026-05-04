@@ -10,9 +10,9 @@ eureka:
 
 logging:
   level:
-    root: WARN
-    com.netflix: WARN
-    org.springframework: WARN
+    root: ERROR
+    com.netflix: ERROR
+    org.springframework: ERROR
 
 management:
   endpoints:
