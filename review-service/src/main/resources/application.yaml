@@ -1,0 +1,83 @@
+server:
+  port: 8089
+  servlet:
+    context-path: /api/review
+
+spring:
+  application:
+    name: review-service
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/review_service_db
+    redis:
+      host: rideupmicroredis-hung2307xuan-bff7.f.aivencloud.com
+      port: 27742
+      username: default
+      password: AVNS_w8vWRSdFiTovQJ277R8
+      timeout: 10s
+      ssl:
+        enabled: true
+  cache:
+    type: redis
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: review-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
+
+app:
+  kafka:
+    topics:
+      driver-rating-updated: driver-rating-updated
+
+
+jwt:
+  signerKey: S5eUx6DQSJ3ce3Dokj+qZmVlpj3hG7M841wX3NEj3oMcPwx6+oOA9AdHzbZE3Nb84
+  valid-duration: 36000
+  refreshable-duration: 360000
+
+expiryTime: 3600
+
+supabase:
+  url: https://tgbtragwxkulpittcjzw.supabase.co
+  api-key: sb_secret_J_fc93TeUV2CNFWJPh0aVQ_fYGfDwnZ
+  bucket: Ride_Up_Micro
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+  endpoints:
+    web:
+      exposure:
+        include: prometheus, health, info, metrics
+
+logging:
+  level:
+    root: INFO
+    org.springframework: WARN
+    org.springframework.security: WARN
+    org.hibernate: WARN
+    org.hibernate.orm.deprecation: ERROR
+    com.netflix: ERROR
+    org.apache.kafka: WARN
+

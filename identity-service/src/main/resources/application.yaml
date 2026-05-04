@@ -22,6 +22,24 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
 
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: identity-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false      # Bắt buộc khi dùng MANUAL_IMMEDIATE
+    listener:
+      ack-mode: manual_immediate     # Consumer phải tự gọi ack.acknowledge() để commit offset
+    retry:
+      topic:
+        enabled: true                # Bật Non-blocking Retry Topics
+        attempts: 4                  # 1 lần chính + 3 lần retry
+        delay: 2000                  # Lần retry 1 cách 2 giây
+        multiplier: 1.5              # Lần 2: 3s, Lần 3: 4.5s (exponential backoff)
+        dlt-enabled: true            # Một topic sau khi hết retry -> đẩy vào DLT
   data:
     redis:
       host: rideupmicroredis-hung2307xuan-bff7.f.aivencloud.com
@@ -99,3 +117,7 @@ management:
 
 app:
   frontend-base-url: http://localhost:5173
+
+  kafka:
+    topics:
+      driver-rating-updated: driver-rating-updated

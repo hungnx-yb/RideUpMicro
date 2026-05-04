@@ -1,5 +1,6 @@
 package com.rideUp.booking_service.kafka.consumer;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rideUp.booking_service.dto.event.PaymentCompletedEvent;
 import com.rideUp.booking_service.dto.event.PaymentFailedEvent;
@@ -12,7 +13,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +29,7 @@ public class BookingServiceConsumer {
     BookingService bookingService;
     ObjectMapper objectMapper;
 
+    @RetryableTopic(exclude = {JsonProcessingException.class})
     @KafkaListener(
             topics = "${app.kafka.topics.payment-completed}",
             groupId = "${spring.kafka.consumer.group-id}"
@@ -33,7 +38,6 @@ public class BookingServiceConsumer {
         PaymentCompletedEvent event = objectMapper.readValue(payload, PaymentCompletedEvent.class);
         log.info("[PaymentCompletedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
                 event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
-
         bookingService.handlePaymentCompleted(
                 PaymentCompletedRequest.builder()
                         .bookingId(event.getBookingId())
@@ -41,9 +45,10 @@ public class BookingServiceConsumer {
                         .correlationId(event.getCorrelationId())
                         .build()
         );
-                ack.acknowledge();
+        ack.acknowledge();
     }
 
+    @RetryableTopic(exclude = {JsonProcessingException.class})
     @KafkaListener(
             topics = "${app.kafka.topics.payment-failed}",
             groupId = "${spring.kafka.consumer.group-id}"
@@ -52,7 +57,6 @@ public class BookingServiceConsumer {
         PaymentFailedEvent event = objectMapper.readValue(payload, PaymentFailedEvent.class);
         log.info("[PaymentFailedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
                 event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
-
         bookingService.handlePaymentFailed(
                 PaymentFailedRequest.builder()
                         .bookingId(event.getBookingId())
@@ -61,7 +65,13 @@ public class BookingServiceConsumer {
                         .correlationId(event.getCorrelationId())
                         .build()
         );
-                ack.acknowledge();
+        ack.acknowledge();
     }
 
+    @DltHandler
+    public void handleDlt(ConsumerRecord<String, String> record, Exception ex) {
+        log.error("[DLT][booking-service] Message permanently failed after all retries. " +
+                        "MANUAL INTERVENTION REQUIRED! topic={}, offset={}, payload={}, error={}",
+                record.topic(), record.offset(), record.value(), ex.getMessage());
+    }
 }

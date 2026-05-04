@@ -74,20 +74,4 @@ public class BookingController {
                 .result(bookingService.cancelBooking(id, request))
                 .build();
     }
-
-    @PostMapping("/internal/payments/completed")
-    public ApiResponse<BookingResponse> handlePaymentCompleted(@Valid @RequestBody PaymentCompletedRequest request) {
-        return ApiResponse.<BookingResponse>builder()
-                .message("Booking confirmed from payment callback")
-                .result(bookingService.handlePaymentCompleted(request))
-                .build();
-    }
-
-    @PostMapping("/internal/payments/failed")
-    public ApiResponse<BookingResponse> handlePaymentFailed(@Valid @RequestBody PaymentFailedRequest request) {
-        return ApiResponse.<BookingResponse>builder()
-                .message("Booking cancelled from payment callback")
-                .result(bookingService.handlePaymentFailed(request))
-                .build();
-    }
 }

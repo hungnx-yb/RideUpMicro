@@ -13,7 +13,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +34,7 @@ public class NotificationConsumer {
 	TripFeignClient tripClient;
 	ObjectMapper objectMapper;
 
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
 	@KafkaListener(
 			topics = "${app.kafka.topics.booking-confirmed}",
 			groupId = "${spring.kafka.consumer.group-id}"
@@ -74,6 +78,7 @@ public class NotificationConsumer {
 		ack.acknowledge();
 	}
 
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
 	@KafkaListener(topics = "${app.kafka.topics.booking-cancelled}", groupId = "${spring.kafka.consumer.group-id}")
 	public void onBookingCancelled(String payload, Acknowledgment ack) throws Exception {
 		BookingCancelledEvent event = objectMapper.readValue(payload, BookingCancelledEvent.class);
@@ -133,5 +138,12 @@ public class NotificationConsumer {
 			log.warn("Failed to fetch trip {} for notification: {}", tripId, ex.getMessage());
 			return null;
 		}
+	}
+
+	@DltHandler
+	public void handleDlt(ConsumerRecord<String, String> record, Exception ex) {
+		log.error("[DLT][notification-service] Message permanently failed after all retries. " +
+				"MANUAL INTERVENTION REQUIRED! topic={}, offset={}, payload={}, error={}",
+				record.topic(), record.offset(), record.value(), ex.getMessage());
 	}
 }
