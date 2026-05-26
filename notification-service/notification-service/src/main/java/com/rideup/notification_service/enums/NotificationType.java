@@ -6,5 +6,6 @@ public enum NotificationType {
     PAYMENT_SUCCESS,
     PAYMENT_FAILED,
     TRIP_REMINDER,
+    BOOKING_COMPLETED,
     SYSTEM
 }

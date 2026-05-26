@@ -64,7 +64,6 @@ public class DriverController {
                 .build();
     }
 
-//    @PreAuthorize("hasAuthority('ADMIN')")
     @GetMapping("/admin/pending")
     public ApiResponse<List<DriverResponse>> getPendingDrivers() {
         return ApiResponse.<List<DriverResponse>>builder()

@@ -104,6 +104,23 @@ public class NotificationConsumer {
 		ack.acknowledge();
 	}
 
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(topics = "${app.kafka.topics.booking-completed}", groupId = "${spring.kafka.consumer.group-id}")
+	public void onBookingCompleted(String payload, Acknowledgment ack) throws Exception {
+		com.rideup.notification_service.dto.event.BookingCompletedEvent event = objectMapper.readValue(payload, com.rideup.notification_service.dto.event.BookingCompletedEvent.class);
+		
+		String title = "Chuyến đi hoàn thành";
+		String message = "Chuyến đi của bạn đã hoàn thành. Vui lòng đánh giá chuyến đi.";
+		notificationService.createNotification(
+				event.getCustomerId(),
+				title,
+				message,
+				NotificationType.BOOKING_COMPLETED,
+				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId())
+		);
+		ack.acknowledge();
+	}
+
 
 	private String buildMetadata(String key1, String value1, String key2, String value2) {
 		try {

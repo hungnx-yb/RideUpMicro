@@ -1,0 +1,205 @@
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  EXCEPTION_UNCAUGHT_CXX_EXCEPTION (0xe06d7363) at pc=0x00007ff91f57055c, pid=16328, tid=23500
+#
+# JRE version:  (17.0.11+7) (build )
+# Java VM: Java HotSpot(TM) 64-Bit Server VM (17.0.11+7-LTS-207, mixed mode, emulated-client, sharing, tiered, compressed oops, compressed class ptrs, g1 gc, windows-amd64)
+# Problematic frame:
+# C  [KERNELBASE.dll+0x6055c]
+#
+# No core dump will be written. Minidumps are not enabled by default on client versions of Windows
+#
+#
+
+---------------  S U M M A R Y ------------
+
+Command Line: -agentlib:jdwp=transport=dt_socket,address=127.0.0.1:50783,suspend=y,server=n -javaagent:C:\Users\Admin\AppData\Local\JetBrains\IntelliJIdea2025.3\captureAgent\debugger-agent.jar=file:///C:/Users/Admin/AppData/Local/Temp/capture15349926156548557034.props -agentpath:C:\Users\Admin\AppData\Local\Temp\idea_libasyncProfiler_dll_temp_folder8\libasyncProfiler.dll=version,jfr,event=wall,interval=10ms,cstack=no,file=C:\Users\Admin\IdeaSnapshots\RideUpApplication_2026_05_05_133443.jfr,dbghelppath=C:\Users\Admin\AppData\Local\Temp\idea_dbghelp_dll_temp_folder5\dbghelp.dll,log=C:\Users\Admin\AppData\Local\Temp\RideUpApplication_2026_05_05_133443.jfr.log.txt,logLevel=DEBUG -XX:TieredStopAtLevel=1 -Dspring.output.ansi.enabled=always -Dcom.sun.management.jmxremote -Dspring.jmx.enabled=true -Dspring.liveBeansView.mbeanDomain -Dspring.application.admin.enabled=true -Dmanagement.endpoints.jmx.exposure.include=* -Dkotlinx.coroutines.debug.enable.creation.stack.trace=false -Ddebugger.agent.enable.coroutines=true -Dkotlinx.coroutines.debug.enable.flows.stack.trace=true -Dkotlinx.coroutines.debug.enable.mutable.state.flows.stack.trace=true -Ddebugger.async.stack.trace.for.all.threads=true -Dfile.encoding=UTF-8 com.example.demo.RideUpApplication
+
+Host: AMD Ryzen 5 5600H with Radeon Graphics         , 12 cores, 15G,  Windows 11 , 64 bit Build 22621 (10.0.22621.5415)
+Time: Tue May  5 13:34:44 2026 SE Asia Standard Time elapsed time: 0.033412 seconds (0d 0h 0m 0s)
+
+---------------  T H R E A D  ---------------
+
+Current thread is native thread
+
+Stack: [0x00000052e5300000,0x00000052e5400000],  sp=0x00000052e53fb330,  free space=1004k
+Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)
+C  [KERNELBASE.dll+0x6055c]
+C  [libasyncProfiler.dll+0x10e78f]
+
+
+siginfo: EXCEPTION_UNCAUGHT_CXX_EXCEPTION (0xe06d7363), ExceptionInformation=0x0000000019930520 0x00000052e53fb490 0x00007ff8df815fe8 0x00007ff8df610000 
+
+
+Registers:
+RAX=0x0000000000000000, RBX=0x00007ff8df815fe8, RCX=0x0000000000000000, RDX=0x0000000000000000
+RSP=0x00000052e53fb330, RBP=0x00000052e53fb620, RSI=0x00000052e53fb490, RDI=0x0000000019930520
+R8 =0x0000000000000000, R9 =0x0000000000000000, R10=0x0000000000000000, R11=0x0000000000000000
+R12=0x00007ff91f8f0000, R13=0x00007ff8e4d226d0, R14=0x000002458c9ab840, R15=0x0000024595c66208
+RIP=0x00007ff91f57055c, EFLAGS=0x0000000000000202
+
+
+Top of Stack: (sp=0x00000052e53fb330)
+0x00000052e53fb330:   000002458c760cc0 00007ff8df815fe8
+0x00000052e53fb340:   00000052e53fb490 0000000000000026
+0x00000052e53fb350:   00000081e06d7363 0000000000000000
+0x00000052e53fb360:   00007ff91f57055c 0000000000000004
+0x00000052e53fb370:   0000000019930520 00000052e53fb490
+0x00000052e53fb380:   00007ff8df815fe8 00007ff8df610000
+0x00000052e53fb390:   0000024500000000 0000000000000002
+0x00000052e53fb3a0:   0000000000000000 00007ff8df815fe8
+0x00000052e53fb3b0:   000002458c9ab840 00007ff9223a6c6f
+0x00000052e53fb3c0:   00000052e53fb430 00007ff8df828000
+0x00000052e53fb3d0:   00000052e53fb490 0000000019930520
+0x00000052e53fb3e0:   00007ff8df828000 00007ff8df610000
+0x00000052e53fb3f0:   00003e707770efe4 00007ff900000008
+0x00000052e53fb400:   00007ff8df815fe8 00007ff8df71e78f
+0x00000052e53fb410:   0000000000000008 00007ff8df78d3c2
+0x00000052e53fb420:   0000005200000008 000002458c9a14f0 
+
+Instructions: (pc=0x00007ff91f57055c)
+0x00007ff91f57045c:   ff 4c 8d 05 0c 4c 2f 00 33 d2 b9 00 00 10 00 e8
+0x00007ff91f57046c:   b0 37 fe ff 4c 8b f0 48 89 44 24 58 48 85 c0 0f
+0x00007ff91f57047c:   84 0b fe ff ff 4c 8d 05 30 4c 2f 00 33 d2 8d 4a
+0x00007ff91f57048c:   02 e8 8e 37 fe ff 48 8b f8 48 89 44 24 50 e9 ed
+0x00007ff91f57049c:   fd ff ff 45 33 c0 49 8b d7 48 83 c9 ff e8 c2 a5
+0x00007ff91f5704ac:   01 00 e9 08 ff ff ff 48 8b 0d 1e 39 32 00 e8 01
+0x00007ff91f5704bc:   ba fd ff 48 8b cf e8 99 8e fc ff e9 f8 fe ff ff
+0x00007ff91f5704cc:   49 8b ce e8 8c 8e fc ff e9 f4 fe ff ff 48 8b ce
+0x00007ff91f5704dc:   e8 7f 8e fc ff e9 f0 fe ff ff cc cc 71 18 d3 7a
+0x00007ff91f5704ec:   1a 87 89 f9 48 81 ec d8 00 00 00 48 8b 05 f2 0a
+0x00007ff91f5704fc:   32 00 48 33 c4 48 89 84 24 c0 00 00 00 48 83 64
+0x00007ff91f57050c:   24 28 00 48 8d 05 da ff ff ff 83 e2 01 89 4c 24
+0x00007ff91f57051c:   20 89 54 24 24 48 89 44 24 30 4d 85 c9 74 4f b8
+0x00007ff91f57052c:   0f 00 00 00 48 8d 4c 24 40 44 3b c0 49 8b d1 41
+0x00007ff91f57053c:   0f 46 c0 44 8b c0 44 89 44 24 38 49 c1 e0 03 e8
+0x00007ff91f57054c:   87 2d 09 00 48 8d 4c 24 20 48 ff 15 14 60 22 00
+0x00007ff91f57055c:   0f 1f 44 00 00 48 8b 8c 24 c0 00 00 00 48 33 cc
+0x00007ff91f57056c:   e8 6f 18 05 00 48 81 c4 d8 00 00 00 c3 cc 83 64
+0x00007ff91f57057c:   24 38 00 eb cf cc cc cc cc cc cc cc 48 8b c4 48
+0x00007ff91f57058c:   89 58 08 48 89 70 10 48 89 78 18 4c 89 68 20 55
+0x00007ff91f57059c:   41 56 41 57 48 8d 68 a1 48 81 ec e0 00 00 00 48
+0x00007ff91f5705ac:   8b 05 3e 0a 32 00 48 33 c4 48 89 45 3f 45 33 ff
+0x00007ff91f5705bc:   66 c7 45 2b 00 05 48 8d 45 c7 44 89 7d 27 48 89
+0x00007ff91f5705cc:   44 24 50 48 8d 4d 27 44 89 7c 24 48 45 33 c9 44
+0x00007ff91f5705dc:   89 7c 24 40 45 8d 47 12 44 89 7c 24 38 b2 01 44
+0x00007ff91f5705ec:   89 7c 24 30 41 8b df 44 89 7c 24 28 41 8b ff 44
+0x00007ff91f5705fc:   89 7c 24 20 45 8b f7 44 89 7d 2f 66 c7 45 33 00
+0x00007ff91f57060c:   01 44 89 7d 37 66 c7 45 3b 00 10 4c 89 7d c7 4c
+0x00007ff91f57061c:   89 7d cf 4c 89 7d d7 4c 89 7d df 48 ff 15 62 60
+0x00007ff91f57062c:   22 00 0f 1f 44 00 00 85 c0 0f 88 a7 02 00 00 48
+0x00007ff91f57063c:   8d 45 cf 41 b9 20 02 00 00 48 89 44 24 50 45 8d
+0x00007ff91f57064c:   6f 02 44 89 7c 24 48 45 8d 47 20 44 89 7c 24 40 
+
+
+
+---------------  P R O C E S S  ---------------
+
+VM state: not at safepoint (not fully initialized)
+
+VM Mutex/Monitor currently owned by a thread: None
+
+Heap address: 0x0000000000000000, size: 0 MB, Compressed Oops mode: 32-bit
+
+CDS archive(s) mapped at: [0x0000000000000000-0x0000000000000000-0x0000000000000000), size 0, SharedBaseAddress: 0x0000000800000000, ArchiveRelocationMode: 1.
+Narrow klass base: 0x0000000000000000, Narrow klass shift: 0, Narrow klass range: 0x0
+
+GC Precious Log:
+<Not initialized>
+
+
+Dynamic libraries:
+0x00007ff7a54a0000 - 0x00007ff7a54b0000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\java.exe
+0x00007ff922330000 - 0x00007ff922548000 	C:\Windows\SYSTEM32\ntdll.dll
+0x00007ff921650000 - 0x00007ff921714000 	C:\Windows\System32\KERNEL32.DLL
+0x00007ff91f510000 - 0x00007ff91f8e3000 	C:\Windows\System32\KERNELBASE.dll
+0x00007ff91fd80000 - 0x00007ff91fe91000 	C:\Windows\System32\ucrtbase.dll
+0x00007ff917620000 - 0x00007ff91763b000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\VCRUNTIME140.dll
+0x00007ff91aba0000 - 0x00007ff91abb9000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\jli.dll
+0x00007ff920dc0000 - 0x00007ff920e71000 	C:\Windows\System32\ADVAPI32.dll
+0x00007ff9219a0000 - 0x00007ff921a47000 	C:\Windows\System32\msvcrt.dll
+0x00007ff920050000 - 0x00007ff9200f8000 	C:\Windows\System32\sechost.dll
+0x00007ff91fea0000 - 0x00007ff91fec8000 	C:\Windows\System32\bcrypt.dll
+0x00007ff9202c0000 - 0x00007ff9203d8000 	C:\Windows\System32\RPCRT4.dll
+0x00007ff920500000 - 0x00007ff9206b2000 	C:\Windows\System32\USER32.dll
+0x00007ff90d2d0000 - 0x00007ff90d56c000 	C:\Windows\WinSxS\amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.22621.6060_none_2712eda17382d24b\COMCTL32.dll
+0x00007ff91f4e0000 - 0x00007ff91f506000 	C:\Windows\System32\win32u.dll
+0x00007ff921720000 - 0x00007ff921749000 	C:\Windows\System32\GDI32.dll
+0x00007ff91f8f0000 - 0x00007ff91fa0b000 	C:\Windows\System32\gdi32full.dll
+0x00007ff91f440000 - 0x00007ff91f4da000 	C:\Windows\System32\msvcp_win.dll
+0x00007ff916df0000 - 0x00007ff916dfa000 	C:\Windows\SYSTEM32\VERSION.dll
+0x00007ff9204c0000 - 0x00007ff9204f1000 	C:\Windows\System32\IMM32.DLL
+0x00007ff917df0000 - 0x00007ff917dfc000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\vcruntime140_1.dll
+0x00007ff90c410000 - 0x00007ff90c49e000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\msvcp140.dll
+0x00007ff8e43c0000 - 0x00007ff8e4fa0000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\server\jvm.dll
+0x00007ff9207c0000 - 0x00007ff9207c8000 	C:\Windows\System32\PSAPI.DLL
+0x00007ff9168d0000 - 0x00007ff9168d9000 	C:\Windows\SYSTEM32\WSOCK32.dll
+0x00007ff91ffd0000 - 0x00007ff920041000 	C:\Windows\System32\WS2_32.dll
+0x00007ff919f50000 - 0x00007ff919f84000 	C:\Windows\SYSTEM32\WINMM.dll
+0x00007ff91e3f0000 - 0x00007ff91e408000 	C:\Windows\SYSTEM32\kernel.appcore.dll
+0x00007ff9168c0000 - 0x00007ff9168ca000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\jimage.dll
+0x00007ff9146c0000 - 0x00007ff9148f3000 	C:\Windows\SYSTEM32\DBGHELP.DLL
+0x00007ff921140000 - 0x00007ff9214d1000 	C:\Windows\System32\combase.dll
+0x00007ff921040000 - 0x00007ff921118000 	C:\Windows\System32\OLEAUT32.dll
+0x00007ff91fed0000 - 0x00007ff91ff4b000 	C:\Windows\System32\bcryptPrimitives.dll
+0x00007ff909f60000 - 0x00007ff909f9b000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\jdwp.dll
+0x00007ff90fe60000 - 0x00007ff90fe6e000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\instrument.dll
+0x00007ff912ee0000 - 0x00007ff912f05000 	D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\java.dll
+0x00007ff8df610000 - 0x00007ff8df849000 	C:\Users\Admin\AppData\Local\Temp\idea_libasyncProfiler_dll_temp_folder8\libasyncProfiler.dll
+
+dbghelp: loaded successfully - version: 4.0.5 - missing functions: MiniDumpWriteDump
+symbol engine: initialized successfully - sym options: 0x614 - pdb path: .;D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin;C:\Windows\SYSTEM32;C:\Windows\WinSxS\amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.22621.6060_none_2712eda17382d24b;D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin\server;C:\Users\Admin\AppData\Local\Temp\idea_libasyncProfiler_dll_temp_folder8
+
+VM Arguments:
+jvm_args: -agentlib:jdwp=transport=dt_socket,address=127.0.0.1:50783,suspend=y,server=n -javaagent:C:\Users\Admin\AppData\Local\JetBrains\IntelliJIdea2025.3\captureAgent\debugger-agent.jar=file:///C:/Users/Admin/AppData/Local/Temp/capture15349926156548557034.props -agentpath:C:\Users\Admin\AppData\Local\Temp\idea_libasyncProfiler_dll_temp_folder8\libasyncProfiler.dll=version,jfr,event=wall,interval=10ms,cstack=no,file=C:\Users\Admin\IdeaSnapshots\RideUpApplication_2026_05_05_133443.jfr,dbghelppath=C:\Users\Admin\AppData\Local\Temp\idea_dbghelp_dll_temp_folder5\dbghelp.dll,log=C:\Users\Admin\AppData\Local\Temp\RideUpApplication_2026_05_05_133443.jfr.log.txt,logLevel=DEBUG -XX:TieredStopAtLevel=1 -Dspring.output.ansi.enabled=always -Dcom.sun.management.jmxremote -Dspring.jmx.enabled=true -Dspring.liveBeansView.mbeanDomain -Dspring.application.admin.enabled=true -Dmanagement.endpoints.jmx.exposure.include=* -Dkotlinx.coroutines.debug.enable.creation.stack.trace=false -Ddebugger.agent.enable.coroutines=true -Dkotlinx.coroutines.debug.enable.flows.stack.trace=true -Dkotlinx.coroutines.debug.enable.mutable.state.flows.stack.trace=true -Ddebugger.async.stack.trace.for.all.threads=true -Dfile.encoding=UTF-8 
+java_command: com.example.demo.RideUpApplication
+java_class_path (initial): D:\Workspace\DuongXaChungLoi\identity-service\target\classes;C:\Users\Admin\.m2\repository\org\springframework\boot\spring-boot-starter-web\3.3.4\spring-boot-starter-web-3.3.4.jar;C:\Users\Admin\.m2\repository\org\springframework\boot\spring-boot-starter\3.3.4\spring-boot-starter-3.3.4.jar;C:\Users\Admin\.m2\repository\org\springframework\boot\spring-boot\3.3.4\spring-boot-3.3.4.jar;C:\Users\Admin\.m2\repository\org\springframework\boot\spring-boot-autoconfigure\3.3.4\spring-boot-autoconfigure-3.3.4.jar;C:\Users\Admin\.m2\repository\org\springframework\boot\spring-boot-starter-logging\3.3.4\spring-boot-starter-logging-3.3.4.jar;C:\Users\Admin\.m2\repository\ch\qos\logback\logback-classic\1.5.8\logback-classic-1.5.8.jar;C:\Users\Admin\.m2\repository\ch\qos\logback\logback-core\1.5.8\logback-core-1.5.8.jar;C:\Users\Admin\.m2\repository\org\apache\logging\log4j\log4j-to-slf4j\2.23.1\log4j-to-slf4j-2.23.1.jar;C:\Users\Admin\.m2\repository\org\apache\logging\log4j\log4j-api\2.23.1\log4j-api-2.23.1.jar;C:\Users\Admin\.m2\repository\org\slf4j\jul-to-slf4j\2.0.16\jul-to-slf4j-2.0.16.jar;C:\Users\Admin\.m2\repository\jakarta\annotation\jakarta.annotation-api\2.1.1\jakarta.annotation-api-2.1.1.jar;C:\Users\Admin\.m2\repository\org\yaml\snakeyaml\2.2\snakeyaml-2.2.jar;C:\Users\Admin\.m2\repository\org\springframework\boot\spring-boot-starter-json\3.3.4\spring-boot-starter-json-3.3.4.jar;C:\Users\Admin\.m2\repository\com\fasterxml\jackson\datatype\jackson-datatype-jdk8\2.17.2\jackson-datatype-jdk8-2.17.2.jar;C:\Users\Admin\.m2\repository\com\fasterxml\jackson\datatype\jackson-datatype-jsr310\2.17.2\jackson-datatype-jsr310-2.17.2.jar;C:\Users\Admin\.m2\repository\com\fasterxml\jackson\module\jackson-module-parameter-names\2.17.2\jackson-module-parameter-names-2.17.2.jar;C:\Users\Admin\.m2\repository\org\springframework\boot\spring-boot-starter-tomcat\3.3.4\spring-boot-starter-tomcat-3.3.4.jar;C:\Users\Admin\.m2\repository\org\apache\tomcat\embed\tomc
+Launcher Type: SUN_STANDARD
+
+[Global flags]
+     uint ConcGCThreads                            = 3                                         {product} {ergonomic}
+     uint G1ConcRefinementThreads                  = 10                                        {product} {ergonomic}
+    uintx GCDrainStackTargetSize                   = 64                                        {product} {ergonomic}
+   size_t InitialHeapSize                          = 257560512                                 {product} {ergonomic}
+     bool ManagementServer                         = true                                      {product} {command line}
+   size_t MarkStackSize                            = 4194304                                   {product} {ergonomic}
+   size_t MaxHeapSize                              = 4120968192                                {product} {ergonomic}
+   size_t MinHeapSize                              = 6815736                                   {product} {ergonomic}
+     bool ProfileInterpreter                       = false                                  {pd product} {command line}
+     intx TieredStopAtLevel                        = 1                                         {product} {command line}
+     bool UseCompressedClassPointers               = true                           {product lp64_product} {ergonomic}
+     bool UseCompressedOops                        = true                           {product lp64_product} {ergonomic}
+     bool UseG1GC                                  = true                                      {product} {ergonomic}
+     bool UseLargePagesIndividualAllocation        = false                                  {pd product} {ergonomic}
+
+Logging:
+Log output configuration:
+ #0: stdout all=warning uptime,level,tags
+ #1: stderr all=off uptime,level,tags
+
+Environment Variables:
+JAVA_HOME=D:\OS\dowload easy\Java JDK\jdk-17.0.11
+PATH=C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\Git\cmd;D:\OS\dowload easy\Java JDK\jdk-17.0.11\bin;D:\OS\dowload easy\apache-maven-3.8.5\bin;C:\Users\Admin\AppData\Local\nvm;C:\nvm4w\nodejs;C:\Program Files\Docker\Docker\resources\bin;C:\Program Files\MySQL\MySQL Shell 8.0\bin\;C:\Users\Admin\.local\bin;C:\Users\Admin\AppData\Local\Microsoft\WindowsApps;C:\Program Files\JetBrains\DataGrip 2025.3.5\bin;C:\Users\Admin\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\Admin\AppData\Local\GitHubDesktop\bin;C:\Users\Admin\AppData\Local\nvm;C:\nvm4w\nodejs;C:\Users\Admin\AppData\Local\Python\bin;D:\Data\Antigravity\bin
+USERNAME=Admin
+OS=Windows_NT
+PROCESSOR_IDENTIFIER=AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD
+
+
+
+---------------  S Y S T E M  ---------------
+
+OS:
+ Windows 11 , 64 bit Build 22621 (10.0.22621.5415)
+OS uptime: 0 days 2:46 hours
+
+CPU: total 12 (initial active 12) 
+
+Memory: 4k page, system-wide physical 15720M (310M free)
+TotalPageFile size 32653M (AvailPageFile size 31M)
+current process WorkingSet (physical memory assigned to process): 10M, peak: 10M
+current process commit charge ("private bytes"): 4M, peak: 11M
+
+vm_info: Java HotSpot(TM) 64-Bit Server VM (17.0.11+7-LTS-207) for windows-amd64 JRE (17.0.11+7-LTS-207), built on Mar 11 2024 19:01:50 by "mach5one" with MS VC++ 17.6 (VS2022)
+
+END.

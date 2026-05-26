@@ -1,5 +1,4 @@
 package com.rideup.locationservice.config;
-
 import com.rideup.locationservice.constant.RedisPrefixKeyConstant;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,10 +9,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Component;
-
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-
 @Component
 public class CustomJwtDecoder implements JwtDecoder {
 
@@ -38,19 +35,17 @@ public class CustomJwtDecoder implements JwtDecoder {
                 }
             }
         }
-
         Jwt jwt = nimbusJwtDecoder.decode(token);
         String jti = jwt.getId();
-
         if (jti == null) {
             throw new JwtException("Token missing jti");
         }
-
         boolean exists = redisTemplate.hasKey(RedisPrefixKeyConstant.TOKEN+token);
         if (!exists) {
             throw new JwtException("Token expired or revoked (Redis)");
         }
-
         return jwt;
     }
+
+
 }

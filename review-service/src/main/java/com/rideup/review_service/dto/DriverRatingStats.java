@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class DriverRatingStats {
-    private String id; // Ánh xạ với _id trong MongoDB Group
+    private String id;
     private double averageRating;
     private long totalReviews;
 }

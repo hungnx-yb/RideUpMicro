@@ -134,4 +134,6 @@ app:
     topics:
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
+      booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}
+
 

@@ -218,6 +218,35 @@ public class BookingService {
         }
         return modelMapper.map(saved, BookingResponse.class);
     }
+
+    @Transactional
+    public BookingResponse completeBooking(String bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new AppException(ErrorCode.BOOKING_ALREADY_CANCELLED);
+        }
+
+        booking.setStatus(BookingStatus.COMPLETED);
+        Booking saved = bookingRepository.save(booking);
+
+        String correlationId = UUID.randomUUID().toString();
+        
+        com.rideUp.booking_service.dto.event.BookingCompletedEvent event = com.rideUp.booking_service.dto.event.BookingCompletedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .correlationId(correlationId)
+                .bookingId(saved.getId())
+                .customerId(saved.getCustomerId())
+                .tripId(saved.getTripId())
+                .completedAt(LocalDateTime.now())
+                .build();
+                
+        bookingServicePublisher.publishBookingCompleted(event);
+
+        return modelMapper.map(saved, BookingResponse.class);
+    }
+
     @Transactional
     public int expirePendingBookings() {
         LocalDateTime now = LocalDateTime.now();

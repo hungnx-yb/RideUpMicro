@@ -7,6 +7,7 @@ import com.rideup.review_service.dto.response.ReviewResponse;
 import com.rideup.review_service.entity.Review;
 import com.rideup.review_service.kafka.producer.ReviewServicePublisher;
 import com.rideup.review_service.repository.ReviewRepository;
+import com.rideup.review_service.utils.SecurityUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -27,21 +28,20 @@ public class ReviewService {
     ReviewServicePublisher reviewServicePublisher;
     ModelMapper modelMapper;
     public ReviewResponse createReview(CreateReviewRequest request) {
-        log.info("Creating review for trip: {} by customer: {}", request.getTripId(), request.getCustomerId());
+        String customerId = SecurityUtils.getCurrentUserId();
+        log.info("Creating review for trip: {} by customer: {}", request.getTripId(), customerId);
 
         Review review = modelMapper.map(request, Review.class);
+        review.setCustomerId(customerId);
         Review savedReview = reviewRepository.save(review);
         updateDriverRating(savedReview.getDriverId());
-        return mapToResponse(savedReview);
+        return modelMapper.map(savedReview,  ReviewResponse.class);
     }
 
     private void updateDriverRating(String driverId) {
-        // Sử dụng Aggregation để lấy tổng số và trung bình (Nhanh gấp trăm lần so với List)
         DriverRatingStats stats = reviewRepository.getRatingStatsByDriverId(driverId);
-        
         long v = (stats != null) ? stats.getTotalReviews() : 0;
         double R = (stats != null) ? stats.getAverageRating() : 5.0;
-
         long W = 5;
         double C = 5.0;
         double bayesianAverage = ((W * C) + (R * v)) / (W + v);
@@ -57,19 +57,8 @@ public class ReviewService {
 
     public List<ReviewResponse> getDriverReviews(String driverId) {
         return reviewRepository.findByDriverId(driverId).stream()
-                .map(this::mapToResponse)
+                .map(x->modelMapper.map(x, ReviewResponse.class))
                 .collect(Collectors.toList());
     }
 
-    private ReviewResponse mapToResponse(Review review) {
-        return ReviewResponse.builder()
-                .id(review.getId())
-                .tripId(review.getTripId())
-                .driverId(review.getDriverId())
-                .customerId(review.getCustomerId())
-                .rating(review.getRating())
-                .comment(review.getComment())
-                .createdAt(review.getCreatedAt())
-                .build();
-    }
 }

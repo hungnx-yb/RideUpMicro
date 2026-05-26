@@ -2,7 +2,6 @@ spring:
   application:
     name: booking-service
 
-
   cloud:
     openfeign:
       micrometer:
@@ -118,6 +117,7 @@ app:
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
       booking-cancell-request: ${KAFKA_TOPIC_BOOKING_CANCELL_REQUEST:booking.cancell.request}
+      booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}
 
 booking:
   expire:

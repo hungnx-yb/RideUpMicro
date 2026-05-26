@@ -74,4 +74,12 @@ public class BookingController {
                 .result(bookingService.cancelBooking(id, request))
                 .build();
     }
+
+    @PostMapping("/{id}/complete")
+    public ApiResponse<BookingResponse> completeBooking(@PathVariable String id) {
+        return ApiResponse.<BookingResponse>builder()
+                .message("Booking completed successfully")
+                .result(bookingService.completeBooking(id))
+                .build();
+    }
 }
