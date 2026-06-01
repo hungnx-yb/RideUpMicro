@@ -1,0 +1,120 @@
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  SafeAreaView, 
+  KeyboardAvoidingView, 
+  Platform,
+  ActivityIndicator
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiService } from '../services/apiService';
+
+const COLORS = { background: '#121212', surface: '#1E1E1E', primary: '#FFD700', text: '#FFFFFF', textMuted: '#A0A0A0', error: '#FF4C4C', border: '#333333' };
+const SIZES = { base: 8, small: 12, font: 14, medium: 16, large: 20, extraLarge: 24, title: 32 };
+
+const LoginScreen = ({ navigation }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setErrorMsg('Vui lòng nhập đầy đủ Email và mật khẩu');
+      return;
+    }
+    setErrorMsg('');
+    setLoading(true);
+
+    try {
+      const response = await apiService.login(email, password);
+
+      if (response.data.code === 1000) {
+        const token = response.data.result.token;
+        await AsyncStorage.setItem('accessToken', token);
+        navigation.replace('MainTabs');
+      } else {
+        setErrorMsg(response.data.message || 'Sai thông tin đăng nhập');
+      }
+    } catch (error) {
+      console.log(error);
+      const backendError = error.response?.data?.message || error.message || 'Không thể kết nối đến máy chủ.';
+      setErrorMsg(backendError);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.content}>
+        <View style={styles.headerContainer}>
+          <Text style={styles.logoText}>Ride<Text style={{color: COLORS.primary}}>Up</Text></Text>
+          <Text style={styles.subText}>Cùng nhau đi muôn nơi</Text>
+        </View>
+
+        <View style={styles.formContainer}>
+          {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input} placeholder="Nhập email của bạn" placeholderTextColor={COLORS.textMuted}
+              value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Mật khẩu</Text>
+            <TextInput
+              style={styles.input} placeholder="Nhập mật khẩu" placeholderTextColor={COLORS.textMuted}
+              secureTextEntry value={password} onChangeText={setPassword}
+            />
+          </View>
+
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
+            {loading ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.loginButtonText}>ĐĂNG NHẬP</Text>}
+          </TouchableOpacity>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Chưa có tài khoản? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.registerText}>Đăng ký ngay</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  headerContainer: { alignItems: 'center', marginBottom: 50 },
+  logoText: { fontSize: 48, fontWeight: 'bold', color: COLORS.text, letterSpacing: 1 },
+  subText: { fontSize: SIZES.medium, color: COLORS.textMuted, marginTop: 8 },
+  formContainer: { width: '100%' },
+  inputContainer: { marginBottom: 20 },
+  label: { color: COLORS.text, fontSize: SIZES.font, marginBottom: 8, fontWeight: '500' },
+  input: {
+    backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 12, padding: 16, color: COLORS.text, fontSize: SIZES.medium,
+  },
+  loginButton: {
+    backgroundColor: COLORS.primary, borderRadius: 12, padding: 16, alignItems: 'center',
+    marginTop: 10, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+  },
+  loginButtonText: { color: COLORS.background, fontSize: SIZES.medium, fontWeight: 'bold', letterSpacing: 1 },
+  errorText: { color: COLORS.error, fontSize: SIZES.font, marginBottom: 16, textAlign: 'center' },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 32 },
+  footerText: { color: COLORS.textMuted, fontSize: SIZES.medium },
+  registerText: { color: COLORS.primary, fontWeight: 'bold', fontSize: SIZES.medium }
+});
+
+export default LoginScreen;
