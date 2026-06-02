@@ -6,29 +6,28 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 import LoginScreen from './src/screens/LoginScreen';
-import SearchRideScreen from './src/screens/SearchRideScreen';
-import MapScreen from './src/screens/MapScreen';
-import BookingChatScreen from './src/screens/BookingChatScreen';
-import MyTripsScreen from './src/screens/MyTripsScreen';
-import RatingScreen from './src/screens/RatingScreen';
-import CustomerProfileScreen from './src/screens/CustomerProfileScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import DriverDashboardScreen from './src/screens/DriverDashboardScreen';
+import CreateTripScreen from './src/screens/CreateTripScreen';
+import DriverTripsScreen from './src/screens/DriverTripsScreen';
+import DriverProfileScreen from './src/screens/DriverProfileScreen';
+import BookingChatScreen from './src/screens/BookingChatScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const COLORS = { background: '#121212', surface: '#1E1E1E', primary: '#FFD700', text: '#FFFFFF', textMuted: '#A0A0A0' };
+const COLORS = { background: '#121212', surface: '#1E1E1E', primary: '#0ea5e9', text: '#FFFFFF', textMuted: '#A0A0A0' };
 
 function MainTabNavigator() {
   return (
     <Tab.Navigator
-      initialRouteName="SearchRide"
+      initialRouteName="Dashboard"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
           backgroundColor: COLORS.surface,
-          borderTopColor: COLORS.border || COLORS.background,
+          borderTopColor: COLORS.border,
           borderTopWidth: 1,
           paddingTop: 8,
         },
@@ -37,10 +36,12 @@ function MainTabNavigator() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
 
-          if (route.name === 'SearchRide') {
-            iconName = focused ? 'search' : 'search-outline';
-          } else if (route.name === 'MyTrips') {
-            iconName = focused ? 'time' : 'time-outline';
+          if (route.name === 'Dashboard') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'CreateTrip') {
+            iconName = focused ? 'add-circle' : 'add-circle-outline';
+          } else if (route.name === 'DriverTrips') {
+            iconName = focused ? 'car' : 'car-outline';
           } else if (route.name === 'Notifications') {
             iconName = focused ? 'notifications' : 'notifications-outline';
           } else if (route.name === 'Profile') {
@@ -51,10 +52,11 @@ function MainTabNavigator() {
         },
       })}
     >
-      <Tab.Screen name="SearchRide" component={SearchRideScreen} options={{ tabBarLabel: 'Tìm chuyến' }} />
-      <Tab.Screen name="MyTrips" component={MyTripsScreen} options={{ tabBarLabel: 'Lịch sử' }} />
+      <Tab.Screen name="Dashboard" component={DriverDashboardScreen} options={{ tabBarLabel: 'Tổng quan' }} />
+      <Tab.Screen name="CreateTrip" component={CreateTripScreen} options={{ tabBarLabel: 'Tạo chuyến' }} />
+      <Tab.Screen name="DriverTrips" component={DriverTripsScreen} options={{ tabBarLabel: 'Quản lý' }} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ tabBarLabel: 'Thông báo' }} />
-      <Tab.Screen name="Profile" component={CustomerProfileScreen} options={{ tabBarLabel: 'Hồ sơ' }} />
+      <Tab.Screen name="Profile" component={DriverProfileScreen} options={{ tabBarLabel: 'Hồ sơ' }} />
     </Tab.Navigator>
   );
 }
@@ -73,9 +75,8 @@ export default function App() {
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-        <Stack.Screen name="Map" component={MapScreen} />
         <Stack.Screen name="Chat" component={BookingChatScreen} />
-        <Stack.Screen name="Rating" component={RatingScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
