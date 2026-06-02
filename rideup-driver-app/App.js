@@ -17,7 +17,7 @@ import BookingChatScreen from './src/screens/BookingChatScreen';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const COLORS = { background: '#121212', surface: '#1E1E1E', primary: '#0ea5e9', text: '#FFFFFF', textMuted: '#A0A0A0' };
+const COLORS = { background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', text: '#0F172A', textMuted: '#64748B', border: '#E2E8F0' };
 
 function MainTabNavigator() {
   return (
@@ -64,12 +64,12 @@ function MainTabNavigator() {
 export default function App() {
   return (
     <NavigationContainer>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack.Navigator 
         initialRouteName="Login"
         screenOptions={{
           headerShown: false,
-          cardStyle: { backgroundColor: '#121212' }
+          cardStyle: { backgroundColor: '#F8FAFC' }
         }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />

@@ -14,70 +14,94 @@ import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 
 const COLORS = { 
-  background: '#121212', surface: '#1E1E1E', primary: '#0ea5e9', 
-  text: '#FFFFFF', textMuted: '#A0A0A0', error: '#FF4C4C', 
-  border: '#333333', success: '#4ade80', info: '#60a5fa' 
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', 
+  text: '#0F172A', textMuted: '#64748B', error: '#ef4444', 
+  border: '#E2E8F0', success: '#4ade80', info: '#60a5fa' 
 };
 
 const SIZES = { small: 12, font: 14, medium: 16, large: 20, title: 28 };
 
 const NotificationItem = ({ item, onPress }) => {
   const isRead = item.isRead;
-  const bgColor = isRead ? COLORS.surface : 'rgba(14, 165, 233, 0.08)';
+  const cardBorderColor = isRead ? 'transparent' : COLORS.primary;
+  const cardBgColor = isRead ? COLORS.surface : `${COLORS.primary}05`;
 
   // Pick icon based on some keywords or type if available
   let iconName = 'notifications';
   let iconColor = COLORS.primary;
+  let iconBgColor = `${COLORS.primary}15`;
+
   const titleLower = (item.title || '').toLowerCase();
   
   if (titleLower.includes('đặt') || titleLower.includes('booking')) {
     iconName = 'car-sport';
     iconColor = COLORS.info;
+    iconBgColor = `${COLORS.info}15`;
   } else if (titleLower.includes('thành công') || titleLower.includes('hoàn thành')) {
     iconName = 'checkmark-circle';
     iconColor = COLORS.success;
+    iconBgColor = `${COLORS.success}15`;
   } else if (titleLower.includes('hủy')) {
     iconName = 'close-circle';
     iconColor = COLORS.error;
+    iconBgColor = `${COLORS.error}15`;
   } else if (titleLower.includes('thanh toán')) {
     iconName = 'card';
-    iconColor = COLORS.primary;
+    iconColor = COLORS.warning;
+    iconBgColor = `${COLORS.warning}15`;
   }
 
-  const formatTime = (iso) => {
-    if (!iso) return 'Gần đây';
-    const date = new Date(iso);
+  const formatTime = (localDateTimeString) => {
+    if (!localDateTimeString) return 'Vừa xong';
+    
+    // Xử lý chuỗi LocalDateTime từ Java (VD: "2026-06-02T13:51:27.123")
+    // Replace '-' bằng '/' để an toàn trên JSC/iOS cũ
+    let safeString = localDateTimeString;
+    if (typeof localDateTimeString === 'string') {
+      safeString = localDateTimeString.split('.')[0].replace(/-/g, '/').replace('T', ' ');
+    }
+    const date = new Date(safeString);
+    if (isNaN(date.getTime())) return localDateTimeString.substring(0, 10);
+
     const now = new Date();
     const diffMs = now - date;
-    const diffMins = Math.round(diffMs / 60000);
-    const diffHrs = Math.round(diffMs / 3600000);
-    const diffDays = Math.round(diffMs / 86400000);
-
+    
+    if (diffMs < 60000) return 'Vừa xong';
+    
+    const diffMins = Math.floor(diffMs / 60000);
     if (diffMins < 60) return `${diffMins} phút trước`;
+    
+    const diffHrs = Math.floor(diffMs / 3600000);
     if (diffHrs < 24) return `${diffHrs} giờ trước`;
+    
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 1) return 'Hôm qua';
     if (diffDays < 7) return `${diffDays} ngày trước`;
-    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+
+    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
   return (
     <TouchableOpacity 
-      style={[styles.notiCard, { backgroundColor: bgColor }]} 
+      style={[styles.notiCard, !isRead && styles.notiCardUnread]} 
       onPress={() => onPress(item)}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
-      <View style={styles.iconBox}>
-        <Ionicons name={iconName} size={24} color={iconColor} />
-        {!isRead && <View style={styles.unreadDot} />}
+      <View style={[styles.iconBox, { backgroundColor: iconBgColor }]}>
+        <Ionicons name={iconName} size={22} color={iconColor} />
       </View>
       <View style={styles.contentBox}>
-        <Text style={[styles.title, !isRead && styles.titleUnread]} numberOfLines={2}>
-          {item.title || 'Thông báo mới'}
-        </Text>
-        <Text style={styles.message} numberOfLines={3}>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, !isRead && styles.titleUnread]} numberOfLines={1}>
+            {item.title || 'Thông báo hệ thống'}
+          </Text>
+          <Text style={[styles.time, !isRead && styles.timeUnread]}>{formatTime(item.createdAt)}</Text>
+        </View>
+        <Text style={[styles.message, !isRead && styles.messageUnread]} numberOfLines={2}>
           {item.content || item.message || ''}
         </Text>
-        <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
       </View>
+      {!isRead && <View style={styles.unreadDot} />}
     </TouchableOpacity>
   );
 };
@@ -190,23 +214,27 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 40, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  headerSub: { color: COLORS.primary, fontSize: SIZES.small, fontWeight: 'bold', letterSpacing: 1 },
-  headerTitle: { fontSize: SIZES.title, fontWeight: 'bold', color: COLORS.text, marginTop: 2 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
+  headerSub: { color: COLORS.primary, fontSize: SIZES.small, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
   markAllBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', alignItems: 'center', justifyContent: 'center' },
 
   // List
-  listContainer: { paddingVertical: 10 },
+  listContainer: { padding: 16, paddingBottom: 40 },
   
   // Item
-  notiCard: { flexDirection: 'row', padding: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  iconBox: { width: 48, alignItems: 'center', marginRight: 12, paddingTop: 2 },
-  unreadDot: { position: 'absolute', top: 0, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.error, borderWidth: 2, borderColor: COLORS.background },
-  contentBox: { flex: 1 },
-  title: { color: COLORS.text, fontSize: SIZES.medium, fontWeight: '600', marginBottom: 4 },
-  titleUnread: { color: COLORS.primary, fontWeight: 'bold' },
-  message: { color: COLORS.textMuted, fontSize: SIZES.font, lineHeight: 20, marginBottom: 8 },
-  time: { color: COLORS.textMuted, fontSize: 11, fontStyle: 'italic' },
+  notiCard: { flexDirection: 'row', padding: 16, paddingRight: 24, marginBottom: 16, borderRadius: 20, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
+  notiCardUnread: { backgroundColor: '#F0F9FF', borderColor: 'rgba(14, 165, 233, 0.2)', borderWidth: 1 },
+  iconBox: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  unreadDot: { position: 'absolute', top: 22, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary },
+  contentBox: { flex: 1, justifyContent: 'center' },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  title: { flex: 1, color: COLORS.text, fontSize: 15, fontWeight: '700', paddingRight: 8 },
+  titleUnread: { color: '#0369a1', fontWeight: '900' },
+  message: { color: COLORS.textMuted, fontSize: 13, lineHeight: 20 },
+  messageUnread: { color: '#0F172A' },
+  time: { color: '#94A3B8', fontSize: 12, fontWeight: '500' },
+  timeUnread: { color: COLORS.primary, fontWeight: 'bold' },
 
   // Empty
   emptyBox: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 40 },

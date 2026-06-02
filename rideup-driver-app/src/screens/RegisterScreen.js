@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { apiService } from '../services/apiService';
 
-const COLORS = { background: '#121212', surface: '#1E1E1E', primary: '#FFD700', text: '#FFFFFF', textMuted: '#A0A0A0', error: '#FF4C4C', border: '#333333' };
+const COLORS = { background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', text: '#0F172A', textMuted: '#64748B', error: '#ef4444', border: '#E2E8F0' };
 const SIZES = { base: 8, small: 12, medium: 16, large: 20, extraLarge: 28, title: 32 };
 
 const RegisterScreen = ({ navigation }) => {

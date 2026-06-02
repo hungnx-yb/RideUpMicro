@@ -9,9 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiService } from '../services/apiService';
 
 const COLORS = {
-  background: '#121212', surface: '#1E1E1E', primary: '#0ea5e9',
-  text: '#FFFFFF', textMuted: '#94a3b8', border: '#334155',
-  success: '#10b981', error: '#ef4444'
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9',
+  text: '#0F172A', textMuted: '#64748B', border: '#E2E8F0',
+  success: '#10b981', warning: '#f59e0b', error: '#ef4444'
 };
 
 const SEAT_OPTIONS = ['1', '2', '3', '4', '7'];
@@ -175,7 +175,12 @@ export default function CreateTripScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mở Chuyến Xe</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View>
+            <Text style={styles.headerAppTitle}>RIDEUP</Text>
+            <Text style={styles.headerTitle}>Mở chuyến xe</Text>
+          </View>
+        </View>
         <Text style={styles.headerSub}>Thiết lập lộ trình để hành khách đặt chỗ</Text>
       </View>
 
@@ -250,11 +255,13 @@ export default function CreateTripScreen({ navigation }) {
             </View>
           </View>
 
-          {/* === THỜI GIAN & GIÁ VÉ === */}
+          {/* === THỜI GIAN KHỞI HÀNH === */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Ionicons name="time" size={18} color={COLORS.primary} />
-              <Text style={styles.cardTitle}>THỜI GIAN & GIÁ VÉ</Text>
+              <View style={styles.cardIconWrap}>
+                <Ionicons name="time" size={18} color={COLORS.primary} />
+              </View>
+              <Text style={styles.cardTitle}>THỜI GIAN KHỞI HÀNH</Text>
             </View>
 
             {/* Date/Time pickers */}
@@ -281,6 +288,7 @@ export default function CreateTripScreen({ navigation }) {
                 <DateTimePicker
                   value={form.departureTime} mode="date"
                   display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+                  themeVariant="light"
                   minimumDate={new Date()} style={{ alignSelf: 'stretch' }}
                   onChange={(e, date) => {
                     if (Platform.OS === 'android') setShowDatePicker(false);
@@ -298,7 +306,8 @@ export default function CreateTripScreen({ navigation }) {
                 <DateTimePicker
                   value={form.departureTime} mode="time"
                   display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
-                  style={{ alignSelf: 'stretch' }}
+                  themeVariant="light"
+                  style={{ alignSelf: 'center' }}
                   onChange={(e, time) => {
                     if (Platform.OS === 'android') setShowTimePicker(false);
                     if (time) { const d = new Date(form.departureTime); d.setHours(time.getHours(), time.getMinutes()); updateForm('departureTime', d); }
@@ -310,11 +319,22 @@ export default function CreateTripScreen({ navigation }) {
               </View>
             )}
 
+          </View>
+
+          {/* === SỐ GHẾ & GIÁ VÉ === */}
+          <View style={[styles.card, { marginTop: 16 }]}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.cardIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                <Ionicons name="ticket" size={18} color={COLORS.success} />
+              </View>
+              <Text style={styles.cardTitle}>THÔNG TIN VÉ</Text>
+            </View>
+
             {/* === SỐ GHẾ === */}
             <Text style={[styles.sectionLabel, { marginTop: 8 }]}>Số ghế nhận khách</Text>
             <View style={styles.stepperRow}>
-              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustSeats(-1)}>
-                <Ionicons name="remove" size={22} color={COLORS.primary} />
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustSeats(-1)} activeOpacity={0.8}>
+                <Ionicons name="remove" size={24} color={COLORS.primary} />
               </TouchableOpacity>
               <View style={styles.seatValueBox}>
                 <TextInput
@@ -324,17 +344,19 @@ export default function CreateTripScreen({ navigation }) {
                   onChangeText={(t) => updateForm('seatTotal', t.replace(/[^0-9]/g, ''))}
                   textAlign="center"
                   maxLength={2}
-                  color={COLORS.text}
+                  color={COLORS.primary}
+                  includeFontPadding={false}
                 />
                 <Text style={styles.seatUnit}>ghế</Text>
               </View>
-              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustSeats(1)}>
-                <Ionicons name="add" size={22} color={COLORS.primary} />
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustSeats(1)} activeOpacity={0.8}>
+                <Ionicons name="add" size={24} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24, marginTop: 10 }}>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 32, paddingBottom: 10 }}>
               {SEAT_OPTIONS.map(seat => (
-                <TouchableOpacity key={seat} style={[styles.chip, form.seatTotal === seat && styles.chipActive]} onPress={() => updateForm('seatTotal', seat)}>
+                <TouchableOpacity key={seat} style={[styles.chip, form.seatTotal === seat && styles.chipActive]} onPress={() => updateForm('seatTotal', seat)} activeOpacity={0.8}>
                   <Text style={[styles.chipText, form.seatTotal === seat && styles.chipTextActive]}>{seat} ghế</Text>
                 </TouchableOpacity>
               ))}
@@ -342,28 +364,30 @@ export default function CreateTripScreen({ navigation }) {
 
             {/* === GIÁ VÉ === */}
             <Text style={styles.sectionLabel}>Giá vé mỗi ghế</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, paddingBottom: 10 }}>
               {PRICE_OPTIONS.map(price => (
-                <TouchableOpacity key={price} style={[styles.chip, form.priceVnd === price && styles.chipActive]} onPress={() => updateForm('priceVnd', price)}>
+                <TouchableOpacity key={price} style={[styles.chip, form.priceVnd === price && styles.chipActive]} onPress={() => updateForm('priceVnd', price)} activeOpacity={0.8}>
                   <Text style={[styles.chipText, form.priceVnd === price && styles.chipTextActive]}>{formatMoney(price)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
+
             <View style={styles.customInputRow}>
-              <Ionicons name="cash-outline" size={20} color={COLORS.textMuted} />
+              <View style={styles.iconCurrencyWrap}>
+                <Ionicons name="cash" size={24} color={COLORS.success} />
+              </View>
               <TextInput 
                 style={styles.customInput}
                 keyboardType="numeric" 
-                placeholder="Nhập giá khác..."
+                placeholder="Nhập giá tự chọn..."
                 placeholderTextColor={COLORS.textMuted} 
                 value={form.priceVnd}
-                color={COLORS.text}
+                color={COLORS.primary}
                 onChangeText={(t) => updateForm('priceVnd', t.replace(/[^0-9]/g, ''))}
               />
-              <Text style={styles.currencyLabel}>đ</Text>
+              <Text style={styles.currencyLabel}>VNĐ</Text>
             </View>
           </View>
-
         </ScrollView>
       )}
 
@@ -393,14 +417,16 @@ export default function CreateTripScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { padding: 20, paddingTop: 40, paddingBottom: 20, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: COLORS.primary, marginBottom: 4 },
+  header: { padding: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
+  headerAppTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.primary, letterSpacing: 1, marginBottom: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
   headerSub: { fontSize: 14, color: COLORS.textMuted },
-  scrollContent: { padding: 16, paddingBottom: 20 },
+  scrollContent: { padding: 16, paddingBottom: 8 },
 
-  card: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
-  cardTitle: { color: COLORS.text, fontSize: 13, fontWeight: 'bold', letterSpacing: 1 },
+  card: { backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  cardIconWrap: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  cardTitle: { color: COLORS.text, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
 
   divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 4 },
   addStopBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: `${COLORS.primary}44`, backgroundColor: `${COLORS.primary}0d`, marginTop: 4 },
@@ -410,39 +436,40 @@ const styles = StyleSheet.create({
   inputBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, height: 60 },
   inputLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  sectionLabel: { color: COLORS.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  datePickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: `${COLORS.primary}15`, paddingHorizontal: 16, height: 50, borderRadius: 12, borderWidth: 1, borderColor: `${COLORS.primary}33` },
-  datePickerBtnActive: { borderColor: COLORS.primary, borderWidth: 2 },
-  datePickerText: { color: COLORS.primary, fontSize: 15, fontWeight: 'bold' },
+  sectionLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '800', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  datePickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: `${COLORS.primary}10`, paddingHorizontal: 10, height: 38, borderRadius: 8, borderWidth: 1, borderColor: `${COLORS.primary}22` },
+  datePickerBtnActive: { borderColor: COLORS.primary, borderWidth: 1 },
+  datePickerText: { color: COLORS.primary, fontSize: 12, fontWeight: 'bold' },
 
-  pickerContainer: { backgroundColor: COLORS.background, borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: COLORS.border },
-  pickerDoneBtn: { backgroundColor: COLORS.primary, margin: 12, borderRadius: 10, padding: 12, alignItems: 'center' },
-  pickerDoneText: { color: COLORS.background, fontWeight: 'bold', fontSize: 15 },
+  pickerContainer: { backgroundColor: COLORS.background, borderRadius: 12, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: COLORS.border },
+  pickerDoneBtn: { backgroundColor: COLORS.primary, margin: 10, borderRadius: 8, padding: 8, alignItems: 'center' },
+  pickerDoneText: { color: COLORS.background, fontWeight: 'bold', fontSize: 13 },
 
   // Stepper
-  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 4 },
-  stepperBtn: { width: 52, height: 52, borderRadius: 16, backgroundColor: `${COLORS.primary}15`, borderWidth: 1, borderColor: `${COLORS.primary}33`, justifyContent: 'center', alignItems: 'center' },
-  seatValueBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, paddingHorizontal: 20, marginHorizontal: 12, height: 52, minWidth: 100, justifyContent: 'center' },
-  seatInput: { fontSize: 26, fontWeight: 'bold', color: COLORS.text, minWidth: 40 },
-  seatUnit: { color: COLORS.textMuted, fontSize: 16, marginLeft: 6 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12, marginTop: 4 },
+  stepperBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  seatValueBox: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', width: 50 },
+  seatInput: { fontSize: 20, fontWeight: '800', color: COLORS.primary, padding: 0, margin: 0 },
+  seatUnit: { color: COLORS.textMuted, fontSize: 11, fontWeight: 'bold', marginLeft: 2 },
 
-  chip: { paddingHorizontal: 18, height: 38, borderRadius: 20, backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
-  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  chipText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  chipTextActive: { color: COLORS.background, fontWeight: 'bold' },
+  chip: { paddingHorizontal: 12, height: 28, borderRadius: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
+  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary, shadowColor: COLORS.primary, shadowOpacity: 0.2, shadowRadius: 3, elevation: 2 },
+  chipText: { color: COLORS.text, fontSize: 11, fontWeight: '600' },
+  chipTextActive: { color: '#FFFFFF', fontWeight: 'bold' },
 
-  customInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingHorizontal: 16, height: 52, gap: 10 },
-  customInput: { flex: 1, fontSize: 16, fontWeight: 'bold' },
-  currencyLabel: { color: COLORS.textMuted, fontSize: 16, fontWeight: 'bold' },
+  customInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1, borderRadius: 8, paddingHorizontal: 10, height: 38, marginTop: 4, borderWidth: 1, borderColor: COLORS.border },
+  iconCurrencyWrap: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(16, 185, 129, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  customInput: { flex: 1, fontSize: 13, fontWeight: 'bold', marginLeft: 8 },
+  currencyLabel: { color: COLORS.textMuted, fontSize: 12, fontWeight: 'bold' },
 
   // Bottom Footer
-  bottomFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surface, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, borderTopWidth: 1, borderTopColor: COLORS.border },
+  bottomFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surface, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 4 },
   footerLeft: { flex: 1, marginRight: 12 },
-  footerLabel: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 0.5, marginBottom: 4 },
-  footerValue: { color: COLORS.success, fontSize: 20, fontWeight: '900' },
-  footerSub: { color: COLORS.textMuted, fontSize: 13 },
-  submitBtn: { backgroundColor: COLORS.primary, height: 52, borderRadius: 14, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
-  submitBtnText: { color: COLORS.background, fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
+  footerLabel: { color: COLORS.textMuted, fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
+  footerValue: { color: COLORS.success, fontSize: 16, fontWeight: '900' },
+  footerSub: { color: COLORS.textMuted, fontSize: 11 },
+  submitBtn: { backgroundColor: COLORS.primary, height: 38, borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.2, shadowRadius: 4, elevation: 2 },
+  submitBtnText: { color: COLORS.background, fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '70%', padding: 20 },

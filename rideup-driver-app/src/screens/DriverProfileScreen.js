@@ -19,9 +19,9 @@ import { apiService } from '../services/apiService';
 import { BASE_URL } from '../config/api';
 
 const COLORS = { 
-  background: '#121212', surface: '#1E1E1E', primary: '#0ea5e9', 
-  text: '#FFFFFF', textMuted: '#94a3b8', error: '#ef4444', 
-  border: '#334155', warning: '#f59e0b', success: '#10b981'
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', 
+  text: '#0F172A', textMuted: '#64748B', error: '#ef4444', 
+  border: '#E2E8F0', success: '#10b981', warning: '#f59e0b' 
 };
 
 const MetricBox = ({ icon, value, label, color }) => (
@@ -546,8 +546,8 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16 },
   infoLabel: { color: COLORS.textMuted, fontSize: 15 },
   infoValue: { color: COLORS.text, fontSize: 16, fontWeight: 'bold' },
-  plateBox: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
-  plateText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
+  plateBox: { backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(14, 165, 233, 0.3)' },
+  plateText: { color: COLORS.primary, fontSize: 16, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase' },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontSize: 12, fontWeight: 'bold' },
   vehicleImageContainer: { width: '100%', height: 220, borderRadius: 16, overflow: 'hidden', marginBottom: 24, borderWidth: 1, borderColor: COLORS.border },
@@ -558,6 +558,6 @@ const styles = StyleSheet.create({
   fullScreenHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   fullScreenTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
   bottomBar: { padding: 20, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.surface },
-  editButton: { flexDirection: 'row', backgroundColor: COLORS.primary, paddingVertical: 16, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  editButtonText: { color: COLORS.background, fontSize: 16, fontWeight: 'bold' }
+  editButton: { flexDirection: 'row', backgroundColor: COLORS.primary, height: 46, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  editButtonText: { color: COLORS.background, fontSize: 14, fontWeight: 'bold' }
 });

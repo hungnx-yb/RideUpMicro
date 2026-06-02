@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { 
-  View, Text, StyleSheet, SafeAreaView, FlatList, 
-  TouchableOpacity, ActivityIndicator, Modal, RefreshControl, ScrollView
+import {
+  View, Text, StyleSheet, SafeAreaView, FlatList,
+  TouchableOpacity, ActivityIndicator, Modal, RefreshControl, ScrollView, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -9,8 +9,8 @@ import { apiService } from '../services/apiService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COLORS = {
-  background: '#121212', surface: '#1E1E1E', primary: '#0ea5e9',
-  text: '#FFFFFF', textMuted: '#94a3b8', border: '#334155',
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9',
+  text: '#0F172A', textMuted: '#64748B', border: '#E2E8F0',
   success: '#10b981', warning: '#f59e0b', error: '#ef4444'
 };
 
@@ -65,7 +65,7 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect }) => {
               data={options}
               keyExtractor={(item) => String(item.id)}
               renderItem={({ item }) => (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => { onSelect(item.id); setModalVisible(false); }}
                 >
@@ -89,7 +89,7 @@ export default function DriverTripsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('ACTIVE'); // 'ACTIVE' or 'ALL'
-  
+
   // Filter state
   const [provinces, setProvinces] = useState([]);
   const [showFilter, setShowFilter] = useState(false);
@@ -175,10 +175,12 @@ export default function DriverTripsScreen({ navigation }) {
       <TouchableOpacity style={styles.card} onPress={() => handleTripPress(item)} activeOpacity={0.85}>
         {/* Tiêu đề card */}
         <View style={styles.cardHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="time-outline" size={20} color={COLORS.textMuted} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.iconWrap}>
+              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+            </View>
             <Text style={styles.tripTime}>{time}</Text>
-            <Text style={styles.tripDate}>• {date}</Text>
+            <Text style={styles.tripDate}>•  {date}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: sColor.bg }]}>
             <Text style={[styles.statusText, { color: sColor.text }]}>{sColor.label}</Text>
@@ -214,7 +216,7 @@ export default function DriverTripsScreen({ navigation }) {
             <Ionicons name="people" size={16} color={COLORS.primary} />
             <Text style={styles.statPillText}>{seatsBooked}/{item.seatTotal} khách</Text>
           </View>
-          
+
           <View style={styles.revenueWrap}>
             <Text style={styles.revenueSub}>Doanh thu</Text>
             <Text style={styles.revenueText}>{formatMoney(revenue)}</Text>
@@ -228,41 +230,63 @@ export default function DriverTripsScreen({ navigation }) {
     const sColor = getStatusColor(item.status);
     return (
       <View style={styles.bookingCard}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarInitials}>{(item.userName || 'K').charAt(0).toUpperCase()}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bookingName} numberOfLines={1}>{item.userName || 'Khách hàng'}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <Ionicons name="ticket" size={12} color={COLORS.primary} />
-              <Text style={styles.bookingSub}>{item.seatCount} ghế • {formatMoney(item.totalAmount)}</Text>
+        {/* Header Khách hàng */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarInitials}>{(item.userName || 'K').charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bookingName} numberOfLines={1}>{item.userName || 'Khách hàng'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <Ionicons name="ticket" size={12} color={COLORS.primary} />
+                <Text style={styles.bookingSub}>{item.seatCount} ghế • {formatMoney(item.totalAmount)}</Text>
+              </View>
             </View>
           </View>
-        </View>
-        
-        <View style={{ alignItems: 'flex-end', gap: 8 }}>
-          <View style={[styles.bookingStatusBadge, { backgroundColor: sColor.bg }]}>
-            <Text style={[styles.bookingStatusText, { color: sColor.text }]}>{item.status}</Text>
+          <View style={[styles.bookingStatusBadge, { backgroundColor: item.paymentStatus === 'PAID' ? 'rgba(16, 185, 129, 0.15)' : sColor.bg }]}>
+            <Text style={[styles.bookingStatusText, { color: item.paymentStatus === 'PAID' ? COLORS.success : sColor.text }]}>
+              {item.paymentStatus === 'PAID' ? 'ĐÃ TT' : item.status}
+            </Text>
           </View>
-          {item.status === 'CONFIRMED' && (
-            <TouchableOpacity 
-              style={styles.chatBtn} 
-              onPress={() => {
-                setSelectedTrip(null);
-                navigation.navigate('Chat', { 
-                  bookingId: item.id, 
-                  passengerName: item.userName || 'Khách hàng',
-                  passengerPhone: item.userPhone || '0987654321', // Thêm data phone nếu có
-                  passengerAvatar: item.userAvatarUrl || null
-                });
-              }}
-            >
-              <Ionicons name="chatbubbles" size={16} color={COLORS.background} />
-              <Text style={styles.chatBtnText}>Nhắn tin</Text>
-            </TouchableOpacity>
+        </View>
+
+        {/* Điểm Đón & Trả của khách */}
+        <View style={{ marginTop: 12, backgroundColor: 'rgba(14, 165, 233, 0.05)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(14, 165, 233, 0.1)' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 4, marginRight: 8 }} />
+            <Text style={{ flex: 1, fontSize: 12, color: COLORS.text, lineHeight: 18 }}><Text style={{ fontWeight: 'bold' }}>Đón: </Text>{item.pickupAddressText || 'Chưa cập nhật'}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+            <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: COLORS.success, marginTop: 4, marginRight: 8 }} />
+            <Text style={{ flex: 1, fontSize: 12, color: COLORS.text, lineHeight: 18 }}><Text style={{ fontWeight: 'bold' }}>Trả: </Text>{item.dropoffAddressText || 'Chưa cập nhật'}</Text>
+          </View>
+          {!!item.note && (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' }}>
+              <Ionicons name="chatbox-ellipses-outline" size={14} color={COLORS.warning} style={{ marginTop: 2, marginRight: 6 }} />
+              <Text style={{ flex: 1, fontSize: 12, color: COLORS.textMuted, fontStyle: 'italic' }}>{item.note}</Text>
+            </View>
           )}
         </View>
+
+        {/* Nút Nhắn tin */}
+        {item.status === 'CONFIRMED' && (
+          <TouchableOpacity
+            style={[styles.chatBtn, { marginTop: 12, alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 16 }]}
+            onPress={() => {
+              setSelectedTrip(null);
+              navigation.navigate('Chat', {
+                bookingId: item.id,
+                passengerName: item.userName || 'Khách hàng',
+                passengerPhone: item.userPhone || '0987654321',
+                passengerAvatar: item.userAvatarUrl || null
+              });
+            }}
+          >
+            <Ionicons name="chatbubbles" size={16} color={COLORS.background} />
+            <Text style={styles.chatBtnText}>Nhắn tin</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -271,21 +295,24 @@ export default function DriverTripsScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Text style={styles.headerTitle}>Quản lý chuyến xe</Text>
+          <View>
+            <Text style={styles.headerAppTitle}>RIDEUP</Text>
+            <Text style={styles.headerTitle}>Quản lý chuyến xe</Text>
+          </View>
           <TouchableOpacity style={styles.filterBtnIcon} onPress={() => setShowFilter(true)}>
             <Ionicons name="filter" size={20} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
-        
+
         {/* Tabs */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'ACTIVE' && styles.tabBtnActive]}
             onPress={() => setActiveTab('ACTIVE')}
           >
             <Text style={[styles.tabText, activeTab === 'ACTIVE' && styles.tabTextActive]}>Đang hoạt động</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'ALL' && styles.tabBtnActive]}
             onPress={() => setActiveTab('ALL')}
           >
@@ -311,8 +338,8 @@ export default function DriverTripsScreen({ navigation }) {
               </View>
               <Text style={styles.emptyTitle}>Chưa có chuyến xe nào</Text>
               <Text style={styles.emptySub}>
-                {activeTab === 'ACTIVE' 
-                  ? 'Bạn chưa mở chuyến nào sắp tới. Hãy tạo chuyến ngay để bắt đầu kiếm tiền nhé.' 
+                {activeTab === 'ACTIVE'
+                  ? 'Bạn chưa mở chuyến nào sắp tới. Hãy tạo chuyến ngay để bắt đầu kiếm tiền nhé.'
                   : 'Lịch sử chuyến đi của bạn hiện đang trống.'}
               </Text>
               {activeTab === 'ACTIVE' && (
@@ -325,96 +352,184 @@ export default function DriverTripsScreen({ navigation }) {
         />
       )}
 
-      {/* Booking Details Modal (Bottom Sheet Style) */}
-      <Modal visible={!!selectedTrip} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setSelectedTrip(null)} />
-          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-            <View style={styles.modalDragIndicator} />
-            
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Khách hàng đã đặt</Text>
-                <Text style={styles.modalSub}>{formatDate(selectedTrip?.departureTime).time} • {formatDate(selectedTrip?.departureTime).date}</Text>
-              </View>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedTrip(null)}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-            
-            {loadingBookings ? (
-              <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
-            ) : (
-              <FlatList
-                data={bookings}
-                keyExtractor={(item) => String(item.id)}
-                renderItem={renderBookingItem}
-                contentContainerStyle={{ paddingVertical: 16 }}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                  <View style={styles.emptyBookingBox}>
-                    <Ionicons name="people-outline" size={48} color={COLORS.border} />
-                    <Text style={styles.emptyBookingText}>Chưa có hành khách nào đặt chỗ.</Text>
-                  </View>
-                }
-              />
-            )}
+      {/* Modal Danh sách khách đặt & Chi tiết chuyến đi (Full Screen) */}
+      <Modal visible={!!selectedTrip} animationType="slide">
+        <View style={[styles.fullScreenContainer, { paddingTop: Math.max(insets.top, 20) }]}>
+          <View style={styles.fullScreenHeader}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedTrip(null)}>
+              <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+            <Text style={styles.fullScreenTitle}>Chi tiết chuyến đi</Text>
+            <View style={{ width: 40 }} />
           </View>
+
+          {loadingBookings ? (
+            <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
+          ) : (
+            <FlatList
+              data={bookings}
+              keyExtractor={(item) => String(item.id)}
+              contentContainerStyle={{ paddingVertical: 16 }}
+              ListHeaderComponent={() => {
+                if (!selectedTrip) return null;
+                const sColor = getStatusColor(selectedTrip.status);
+                const { time, date } = formatDate(selectedTrip.departureTime);
+                const seatsBooked = Math.max((selectedTrip.seatTotal || 0) - (selectedTrip.seatAvailable || 0), 0);
+
+                // Lấy danh sách điểm đón/trả từ mảng stops
+                const pickups = selectedTrip.stops?.filter(s => s.stopType === 'PICKUP').map(s => s.addressText).join(', ') || 'Không có điểm cụ thể';
+                const dropoffs = selectedTrip.stops?.filter(s => s.stopType === 'DROPOFF').map(s => s.addressText).join(', ') || 'Không có điểm cụ thể';
+
+                return (
+                  <View style={styles.tripDetailHeader}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text }}>{time}</Text>
+                        <Text style={{ fontSize: 13, color: COLORS.textMuted }}>•  {date}</Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: sColor.bg }]}>
+                        <Text style={[styles.statusText, { color: sColor.text }]}>{sColor.label}</Text>
+                      </View>
+                    </View>
+
+                    {/* Lộ Trình Đón / Trả Chi Tiết */}
+                    <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border }}>
+
+                      {/* Điểm đón */}
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 }}>
+                        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.primary, marginTop: 4, marginRight: 10, borderWidth: 2, borderColor: 'rgba(14, 165, 233, 0.2)' }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 11, color: COLORS.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 2 }}>Tỉnh đón: <Text style={{ color: COLORS.text, fontSize: 13 }}>{selectedTrip.startAddressText || selectedTrip.startProvinceName || 'Chưa rõ'}</Text></Text>
+                          <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', lineHeight: 20 }}>{pickups}</Text>
+                        </View>
+                      </View>
+
+                      <View style={{ width: 2, height: 20, backgroundColor: COLORS.border, marginLeft: 5, marginTop: -16, marginBottom: -4 }} />
+
+                      {/* Điểm trả */}
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 12 }}>
+                        <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: COLORS.success, marginTop: 4, marginRight: 10 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 11, color: COLORS.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 2 }}>Tỉnh trả: <Text style={{ color: COLORS.text, fontSize: 13 }}>{selectedTrip.endAddressText || selectedTrip.endProvinceName || 'Chưa rõ'}</Text></Text>
+                          <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', lineHeight: 20 }}>{dropoffs}</Text>
+                        </View>
+                      </View>
+
+                    </View>
+
+                    {/* Stats */}
+                    <View style={{ flexDirection: 'row', backgroundColor: COLORS.background, borderRadius: 12, padding: 12, marginBottom: 20 }}>
+                      <View style={{ flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: COLORS.border }}>
+                        <Text style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4, textTransform: 'uppercase', fontWeight: 'bold' }}>Ghế đã đặt</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.primary }}>{seatsBooked}/{selectedTrip.seatTotal}</Text>
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4, textTransform: 'uppercase', fontWeight: 'bold' }}>Doanh thu (Ước tính)</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.success }}>{formatMoney((selectedTrip.priceVnd || 0) * seatsBooked)}</Text>
+                      </View>
+                    </View>
+
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Danh sách khách ({bookings.length})</Text>
+                  </View>
+                );
+              }}
+              renderItem={renderBookingItem}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptyBookingBox}>
+                  <Ionicons name="people-circle-outline" size={60} color={COLORS.border} />
+                  <Text style={styles.emptyBookingText}>Chưa có khách nào đặt vé chuyến này.</Text>
+                </View>
+              }
+            />
+          )}
         </View>
       </Modal>
 
       {/* Filter Modal */}
       <Modal visible={showFilter} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { height: '85%' }]}>
+          <View style={styles.filterModalContent}>
             <View style={styles.modalDragIndicator} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Bộ Lọc Chuyến Đi</Text>
-              <TouchableOpacity onPress={() => setShowFilter(false)}>
-                <Ionicons name="close" size={28} color={COLORS.textMuted} />
+            <View style={styles.filterHeader}>
+              <Text style={styles.filterTitle}>Bộ lọc chuyến đi</Text>
+              <TouchableOpacity style={styles.filterCloseBtn} onPress={() => setShowFilter(false)}>
+                <Ionicons name="close" size={20} color={COLORS.text} />
               </TouchableOpacity>
             </View>
-            
-            <ScrollView style={{ marginTop: 10 }} showsVerticalScrollIndicator={false}>
-              <DropdownSelect 
-                label="Tỉnh đi" placeholder="Tất cả" 
-                value={filters.startProvinceId} options={provinces}
-                onSelect={(val) => setFilters(p => ({...p, startProvinceId: val}))}
-              />
-              <DropdownSelect 
-                label="Tỉnh đến" placeholder="Tất cả" 
-                value={filters.endProvinceId} options={provinces}
-                onSelect={(val) => setFilters(p => ({...p, endProvinceId: val}))}
-              />
-              
-              <Text style={styles.label}>Từ ngày</Text>
-              <TouchableOpacity style={styles.inputBox} onPress={() => setDatePickerType('start')}>
-                <Text style={{ color: filters.startDate ? COLORS.text : COLORS.textMuted }}>
-                  {filters.startDate ? formatDate(filters.startDate).date : 'Chọn ngày bắt đầu'}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color={COLORS.textMuted} />
-              </TouchableOpacity>
 
-              <Text style={[styles.label, { marginTop: 16 }]}>Đến ngày</Text>
-              <TouchableOpacity style={styles.inputBox} onPress={() => setDatePickerType('end')}>
-                <Text style={{ color: filters.endDate ? COLORS.text : COLORS.textMuted }}>
-                  {filters.endDate ? formatDate(filters.endDate).date : 'Chọn ngày kết thúc'}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color={COLORS.textMuted} />
-              </TouchableOpacity>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <DropdownSelect
+                label="Tỉnh đi" placeholder="Chọn tỉnh xuất phát"
+                value={filters.startProvinceId} options={provinces}
+                onSelect={(val) => setFilters(p => ({ ...p, startProvinceId: val }))}
+              />
+              <DropdownSelect
+                label="Tỉnh đến" placeholder="Chọn tỉnh đích"
+                value={filters.endProvinceId} options={provinces}
+                onSelect={(val) => setFilters(p => ({ ...p, endProvinceId: val }))}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Từ ngày</Text>
+                  <TouchableOpacity style={[styles.inputBox, { marginBottom: 0 }]} onPress={() => setDatePickerType('start')}>
+                    <Text style={{ color: filters.startDate ? COLORS.text : COLORS.textMuted, fontSize: 13, fontWeight: filters.startDate ? '600' : '400' }}>
+                      {filters.startDate ? formatDate(filters.startDate).date : 'Chọn ngày'}
+                    </Text>
+                    <Ionicons name="calendar" size={18} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Đến ngày</Text>
+                  <TouchableOpacity style={[styles.inputBox, { marginBottom: 0 }]} onPress={() => setDatePickerType('end')}>
+                    <Text style={{ color: filters.endDate ? COLORS.text : COLORS.textMuted, fontSize: 13, fontWeight: filters.endDate ? '600' : '400' }}>
+                      {filters.endDate ? formatDate(filters.endDate).date : 'Chọn ngày'}
+                    </Text>
+                    <Ionicons name="calendar" size={18} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Lịch Chọn Ngày Inline (Android/iOS) */}
+              {(datePickerType === 'start' || datePickerType === 'end') && (
+                <View style={{ backgroundColor: COLORS.surface, borderRadius: 16, marginTop: 12, padding: 8, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 }}>
+                  <DateTimePicker
+                    value={datePickerType === 'start' ? (filters.startDate || new Date()) : (filters.endDate || new Date())}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+                    themeVariant="light"
+                    onChange={(event, selectedDate) => {
+                      if (Platform.OS === 'android') setDatePickerType(null);
+                      if (selectedDate) {
+                        if (datePickerType === 'start') setFilters(p => ({ ...p, startDate: selectedDate }));
+                        else setFilters(p => ({ ...p, endDate: selectedDate }));
+                      }
+                    }}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <TouchableOpacity style={{ backgroundColor: COLORS.primary, padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 8 }} onPress={() => setDatePickerType(null)}>
+                      <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Xác nhận</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </ScrollView>
 
-            <View style={[styles.filterActions, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-              <TouchableOpacity 
-                style={styles.resetBtn} 
+            <View style={[styles.filterActions, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <TouchableOpacity
+                style={styles.resetBtn}
                 onPress={() => {
                   setFilters({ startProvinceId: '', endProvinceId: '', startDate: null, endDate: null });
                   fetchTrips();
+                  setShowFilter(false);
                 }}
               >
                 <Text style={styles.resetBtnText}>Xóa lọc</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.applyBtn} onPress={fetchTrips}>
+              <TouchableOpacity style={styles.applyBtn} onPress={() => { fetchTrips(); setShowFilter(false); }}>
                 <Text style={styles.applyBtnText}>Áp dụng</Text>
               </TouchableOpacity>
             </View>
@@ -422,66 +537,54 @@ export default function DriverTripsScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* DatePicker */}
-      {datePickerType && (
-        <DateTimePicker
-          value={(datePickerType === 'start' ? filters.startDate : filters.endDate) || new Date()}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setDatePickerType(null);
-            if (selectedDate) {
-              setFilters(p => ({ ...p, [datePickerType === 'start' ? 'startDate' : 'endDate']: selectedDate }));
-            }
-          }}
-        />
-      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: COLORS.text },
-  filterBtnIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center' },
-  
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
+  headerAppTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.primary, letterSpacing: 1, marginBottom: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
+  filterBtnIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center' },
+
   // Tabs
-  tabContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
+  tabContainer: { flexDirection: 'row', backgroundColor: COLORS.surface, borderRadius: 12, padding: 4, marginVertical: 12, borderWidth: 1, borderColor: COLORS.border },
   tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-  tabBtnActive: { backgroundColor: COLORS.primary, shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
-  tabText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '600' },
-  tabTextActive: { color: '#FFF', fontWeight: 'bold' },
+  tabBtnActive: { backgroundColor: `${COLORS.primary}15` },
+  tabText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '700' },
+  tabTextActive: { color: COLORS.primary, fontWeight: '800' },
 
   listContent: { padding: 16 },
-  
+
   // Trip Card (Mới)
-  card: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border },
+  card: { backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: COLORS.border },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tripTime: { color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
-  tripDate: { color: COLORS.textMuted, fontSize: 14 },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  statusText: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
-  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 16 },
-  
+  iconWrap: { width: 28, height: 28, borderRadius: 14, backgroundColor: `${COLORS.primary}15`, justifyContent: 'center', alignItems: 'center' },
+  tripTime: { color: COLORS.text, fontSize: 16, fontWeight: '900' },
+  tripDate: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 12 },
+
   // Timeline
-  timelineContainer: { flexDirection: 'row', marginBottom: 20 },
-  timelineGraphic: { width: 24, alignItems: 'center', marginRight: 12, paddingTop: 4 },
-  timelineDotStart: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.primary, borderWidth: 2, borderColor: 'rgba(14, 165, 233, 0.3)' },
-  timelineLine: { width: 2, flex: 1, backgroundColor: COLORS.border, marginVertical: 4 },
-  timelineDotEnd: { width: 12, height: 12, borderRadius: 2, backgroundColor: COLORS.success, justifyContent: 'center', alignItems: 'center' },
-  timelineDotInner: { width: 4, height: 4, backgroundColor: '#FFF' },
-  timelineContent: { flex: 1 },
-  locationBlock: {},
-  locationLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 4 },
-  locationText: { color: COLORS.text, fontSize: 16, fontWeight: '600' },
-  
+  timelineContainer: { flexDirection: 'row', marginBottom: 12 },
+  timelineGraphic: { width: 20, alignItems: 'center', marginRight: 12, paddingTop: 4 },
+  timelineDotStart: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary, borderWidth: 2, borderColor: 'rgba(14, 165, 233, 0.2)' },
+  timelineLine: { width: 1, flex: 1, backgroundColor: COLORS.border, marginVertical: 4 },
+  timelineDotEnd: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.success, justifyContent: 'center', alignItems: 'center' },
+  timelineDotInner: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#FFF' },
+  timelineContent: { flex: 1, paddingBottom: 4 },
+  locationBlock: { marginBottom: 12 },
+  locationLabel: { color: COLORS.textMuted, fontSize: 9, fontWeight: '800', letterSpacing: 0.5, marginBottom: 2, textTransform: 'uppercase' },
+  locationText: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+
   // Stats Row
-  tripStatsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12 },
-  statPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  statPillText: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold' },
+  tripStatsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border, borderStyle: 'dashed' },
+  statPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: `${COLORS.primary}10`, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  statPillText: { color: COLORS.primary, fontSize: 12, fontWeight: 'bold' },
   revenueWrap: { alignItems: 'flex-end' },
-  revenueSub: { color: COLORS.textMuted, fontSize: 11, marginBottom: 2 },
+  revenueSub: { color: COLORS.textMuted, fontSize: 10, marginBottom: 2, fontWeight: '700', textTransform: 'uppercase' },
   revenueText: { color: COLORS.success, fontSize: 16, fontWeight: '900' },
 
   // Empty State
@@ -494,15 +597,21 @@ const styles = StyleSheet.create({
 
   // Modal Bottom Sheet
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '75%', paddingHorizontal: 20, paddingTop: 12 },
-  modalDragIndicator: { width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 16 },
-  modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  modalSub: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
-  closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '85%', paddingHorizontal: 20, paddingTop: 12 },
+  modalDragIndicator: { width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 16 },
+  modalTitle: { color: COLORS.text, fontSize: 18, fontWeight: '900' },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center' },
+
+  // Full Screen Modal
+  fullScreenContainer: { flex: 1, backgroundColor: COLORS.background },
+  fullScreenHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.background },
+  fullScreenTitle: { color: COLORS.text, fontSize: 18, fontWeight: '900' },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.03)', justifyContent: 'center', alignItems: 'center' },
+  tripDetailHeader: { marginBottom: 8, paddingHorizontal: 16, paddingTop: 16 },
 
   // Booking Card
-  bookingCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.background, padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
+  bookingCard: { backgroundColor: COLORS.surface, padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border, marginHorizontal: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 },
   avatarPlaceholder: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(14, 165, 233, 0.3)' },
   avatarInitials: { color: COLORS.primary, fontSize: 18, fontWeight: 'bold' },
   bookingName: { color: COLORS.text, fontWeight: 'bold', fontSize: 16 },
@@ -511,18 +620,24 @@ const styles = StyleSheet.create({
   bookingStatusText: { fontSize: 10, fontWeight: 'bold' },
   chatBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 5, elevation: 3 },
   chatBtnText: { color: COLORS.background, fontSize: 13, fontWeight: 'bold' },
-  
+
   emptyBookingBox: { alignItems: 'center', padding: 40 },
   emptyBookingText: { color: COLORS.textMuted, fontSize: 14, marginTop: 16 },
 
+  // Filter Modal
+  filterModalContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24, maxHeight: '90%' },
+  filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  filterTitle: { color: COLORS.text, fontSize: 18, fontWeight: '900' },
+  filterCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' },
+
   // Filter Form
-  label: { color: COLORS.textMuted, fontSize: 13, marginBottom: 8, fontWeight: '600', textTransform: 'uppercase' },
-  inputBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 16, height: 50 },
-  filterActions: { flexDirection: 'row', gap: 12, marginTop: 20, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 16 },
-  resetBtn: { flex: 1, height: 50, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, justifyContent: 'center', alignItems: 'center' },
-  resetBtnText: { color: COLORS.text, fontWeight: 'bold' },
-  applyBtn: { flex: 1, height: 50, borderRadius: 12, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
-  applyBtnText: { color: COLORS.background, fontWeight: 'bold' },
+  label: { color: COLORS.text, fontSize: 13, marginBottom: 8, fontWeight: '700' },
+  inputBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, paddingHorizontal: 16, height: 50, marginBottom: 16 },
+  filterActions: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  resetBtn: { flex: 1, height: 50, borderRadius: 16, backgroundColor: 'rgba(239, 68, 68, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  resetBtnText: { color: COLORS.error, fontWeight: 'bold', fontSize: 14 },
+  applyBtn: { flex: 2, height: 50, borderRadius: 16, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  applyBtnText: { color: COLORS.background, fontWeight: 'bold', fontSize: 14 },
 
   // Dropdown
   dropdownOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },

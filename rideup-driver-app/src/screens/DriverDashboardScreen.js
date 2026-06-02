@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, SafeAreaView, ScrollView, 
-  TouchableOpacity, ActivityIndicator, RefreshControl, Dimensions
+  TouchableOpacity, ActivityIndicator, RefreshControl, Dimensions, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
@@ -11,10 +11,9 @@ import { chatSocket } from '../services/chatSocket';
 const { width } = Dimensions.get('window');
 
 const COLORS = {
-  background: '#121212', surface: '#1E1E1E', primary: '#0ea5e9',
-  text: '#FFFFFF', textMuted: '#94a3b8', border: '#334155',
-  success: '#10b981', warning: '#f59e0b', error: '#ef4444',
-  accent: '#6366f1' // Thêm màu nhấn cho sinh động
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9',
+  text: '#0F172A', textMuted: '#64748B', border: '#E2E8F0',
+  success: '#10b981', warning: '#f59e0b', error: '#ef4444'
 };
 
 const formatMoney = (val) => {
@@ -105,199 +104,182 @@ export default function DriverDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* HEADER CAO CẤP */}
       <View style={styles.header}>
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarBox}>
-            <Ionicons name="person" size={24} color={COLORS.primary} />
-          </View>
-          <View>
-            <Text style={styles.greeting}>Xin chào Đối tác,</Text>
-            <Text style={styles.title}>Tổng quan hôm nay</Text>
-          </View>
+        <View>
+          <Text style={styles.headerAppTitle}>RIDEUP</Text>
+          <Text style={styles.headerTitle}>Tổng quan</Text>
         </View>
+        <TouchableOpacity style={styles.avatarBox} activeOpacity={0.8} onPress={() => navigation.navigate('Profile')}>
+          <Image source={require('../../assets/images/react-logo.png')} style={{ width: '100%', height: '100%' }} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView 
         contentContainerStyle={styles.scrollContent} 
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => fetchDashboardData(true)} tintColor={COLORS.primary} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchDashboardData(true)} tintColor={COLORS.primary} />}
       >
-        {/* DOANH THU CHÍNH */}
+        {/* TRẠNG THÁI HOẠT ĐỘNG */}
+        <View style={styles.statusBanner}>
+          <View style={styles.statusDotWrapper}>
+            <View style={styles.statusDot} />
+            <View style={styles.statusPulse} />
+          </View>
+          <Text style={styles.statusText}>Bạn đang trực tuyến và sẵn sàng nhận chuyến</Text>
+        </View>
+
+        {/* THẺ DOANH THU & HIỆU SUẤT TỔNG HỢP */}
         <View style={styles.revenueCard}>
           <View style={styles.revenueTop}>
-            <Text style={styles.revenueLabel}>TỔNG DOANH THU (TẠM TÍNH)</Text>
-            <Ionicons name="wallet-outline" size={20} color="rgba(255,255,255,0.7)" />
+            <View>
+              <Text style={styles.revenueLabel}>DOANH THU HÔM NAY</Text>
+              <Text style={styles.revenueValue}>{formatMoney(stats.totalRevenue || 450000)}</Text>
+            </View>
+            <TouchableOpacity style={styles.walletBtn}>
+              <Text style={styles.walletBtnText}>Rút tiền</Text>
+              <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.revenueValue}>{formatMoney(stats.totalRevenue)}</Text>
           
-          <View style={styles.revenueBottom}>
-            <View style={styles.revenueStatBox}>
-              <Text style={styles.revenueStatNum}>{stats.tripsCompleted}</Text>
-              <Text style={styles.revenueStatLabel}>Hoàn thành</Text>
-            </View>
-            <View style={styles.revenueDivider} />
-            <View style={styles.revenueStatBox}>
-              <Text style={styles.revenueStatNum}>{stats.activeTrips}</Text>
-              <Text style={styles.revenueStatLabel}>Chuyến chờ</Text>
-            </View>
-            <View style={styles.revenueDivider} />
-            <View style={styles.revenueStatBox}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={styles.revenueStatNum}>{stats.rating}</Text>
-                <Ionicons name="star" size={14} color={COLORS.warning} />
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Ionicons name="car" size={18} color="#FFF" />
+              <View style={styles.statInfo}>
+                <Text style={styles.statVal}>{stats.tripsCompleted || 3}</Text>
+                <Text style={styles.statDesc}>Chuyến</Text>
               </View>
-              <Text style={styles.revenueStatLabel}>Đánh giá</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Ionicons name="checkmark-done-circle" size={18} color="#FFF" />
+              <View style={styles.statInfo}>
+                <Text style={styles.statVal}>98%</Text>
+                <Text style={styles.statDesc}>Tỉ lệ nhận</Text>
+              </View>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Ionicons name="star" size={18} color="#FFD700" />
+              <View style={styles.statInfo}>
+                <Text style={styles.statVal}>{stats.rating}</Text>
+                <Text style={styles.statDesc}>Đánh giá</Text>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* CHUYẾN ĐI TIẾP THEO */}
-        <Text style={styles.sectionTitle}>Chuyến đi tiếp theo</Text>
+        {/* LƯỚI TÍNH NĂNG NHANH (QUICK ACTIONS) */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.actionItem}>
+            <View style={[styles.actionIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+              <Ionicons name="wallet" size={24} color={COLORS.success} />
+            </View>
+            <Text style={styles.actionText}>Ví tài xế</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionItem}>
+            <View style={[styles.actionIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
+              <Ionicons name="time" size={24} color={COLORS.warning} />
+            </View>
+            <Text style={styles.actionText}>Lịch sử</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionItem}>
+            <View style={[styles.actionIconBox, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
+              <Ionicons name="bar-chart" size={24} color="#8b5cf6" />
+            </View>
+            <Text style={styles.actionText}>Thống kê</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionItem}>
+            <View style={[styles.actionIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+              <Ionicons name="headset" size={24} color={COLORS.error} />
+            </View>
+            <Text style={styles.actionText}>Hỗ trợ</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* CHUYẾN ĐI SẮP TỚI (DẠNG VÉ BOARDING PASS) */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Chuyến đi tiếp theo</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('DriverTrips')}>
+            <Text style={styles.seeAllText}>Tất cả</Text>
+          </TouchableOpacity>
+        </View>
+
         {upcomingTrip ? (
-          <View style={styles.nextTripCard}>
-            <View style={styles.nextTripHeader}>
-              <View style={styles.badgeOpen}>
-                <Text style={styles.badgeText}>SẮP KHỞI HÀNH</Text>
+          <View style={styles.ticketCard}>
+            <View style={styles.ticketHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="time" size={16} color={COLORS.text} />
+                <Text style={styles.ticketTime}>
+                  {new Date(upcomingTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
               </View>
-              <Text style={styles.nextTripTime}>
-                {new Date(upcomingTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
+              <View style={styles.ticketBadge}>
+                <Text style={styles.ticketBadgeText}>SẮP KHỞI HÀNH</Text>
+              </View>
             </View>
             
-            <View style={styles.routeBox}>
+            <View style={styles.ticketBody}>
               <View style={styles.routeItem}>
-                <Ionicons name="location-outline" size={18} color={COLORS.textMuted} />
-                <Text style={styles.routeText}>{upcomingTrip.startAddressText}</Text>
+                <View style={[styles.routeDot, { backgroundColor: COLORS.primary }]} />
+                <Text style={styles.routeText} numberOfLines={1}>{upcomingTrip.startAddressText}</Text>
               </View>
-              <View style={styles.routeDivider} />
+              <View style={styles.routeLine} />
               <View style={styles.routeItem}>
-                <Ionicons name="location" size={18} color={COLORS.primary} />
-                <Text style={styles.routeText}>{upcomingTrip.endAddressText}</Text>
+                <View style={[styles.routeDot, { backgroundColor: COLORS.error }]} />
+                <Text style={styles.routeText} numberOfLines={1}>{upcomingTrip.endAddressText}</Text>
               </View>
             </View>
 
-            <View style={styles.nextTripFooter}>
-              <View style={styles.nextTripInfo}>
-                <Ionicons name="people" size={16} color={COLORS.textMuted} />
-                <Text style={styles.nextTripInfoText}>Trống {upcomingTrip.seatAvailable}/{upcomingTrip.seatTotal} ghế</Text>
+            <View style={styles.ticketDividerWrap}>
+              <View style={styles.ticketNotchLeft} />
+              <View style={styles.ticketDashedLine} />
+              <View style={styles.ticketNotchRight} />
+            </View>
+
+            <View style={styles.ticketFooter}>
+              <View style={styles.ticketMeta}>
+                <Text style={styles.ticketMetaLabel}>TÌNH TRẠNG</Text>
+                <Text style={styles.ticketMetaValue}>{upcomingTrip.seatTotal - upcomingTrip.seatAvailable}/{upcomingTrip.seatTotal} ghế đã đặt</Text>
               </View>
-              <TouchableOpacity 
-                style={styles.detailBtn}
-                onPress={() => navigation.navigate('DriverTrips')}
-              >
-                <Text style={styles.detailBtnText}>Chi tiết</Text>
+              <TouchableOpacity style={styles.detailBtn} onPress={() => navigation.navigate('DriverTrips')}>
+                <Text style={styles.detailBtnText}>Bắt đầu</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.background} />
               </TouchableOpacity>
             </View>
           </View>
         ) : (
-          <View style={styles.emptyNextTrip}>
-            <Ionicons name="car-outline" size={48} color={COLORS.border} />
-            <Text style={styles.emptyNextTripText}>Bạn chưa có chuyến nào sắp tới.</Text>
-            <TouchableOpacity style={styles.emptyNextTripBtn} onPress={() => navigation.navigate('CreateTrip')}>
-              <Text style={styles.emptyNextTripBtnText}>Mở chuyến ngay</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.emptyTicket} activeOpacity={0.8} onPress={() => navigation.navigate('CreateTrip')}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="add" size={32} color={COLORS.primary} />
+            </View>
+            <Text style={styles.emptyTicketTitle}>Chưa có chuyến đi nào</Text>
+            <Text style={styles.emptyTicketSub}>Tạo ngay chuyến đi mới để bắt đầu nhận khách</Text>
+          </TouchableOpacity>
         )}
 
-        {/* DỊCH VỤ & TIỆN ÍCH (Giống "Khám phá đa dịch vụ") */}
-        <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Dịch vụ & Tiện ích</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.servicesScroll}>
-          <TouchableOpacity style={styles.serviceCard} activeOpacity={0.9}>
-            <View style={[styles.serviceIconWrap, { backgroundColor: 'rgba(14, 165, 233, 0.1)' }]}>
-              <Ionicons name="shield-checkmark" size={36} color={COLORS.primary} />
+        {/* THÔNG TIN BỔ ÍCH / ĐIỂM NÓNG */}
+        <Text style={[styles.sectionTitle, { marginTop: 32, marginBottom: 16 }]}>Cơ hội thu nhập</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.opportunitiesScroll}>
+          <TouchableOpacity style={styles.oppCard} activeOpacity={0.9}>
+            <View style={styles.oppIconWrap}>
+              <Ionicons name="flame" size={24} color={COLORS.error} />
             </View>
-            <Text style={styles.serviceTitle}>Bảo hiểm</Text>
-            <View style={[styles.serviceBadge, { backgroundColor: COLORS.primary }]}>
-              <Text style={styles.serviceBadgeText}>Đăng ký ngay</Text>
-            </View>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.serviceCard} activeOpacity={0.9}>
-            <View style={[styles.serviceIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-              <Ionicons name="wallet" size={36} color={COLORS.warning} />
-            </View>
-            <Text style={styles.serviceTitle}>Vay tiêu dùng</Text>
-            <View style={[styles.serviceBadge, { backgroundColor: COLORS.warning }]}>
-              <Text style={styles.serviceBadgeText}>Lãi suất 1.5%</Text>
+            <View>
+              <Text style={styles.oppTitle}>Nhu cầu cao: Hà Nội</Text>
+              <Text style={styles.oppSub}>Đang có 120 khách chờ đi tỉnh</Text>
             </View>
           </TouchableOpacity>
-
-          <TouchableOpacity style={styles.serviceCard} activeOpacity={0.9}>
-            <View style={[styles.serviceIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-              <Ionicons name="cash" size={36} color={COLORS.success} />
+          <TouchableOpacity style={styles.oppCard} activeOpacity={0.9}>
+            <View style={[styles.oppIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+              <Ionicons name="gift" size={24} color={COLORS.success} />
             </View>
-            <Text style={styles.serviceTitle}>Gói tiết kiệm</Text>
-            <View style={[styles.serviceBadge, { backgroundColor: COLORS.success }]}>
-              <Text style={styles.serviceBadgeText}>Ưu đãi 25%</Text>
+            <View>
+              <Text style={styles.oppTitle}>Thưởng giờ vàng</Text>
+              <Text style={styles.oppSub}>Hoàn thành 3 chuyến nhận 100K</Text>
             </View>
           </TouchableOpacity>
         </ScrollView>
-
-        {/* TIN TỨC & CẨM NANG (Grid 2 cột giống "Giảm đến 66K") */}
-        <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Cẩm nang & Tin tức</Text>
-        <View style={styles.newsGrid}>
-          {/* Card 1 */}
-          <TouchableOpacity style={styles.newsCard} activeOpacity={0.9}>
-            <View style={[styles.newsImagePlaceholder, { backgroundColor: '#FFD700' }]}>
-              <Ionicons name="flash" size={48} color="#FFF" style={{ position: 'absolute', bottom: -10, right: -10, opacity: 0.5 }} />
-              <Ionicons name="car" size={40} color="#000" />
-            </View>
-            <View style={styles.newsContent}>
-              <Text style={styles.newsTitle} numberOfLines={2}>Thưởng giờ vàng 50K</Text>
-              <View style={styles.newsTag}>
-                <Text style={styles.newsTagText}>Khuyến mãi</Text>
-              </View>
-              <Text style={styles.newsSubText}>Xem ngay</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Card 2 */}
-          <TouchableOpacity style={styles.newsCard} activeOpacity={0.9}>
-            <View style={[styles.newsImagePlaceholder, { backgroundColor: '#0ea5e9' }]}>
-              <Ionicons name="star" size={48} color="#FFF" style={{ position: 'absolute', bottom: -10, right: -10, opacity: 0.5 }} />
-              <Ionicons name="chatbubbles" size={40} color="#FFF" />
-            </View>
-            <View style={styles.newsContent}>
-              <Text style={styles.newsTitle} numberOfLines={2}>Tiêu chuẩn phục vụ 5 sao</Text>
-              <View style={styles.newsTag}>
-                <Text style={styles.newsTagText}>Cẩm nang</Text>
-              </View>
-              <Text style={styles.newsSubText}>Học ngay</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Card 3 */}
-          <TouchableOpacity style={styles.newsCard} activeOpacity={0.9}>
-            <View style={[styles.newsImagePlaceholder, { backgroundColor: '#10b981' }]}>
-              <Ionicons name="map" size={48} color="#FFF" style={{ position: 'absolute', bottom: -10, right: -10, opacity: 0.5 }} />
-              <Ionicons name="location" size={40} color="#FFF" />
-            </View>
-            <View style={styles.newsContent}>
-              <Text style={styles.newsTitle} numberOfLines={2}>Bản đồ điểm nóng</Text>
-              <View style={styles.newsTag}>
-                <Text style={styles.newsTagText}>Tính năng mới</Text>
-              </View>
-              <Text style={styles.newsSubText}>Khám phá</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Card 4 */}
-          <TouchableOpacity style={styles.newsCard} activeOpacity={0.9}>
-            <View style={[styles.newsImagePlaceholder, { backgroundColor: '#ef4444' }]}>
-              <Ionicons name="shield-half" size={48} color="#FFF" style={{ position: 'absolute', bottom: -10, right: -10, opacity: 0.5 }} />
-              <Ionicons name="help-buoy" size={40} color="#FFF" />
-            </View>
-            <View style={styles.newsContent}>
-              <Text style={styles.newsTitle} numberOfLines={2}>Trung tâm hỗ trợ tài xế</Text>
-              <View style={styles.newsTag}>
-                <Text style={styles.newsTagText}>Hỗ trợ</Text>
-              </View>
-              <Text style={styles.newsSubText}>Liên hệ</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
 
       </ScrollView>
     </SafeAreaView>
@@ -306,68 +288,76 @@ export default function DriverDashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 40, paddingBottom: 16 },
-  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatarBox: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(14, 165, 233, 0.3)' },
-  greeting: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  title: { color: COLORS.text, fontSize: 20, fontWeight: 'bold' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
+  headerAppTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.primary, letterSpacing: 1, marginBottom: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
+  avatarBox: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', overflow: 'hidden', borderWidth: 2, borderColor: COLORS.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   
   scrollContent: { padding: 20, paddingBottom: 40 },
   
+  // Status
+  statusBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, marginBottom: 20 },
+  statusDotWrapper: { position: 'relative', width: 12, height: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success, zIndex: 2 },
+  statusPulse: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.success, opacity: 0.4 },
+  statusText: { color: COLORS.success, fontSize: 13, fontWeight: 'bold' },
+
   // Revenue Card
-  revenueCard: { backgroundColor: COLORS.primary, borderRadius: 24, padding: 24, shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 15, elevation: 8, marginBottom: 32 },
-  revenueTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  revenueLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
-  revenueValue: { color: '#FFF', fontSize: 36, fontWeight: '900', letterSpacing: -1, marginBottom: 24 },
-  
-  revenueBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 16, padding: 16 },
-  revenueStatBox: { flex: 1, alignItems: 'center' },
-  revenueStatNum: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
-  revenueStatLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' },
-  revenueDivider: { width: 1, height: '80%', backgroundColor: 'rgba(255,255,255,0.2)' },
+  revenueCard: { backgroundColor: COLORS.primary, borderRadius: 24, padding: 20, shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 15, elevation: 8, marginBottom: 24 },
+  revenueTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  revenueLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 4 },
+  revenueValue: { color: '#FFF', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
+  walletBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  walletBtnText: { color: COLORS.primary, fontSize: 12, fontWeight: 'bold', marginRight: 2 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 16, padding: 16 },
+  statBox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statInfo: { justifyContent: 'center' },
+  statVal: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
+  statDesc: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600' },
+  statDivider: { width: 1, height: '100%', backgroundColor: 'rgba(255,255,255,0.2)' },
+
+  // Quick Actions
+  quickActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
+  actionItem: { alignItems: 'center', flex: 1 },
+  actionIconBox: { width: 56, height: 56, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  actionText: { color: COLORS.text, fontSize: 12, fontWeight: '600' },
 
   // Sections
-  sectionTitle: { color: COLORS.text, fontSize: 18, fontWeight: 'bold', marginBottom: 16, letterSpacing: 0.5 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  sectionTitle: { color: COLORS.text, fontSize: 18, fontWeight: '800' },
+  seeAllText: { color: COLORS.primary, fontSize: 14, fontWeight: 'bold' },
 
-  // Next Trip
-  nextTripCard: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: COLORS.border },
-  nextTripHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  badgeOpen: { backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' },
-  badgeText: { color: COLORS.success, fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-  nextTripTime: { color: COLORS.text, fontSize: 16, fontWeight: 'bold' },
-  
-  routeBox: { marginBottom: 16 },
+  // Ticket (Boarding Pass)
+  ticketCard: { backgroundColor: COLORS.surface, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 15, elevation: 4, marginBottom: 8 },
+  ticketHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 16 },
+  ticketTime: { color: COLORS.text, fontSize: 16, fontWeight: '900' },
+  ticketBadge: { backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  ticketBadgeText: { color: COLORS.success, fontSize: 10, fontWeight: 'bold' },
+  ticketBody: { paddingHorizontal: 20, paddingBottom: 16 },
   routeItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  routeText: { color: COLORS.text, fontSize: 15, fontWeight: '600' },
-  routeDivider: { height: 16, width: 2, backgroundColor: COLORS.border, marginLeft: 8, marginVertical: 4 },
-  
-  nextTripFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 16 },
-  nextTripInfo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  nextTripInfoText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '500' },
-  detailBtn: { backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 },
-  detailBtnText: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold' },
+  routeDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)' },
+  routeLine: { width: 2, height: 20, backgroundColor: COLORS.border, marginLeft: 4, marginVertical: 4 },
+  routeText: { color: COLORS.text, fontSize: 15, fontWeight: '700', flex: 1 },
+  ticketDividerWrap: { flexDirection: 'row', alignItems: 'center', height: 1 },
+  ticketNotchLeft: { width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.background, marginLeft: -8 },
+  ticketDashedLine: { flex: 1, height: 1, borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed', marginHorizontal: 4 },
+  ticketNotchRight: { width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.background, marginRight: -8 },
+  ticketFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
+  ticketMetaLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: 'bold', marginBottom: 2 },
+  ticketMetaValue: { color: COLORS.text, fontSize: 14, fontWeight: '800' },
+  detailBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+  detailBtnText: { color: COLORS.background, fontSize: 13, fontWeight: 'bold' },
 
-  // Empty Trip
-  emptyNextTrip: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 30, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
-  emptyNextTripText: { color: COLORS.textMuted, fontSize: 14, marginVertical: 16 },
-  emptyNextTripBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
-  emptyNextTripBtnText: { color: COLORS.background, fontSize: 14, fontWeight: 'bold' },
+  // Empty Ticket
+  emptyTicket: { backgroundColor: COLORS.surface, borderRadius: 20, padding: 30, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
+  emptyIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  emptyTicketTitle: { color: COLORS.text, fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
+  emptyTicketSub: { color: COLORS.textMuted, fontSize: 13, textAlign: 'center' },
 
-  // Services
-  servicesScroll: { gap: 16, paddingRight: 20 },
-  serviceCard: { width: 140, backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
-  serviceIconWrap: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  serviceTitle: { color: COLORS.text, fontSize: 14, fontWeight: 'bold', marginBottom: 12, textAlign: 'center' },
-  serviceBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  serviceBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
-
-  // News Grid
-  newsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16 },
-  newsCard: { width: '47%', backgroundColor: COLORS.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border, marginBottom: 4 },
-  newsImagePlaceholder: { height: 110, justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' },
-  newsContent: { padding: 12 },
-  newsTitle: { color: COLORS.text, fontSize: 14, fontWeight: '600', lineHeight: 20, marginBottom: 8, height: 40 },
-  newsTag: { alignSelf: 'flex-start', backgroundColor: 'rgba(14, 165, 233, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 8 },
-  newsTagText: { color: COLORS.primary, fontSize: 10, fontWeight: 'bold' },
-  newsSubText: { color: COLORS.textMuted, fontSize: 12 }
+  // Opportunities
+  opportunitiesScroll: { gap: 12, paddingRight: 20, paddingBottom: 10 },
+  oppCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, minWidth: 260, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
+  oppIconWrap: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(239, 68, 68, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  oppTitle: { color: COLORS.text, fontSize: 14, fontWeight: 'bold', marginBottom: 4 },
+  oppSub: { color: COLORS.textMuted, fontSize: 12 }
 });
