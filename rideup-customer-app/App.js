@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 import LoginScreen from './src/screens/LoginScreen';
+import CustomerDashboardScreen from './src/screens/CustomerDashboardScreen';
 import SearchRideScreen from './src/screens/SearchRideScreen';
 import MapScreen from './src/screens/MapScreen';
 import BookingChatScreen from './src/screens/BookingChatScreen';
@@ -18,12 +19,12 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const COLORS = { background: '#121212', surface: '#1E1E1E', primary: '#FFD700', text: '#FFFFFF', textMuted: '#A0A0A0' };
+const COLORS = { background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', text: '#0F172A', textMuted: '#64748B', border: '#E2E8F0' };
 
 function MainTabNavigator() {
   return (
     <Tab.Navigator
-      initialRouteName="SearchRide"
+      initialRouteName="Dashboard"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
@@ -37,7 +38,9 @@ function MainTabNavigator() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
 
-          if (route.name === 'SearchRide') {
+          if (route.name === 'Dashboard') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'SearchRide') {
             iconName = focused ? 'search' : 'search-outline';
           } else if (route.name === 'MyTrips') {
             iconName = focused ? 'time' : 'time-outline';
@@ -51,6 +54,7 @@ function MainTabNavigator() {
         },
       })}
     >
+      <Tab.Screen name="Dashboard" component={CustomerDashboardScreen} options={{ tabBarLabel: 'Tổng quan' }} />
       <Tab.Screen name="SearchRide" component={SearchRideScreen} options={{ tabBarLabel: 'Tìm chuyến' }} />
       <Tab.Screen name="MyTrips" component={MyTripsScreen} options={{ tabBarLabel: 'Lịch sử' }} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ tabBarLabel: 'Thông báo' }} />
@@ -62,12 +66,12 @@ function MainTabNavigator() {
 export default function App() {
   return (
     <NavigationContainer>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack.Navigator 
         initialRouteName="Login"
         screenOptions={{
           headerShown: false,
-          cardStyle: { backgroundColor: '#121212' }
+          cardStyle: { backgroundColor: COLORS.background }
         }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />

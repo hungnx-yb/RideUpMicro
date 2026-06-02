@@ -176,8 +176,8 @@ export default function LocationMapPicker({
         onPress={() => setShowWardList(!showWardList)}
         activeOpacity={0.8}
       >
-        <Ionicons name="location-outline" size={18} color={wardId ? accentColor : '#888'} />
-        <Text style={[styles.wardBtnText, wardId && { color: '#fff' }]} numberOfLines={1}>
+        <Ionicons name="location-outline" size={18} color={wardId ? accentColor : '#64748B'} />
+        <Text style={[styles.wardBtnText, wardId && { color: '#0F172A' }]} numberOfLines={1}>
           {wardId ? selectedWardName : 'Chọn Phường/Xã...'}
         </Text>
         <Ionicons name={showWardList ? 'chevron-up' : 'chevron-down'} size={16} color="#888" />
@@ -201,7 +201,7 @@ export default function LocationMapPicker({
               <Ionicons
                 name={w.id === wardId ? 'radio-button-on' : 'radio-button-off'}
                 size={16}
-                color={w.id === wardId ? accentColor : '#888'}
+                color={w.id === wardId ? accentColor : '#64748B'}
               />
               <Text style={[styles.wardItemText, w.id === wardId && { color: accentColor, fontWeight: 'bold' }]}>
                 {w.name}
@@ -220,7 +220,7 @@ export default function LocationMapPicker({
             </View>
             <Text style={[styles.sectionTitle, { color: accentColor }]}>Ghim vị trí trên bản đồ</Text>
             <TouchableOpacity style={styles.gpsBtn} onPress={useCurrentLocation}>
-              <Ionicons name="locate" size={13} color="#fff" />
+              <Ionicons name="locate" size={13} color="#0F172A" />
               <Text style={styles.gpsBtnText}>Vị trí hiện tại</Text>
             </TouchableOpacity>
           </View>
@@ -275,14 +275,14 @@ export default function LocationMapPicker({
           <TextInput
             style={styles.addressInput}
             placeholder="Số nhà, tên đường, mốc nhận diện..."
-            placeholderTextColor="#555"
+            placeholderTextColor="#94A3B8"
             value={value?.addressText || ''}
             onChangeText={(t) => onChange({ lat, lng, addressText: t })}
           />
         </>
       ) : (
         <View style={styles.mapPlaceholder}>
-          <Ionicons name="map-outline" size={32} color="#444" />
+          <Ionicons name="map-outline" size={32} color="#CBD5E1" />
           <Text style={styles.mapPlaceholderText}>Chọn Phường/Xã để hiển thị bản đồ</Text>
         </View>
       )}
@@ -297,49 +297,49 @@ const styles = StyleSheet.create({
 
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   stepBadge: { width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-  stepText: { color: '#000', fontSize: 12, fontWeight: 'bold' },
+  stepText: { color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' },
   sectionTitle: { fontSize: 13, fontWeight: 'bold', textTransform: 'uppercase', flex: 1 },
 
   // Ward selector
   wardBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#1E1E1E', borderWidth: 1, borderColor: '#333',
+    backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0',
     borderRadius: 10, paddingHorizontal: 14, height: 48,
   },
-  wardBtnText: { flex: 1, color: '#888', fontSize: 14 },
+  wardBtnText: { flex: 1, color: '#64748B', fontSize: 14 },
   wardList: {
-    backgroundColor: '#1a1a1a', borderRadius: 10, borderWidth: 1,
-    borderColor: '#333', marginTop: 4, overflow: 'hidden',
+    backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1,
+    borderColor: '#E2E8F0', marginTop: 4, overflow: 'hidden',
   },
   wardItem: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#222',
+    paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
   },
-  wardItemText: { color: '#ccc', fontSize: 14, flex: 1 },
+  wardItemText: { color: '#0F172A', fontSize: 14, flex: 1 },
 
   // GPS button
   gpsBtn: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E1E1E',
-    borderWidth: 1, borderColor: '#333', paddingHorizontal: 10, paddingVertical: 5,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC',
+    borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 10, paddingVertical: 5,
     borderRadius: 8, gap: 4,
   },
-  gpsBtnText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  hint: { color: '#666', fontSize: 11, marginBottom: 8 },
+  gpsBtnText: { color: '#0F172A', fontSize: 11, fontWeight: '600' },
+  hint: { color: '#64748B', fontSize: 11, marginBottom: 8 },
 
   // Map
-  mapContainer: { height: 200, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#333', marginBottom: 8 },
+  mapContainer: { height: 200, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 8 },
   map: { flex: 1 },
-  mapOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  mapOverlayText: { color: '#fff', marginTop: 8, fontSize: 12 },
+  mapOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  mapOverlayText: { color: '#0F172A', marginTop: 8, fontSize: 12, fontWeight: '500' },
 
   // Map placeholder
-  mapPlaceholder: { height: 80, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: '#2a2a2a', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8 },
-  mapPlaceholderText: { color: '#555', fontSize: 13 },
+  mapPlaceholder: { height: 80, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8 },
+  mapPlaceholderText: { color: '#64748B', fontSize: 13 },
 
   // Coords
-  distText: { color: '#777', fontSize: 11, marginBottom: 8, fontStyle: 'italic' },
+  distText: { color: '#64748B', fontSize: 11, marginBottom: 8, fontStyle: 'italic' },
 
   // Address input
-  addressInput: { backgroundColor: '#1E1E1E', borderWidth: 1, borderColor: '#333', borderRadius: 10, paddingHorizontal: 14, height: 48, color: '#fff', fontSize: 14 },
-  errorText: { color: '#FF4C4C', fontSize: 11, marginTop: 6 },
+  addressInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 14, height: 48, color: '#0F172A', fontSize: 14 },
+  errorText: { color: '#ef4444', fontSize: 11, marginTop: 6 },
 });

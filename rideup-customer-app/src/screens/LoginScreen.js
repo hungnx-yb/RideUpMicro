@@ -13,7 +13,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/apiService';
 
-const COLORS = { background: '#121212', surface: '#1E1E1E', primary: '#FFD700', text: '#FFFFFF', textMuted: '#A0A0A0', error: '#FF4C4C', border: '#333333' };
+const COLORS = { background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', text: '#0F172A', textMuted: '#64748B', error: '#ef4444', border: '#E2E8F0', success: '#10b981' };
 const SIZES = { base: 8, small: 12, font: 14, medium: 16, large: 20, extraLarge: 24, title: 32 };
 
 const LoginScreen = ({ navigation }) => {
@@ -103,10 +103,10 @@ const styles = StyleSheet.create({
   label: { color: COLORS.text, fontSize: SIZES.font, marginBottom: 8, fontWeight: '500' },
   input: {
     backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 12, padding: 16, color: COLORS.text, fontSize: SIZES.medium,
+    borderRadius: 16, padding: 16, color: COLORS.text, fontSize: SIZES.medium,
   },
   loginButton: {
-    backgroundColor: COLORS.primary, borderRadius: 12, padding: 16, alignItems: 'center',
+    backgroundColor: COLORS.primary, borderRadius: 16, padding: 16, alignItems: 'center',
     marginTop: 10, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },

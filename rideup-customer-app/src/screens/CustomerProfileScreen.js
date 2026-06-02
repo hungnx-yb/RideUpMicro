@@ -20,9 +20,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { apiService } from '../services/apiService';
 
 const COLORS = { 
-  background: '#121212', surface: '#1E1E1E', primary: '#FFD700', 
-  text: '#FFFFFF', textMuted: '#A0A0A0', error: '#FF4C4C', 
-  border: '#333333', disabled: '#2A2A2A', success: '#4ade80'
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', 
+  text: '#0F172A', textMuted: '#64748B', error: '#ef4444', 
+  border: '#E2E8F0', disabled: '#CBD5E1', success: '#10b981'
 };
 const SIZES = { base: 8, small: 12, font: 14, medium: 16, large: 20, extraLarge: 24, title: 28 };
 
@@ -193,7 +193,10 @@ const CustomerProfileScreen = ({ navigation }) => {
       
       {/* HEADER MAIN */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Hồ sơ</Text>
+        <View>
+          <Text style={styles.headerSub}>RIDEUP</Text>
+          <Text style={styles.headerTitle}>Hồ sơ của tôi</Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -208,19 +211,19 @@ const CustomerProfileScreen = ({ navigation }) => {
                 <Text style={styles.avatarLetter}>{avatarChar}</Text>
               )}
               <View style={styles.editAvatarBadge}>
-                <Ionicons name="camera" size={12} color={COLORS.background} />
+                <Ionicons name="camera" size={12} color={COLORS.surface} />
               </View>
             </View>
           </TouchableOpacity>
           
           <View style={styles.profileInfo}>
-            <Text style={styles.userName}>{user.fullName || 'Người dùng'}</Text>
+            <Text style={styles.userName} numberOfLines={1}>{user.fullName || 'Người dùng'}</Text>
             <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={12} color={COLORS.primary} />
-              <Text style={styles.ratingText}>Thành viên RideUp Premium</Text>
+              <Ionicons name="shield-checkmark" size={14} color={COLORS.primary} />
+              <Text style={styles.ratingText}>Thành viên RideUp</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={24} color={COLORS.textMuted} />
+          <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
         </View>
 
         {/* MENU LIST */}
@@ -262,9 +265,6 @@ const CustomerProfileScreen = ({ navigation }) => {
             onPress={handleLogout} 
           />
         </View>
-
-        <Text style={styles.versionText}>Phiên bản 1.0.0</Text>
-
       </ScrollView>
 
       {/* MODAL EDIT PROFILE */}
@@ -362,33 +362,32 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { justifyContent: 'center', alignItems: 'center' },
   
-  // Header Main
-  header: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  headerTitle: { fontSize: SIZES.title, fontWeight: 'bold', color: COLORS.text },
+  // Header
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
+  headerSub: { color: COLORS.primary, fontSize: SIZES.small, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
 
   content: { paddingBottom: 40 },
 
   // Profile Card
-  profileCard: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.surface, marginTop: 16, marginHorizontal: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 3 },
-  avatarCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#2a2a5e', borderWidth: 2, borderColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  avatarLetter: { color: COLORS.primary, fontSize: 24, fontWeight: 'bold' },
-  avatarImage: { width: '100%', height: '100%', borderRadius: 32 },
-  editAvatarBadge: { position: 'absolute', bottom: -2, right: -2, backgroundColor: COLORS.primary, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.surface },
-  profileInfo: { flex: 1 },
-  userName: { color: COLORS.text, fontSize: SIZES.large, fontWeight: 'bold', marginBottom: 6 },
-  ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,215,0,0.1)', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  ratingText: { color: COLORS.primary, fontSize: 11, fontWeight: 'bold', marginLeft: 4 },
+  profileCard: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.surface, marginTop: 12, marginHorizontal: 16, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: '#F1F5F9' },
+  avatarCircle: { width: 68, height: 68, borderRadius: 34, backgroundColor: 'rgba(14, 165, 233, 0.1)', borderWidth: 3, borderColor: COLORS.surface, justifyContent: 'center', alignItems: 'center', marginRight: 16, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 },
+  avatarLetter: { color: COLORS.primary, fontSize: 26, fontWeight: '900' },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 34 },
+  editAvatarBadge: { position: 'absolute', bottom: -4, right: -4, backgroundColor: COLORS.primary, width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.surface },
+  profileInfo: { flex: 1, justifyContent: 'center' },
+  userName: { color: COLORS.text, fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(14, 165, 233, 0.1)', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  ratingText: { color: COLORS.primary, fontSize: 12, fontWeight: '700', marginLeft: 4 },
 
   // Menu List
   menuSection: { marginTop: 24, paddingHorizontal: 16 },
-  sectionTitle: { color: COLORS.textMuted, fontSize: SIZES.font, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 8, marginLeft: 4 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, padding: 16, borderRadius: 16, marginBottom: 8 },
-  menuIconBox: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,215,0,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  sectionTitle: { color: '#94A3B8', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', marginBottom: 12, marginLeft: 6, letterSpacing: 0.5 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, padding: 16, borderRadius: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 4, elevation: 1, borderWidth: 1, borderColor: '#F8FAFC' },
+  menuIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
   menuContent: { flex: 1 },
-  menuTitle: { fontSize: SIZES.medium, fontWeight: '600' },
-  menuSubtitle: { fontSize: SIZES.small, color: COLORS.textMuted, marginTop: 2 },
-
-  versionText: { textAlign: 'center', color: COLORS.border, marginTop: 30, fontSize: SIZES.small },
+  menuTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  menuSubtitle: { fontSize: 12, color: COLORS.textMuted, marginTop: 3 },
 
   // Edit Modal
   modalContainer: { flex: 1, backgroundColor: COLORS.background },

@@ -7,9 +7,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 
 const COLORS = {
-  background: '#121212', surface: '#1E1E1E', primary: '#FFD700',
-  text: '#FFFFFF', textMuted: '#A0A0A0', error: '#FF4C4C',
-  border: '#333333', green: '#4ade80', blue: '#60a5fa',
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9',
+  text: '#0F172A', textMuted: '#64748B', error: '#ef4444',
+  border: '#E2E8F0', green: '#10b981', blue: '#3b82f6',
 };
 const SIZES = { small: 12, font: 14, medium: 16, large: 20, extraLarge: 24 };
 
@@ -42,31 +42,39 @@ const BookingCard = ({ item, onPress }) => {
   };
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
-
-      {/* ── TOP: Mã + Trạng thái ── */}
-      <View style={styles.cardTop}>
-        <View>
-          <Text style={styles.cardLabel}>MÃ CHUYẾN</Text>
-          <Text style={styles.cardCode}>#{shortId}</Text>
+    <TouchableOpacity 
+      style={[styles.card, { borderLeftColor: status.color }]} 
+      onPress={onPress} 
+      activeOpacity={0.9}
+    >
+      {/* ── TOP: Thời gian + Trạng thái ── */}
+      <View style={styles.cardHeader}>
+        <View style={styles.timeWrap}>
+          <View style={styles.iconCircle}>
+            <Ionicons name="time" size={14} color={COLORS.primary} />
+          </View>
+          <Text style={styles.timeText}>
+            {formatTime(item.createdAt)} • {formatDate(item.createdAt)}
+          </Text>
         </View>
-        <View style={[styles.statusPill, { backgroundColor: status.bg, borderColor: status.color }]}>
-          <Ionicons name={status.icon} size={13} color={status.color} />
-          <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
+        <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+          <Ionicons name={status.icon} size={14} color={status.color} />
+          <Text style={[styles.statusText, { color: status.color }]}>
+            {status.label}
+          </Text>
         </View>
       </View>
 
       {/* ── ROUTE ── */}
-      <View style={styles.routeSection}>
+      <View style={styles.cardBody}>
         {/* Điểm đón */}
         <View style={styles.routeRow}>
-          <View style={styles.routeLeft}>
-            <View style={styles.dotFrom} />
-            <View style={styles.routeLine} />
+          <View style={styles.iconWrap}>
+            <Ionicons name="location" size={20} color={COLORS.primary} />
           </View>
-          <View style={styles.routeRight}>
+          <View style={[styles.textColumn, { marginBottom: 12 }]}>
             <Text style={styles.routeLabel}>ĐIỂM ĐÓN</Text>
-            <Text style={styles.routeAddr} numberOfLines={2}>
+            <Text style={styles.routeAddr} numberOfLines={1}>
               {item.pickupAddressText || 'Điểm đón'}
             </Text>
           </View>
@@ -74,50 +82,20 @@ const BookingCard = ({ item, onPress }) => {
 
         {/* Điểm trả */}
         <View style={styles.routeRow}>
-          <View style={styles.routeLeft}>
-            <View style={styles.dotTo} />
+          <View style={styles.iconWrap}>
+            <Ionicons name="flag" size={20} color="#F59E0B" />
           </View>
-          <View style={styles.routeRight}>
-            <Text style={styles.routeLabel}>ĐIỂM TRẢ</Text>
-            <Text style={styles.routeAddr} numberOfLines={2}>
+          <View style={styles.textColumn}>
+            <Text style={styles.routeLabel}>ĐIỂM ĐẾN</Text>
+            <Text style={styles.routeAddr} numberOfLines={1}>
               {item.dropoffAddressText || 'Điểm đến'}
             </Text>
           </View>
         </View>
+        
+        {/* Dòng kẻ nối 2 icon */}
+        <View style={styles.routeLine} />
       </View>
-
-      {/* ── INFO ROW: Ngày + Ghế ── */}
-      <View style={styles.infoRow}>
-        <View style={styles.infoChip}>
-          <Ionicons name="calendar-outline" size={13} color={COLORS.textMuted} />
-          <Text style={styles.infoChipText}>
-            {formatDate(item.createdAt)} • {formatTime(item.createdAt)}
-          </Text>
-        </View>
-        <View style={styles.infoChip}>
-          <Ionicons name="people-outline" size={13} color={COLORS.textMuted} />
-          <Text style={styles.infoChipText}>{item.seatCount || 1} chỗ</Text>
-        </View>
-        {item.paymentMethod && (
-          <View style={styles.infoChip}>
-            <Ionicons name={item.paymentMethod === 'VNPAY' ? 'card-outline' : 'cash-outline'} size={13} color={COLORS.textMuted} />
-            <Text style={styles.infoChipText}>{item.paymentMethod === 'VNPAY' ? 'VNPay' : 'Tiền mặt'}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* ── BOTTOM: Giá + Hành động ── */}
-      <View style={styles.cardBottom}>
-        <View>
-          <Text style={styles.priceLabel}>TỔNG TIỀN</Text>
-          <Text style={styles.priceValue}>{money(item.totalPriceVnd)}</Text>
-        </View>
-        <TouchableOpacity style={styles.detailBtn} onPress={onPress}>
-          <Text style={styles.detailBtnText}>Chi tiết</Text>
-          <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
-        </TouchableOpacity>
-      </View>
-
     </TouchableOpacity>
   );
 };
@@ -160,36 +138,36 @@ const MyTripsScreen = ({ navigation }) => {
       {/* ── HEADER ── */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerSub}>RideUp</Text>
+          <Text style={styles.headerSub}>RIDEUP</Text>
           <Text style={styles.headerTitle}>Lịch sử chuyến</Text>
         </View>
-        <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchMyBookings(true)}>
-          <Ionicons name="refresh" size={20} color={COLORS.primary} />
-        </TouchableOpacity>
       </View>
 
       {/* ── FILTER TABS ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsContainer}
-        style={styles.tabsScroll}
-      >
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={String(tab.key)}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => setActiveTab(tab.key)}
-            >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.tabsWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContainer}
+          style={styles.tabsScroll}
+        >
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={String(tab.key)}
+                style={[styles.tab, isActive && styles.tabActive]}
+                onPress={() => setActiveTab(tab.key)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* ── CONTENT ── */}
       {loading ? (
@@ -238,22 +216,21 @@ const MyTripsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
-  // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 40, paddingBottom: 16 },
-  headerSub: { color: COLORS.primary, fontSize: SIZES.small, fontWeight: 'bold', letterSpacing: 1, textTransform: 'uppercase' },
-  headerTitle: { fontSize: 28, fontWeight: 'bold', color: COLORS.text, marginTop: 2 },
-  refreshBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,215,0,0.1)', alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
+  headerSub: { color: COLORS.primary, fontSize: SIZES.small, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
 
   // Filter tabs
-  tabsScroll: { flexGrow: 0, marginBottom: 12, minHeight: 35, maxHeight: 35 },
-  tabsContainer: { paddingHorizontal: 16, gap: 8, flexDirection: 'row', alignItems: 'center' },
-  tab: { paddingHorizontal: 16, height: 32, justifyContent: 'center', borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
-  tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabText: { color: COLORS.textMuted, fontSize: SIZES.small, fontWeight: '600' },
-  tabTextActive: { color: COLORS.background, fontWeight: 'bold' },
+  tabsWrapper: { backgroundColor: COLORS.surface, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  tabsScroll: { flexGrow: 0 },
+  tabsContainer: { paddingHorizontal: 16, gap: 10, flexDirection: 'row', alignItems: 'center' },
+  tab: { paddingHorizontal: 20, height: 38, justifyContent: 'center', borderRadius: 20, backgroundColor: '#F1F5F9' },
+  tabActive: { backgroundColor: COLORS.primary, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  tabText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
+  tabTextActive: { color: '#FFFFFF', fontWeight: 'bold' },
 
   // List
-  listContainer: { paddingHorizontal: 16, paddingBottom: 24 },
+  listContainer: { paddingHorizontal: 0, paddingVertical: 16, paddingBottom: 24 },
 
   // Empty state
   emptyBox: { alignItems: 'center', paddingTop: 60 },
@@ -264,40 +241,37 @@ const styles = StyleSheet.create({
 
   // ===== BOOKING CARD =====
   card: {
-    backgroundColor: COLORS.surface, borderRadius: 16, marginBottom: 14,
-    borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 3,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    marginHorizontal: 14,
+    marginBottom: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 4,
+    borderWidth: 1, borderColor: '#F1F5F9',
+    borderLeftWidth: 5, // Hiển thị màu trạng thái ở viền trái
   },
 
-  // Card top
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, paddingBottom: 12 },
-  cardLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: 'bold', letterSpacing: 0.8, marginBottom: 3 },
-  cardCode: { color: COLORS.text, fontSize: SIZES.medium, fontWeight: 'bold', letterSpacing: 1 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
-  statusLabel: { fontSize: 12, fontWeight: '700' },
+  // Card Header
+  cardHeader: { 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: '#F8FAFC'
+  },
+  timeWrap: { flexDirection: 'row', alignItems: 'center' },
+  iconCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  timeText: { color: COLORS.text, fontSize: 12, fontWeight: '700' },
+  
+  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  statusText: { fontSize: 11, fontWeight: '800', marginLeft: 4 },
 
-  // Route
-  routeSection: { backgroundColor: COLORS.background, marginHorizontal: 14, borderRadius: 12, padding: 14, marginBottom: 12 },
-  routeRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 },
-  routeLeft: { width: 20, alignItems: 'center', paddingTop: 4 },
-  dotFrom: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.green, borderWidth: 2, borderColor: '#166534' },
-  routeLine: { width: 2, height: 24, backgroundColor: COLORS.border, marginVertical: 3 },
-  dotTo: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.error, borderWidth: 2, borderColor: '#7f1d1d', marginTop: 4 },
-  routeRight: { flex: 1, paddingLeft: 10 },
+  // Card Body (Route)
+  cardBody: { padding: 14, paddingLeft: 10, position: 'relative' },
+  routeRow: { flexDirection: 'row', alignItems: 'flex-start', zIndex: 2 },
+  iconWrap: { width: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, paddingVertical: 2 },
+  textColumn: { flex: 1, paddingLeft: 8, justifyContent: 'center' },
   routeLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5, marginBottom: 2 },
-  routeAddr: { color: COLORS.text, fontSize: SIZES.font, fontWeight: '500', lineHeight: 20 },
-
-  // Info chips
-  infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 12 },
-  infoChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10 },
-  infoChipText: { color: COLORS.textMuted, fontSize: 12 },
-
-  // Card bottom
-  cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.border, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: 'rgba(255,215,0,0.04)' },
-  priceLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5, marginBottom: 2 },
-  priceValue: { color: COLORS.primary, fontSize: SIZES.large, fontWeight: 'bold' },
-  detailBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.primary },
-  detailBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: SIZES.small },
+  routeAddr: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+  
+  routeLine: { position: 'absolute', left: 23, top: 35, width: 2, height: 26, backgroundColor: '#E2E8F0', borderStyle: 'dashed', zIndex: 1 },
 });
 
 export default MyTripsScreen;

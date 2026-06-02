@@ -20,9 +20,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import LocationMapPicker from '../components/LocationMapPicker';
 
 const COLORS = {
-  background: '#121212', surface: '#1E1E1E', primary: '#FFD700',
-  text: '#FFFFFF', textMuted: '#A0A0A0', error: '#FF4C4C',
-  border: '#333333', green: '#4ade80',
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9',
+  text: '#0F172A', textMuted: '#64748B', error: '#ef4444',
+  border: '#E2E8F0', green: '#10b981',
 };
 const SIZES = { small: 12, font: 14, medium: 16, large: 20, extraLarge: 24, title: 32 };
 
@@ -204,6 +204,10 @@ const SearchRideScreen = ({ navigation }) => {
   const [provinces, setProvinces] = useState([]);
   const [startWards, setStartWards] = useState([]);
   const [endWards, setEndWards] = useState([]);
+
+  // UX states
+  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
+
   const [startProvinceId, setStartProvinceId] = useState('');
   const [startWardId, setStartWardId] = useState('');
   const [endProvinceId, setEndProvinceId] = useState('');
@@ -227,7 +231,7 @@ const SearchRideScreen = ({ navigation }) => {
   const [dropoffLocation, setDropoffLocation] = useState({ lat: NaN, lng: NaN, addressText: '' });
 
   useEffect(() => {
-    fetchTrips();
+    fetchTrips(false); // Không thu gọn bộ lọc trong lần tải đầu tiên
     fetchProvinces();
   }, []);
 
@@ -268,8 +272,12 @@ const SearchRideScreen = ({ navigation }) => {
     }
   };
 
-  const fetchTrips = async () => {
+  const fetchTrips = async (autoCollapse = true) => {
     setLoading(true);
+    if (autoCollapse) {
+      // Chỉ thu gọn khi bấm nút Tìm kiếm
+      setIsFilterExpanded(false);
+    }
     try {
       const dateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : undefined;
       const response = await apiService.getAllTrips({ startWardId, endWardId, date: dateStr, page: 0, size: 20 });
@@ -385,88 +393,69 @@ const SearchRideScreen = ({ navigation }) => {
 
     return (
       <TouchableOpacity style={styles.tripCard} onPress={() => handleOpenBooking(item)} activeOpacity={0.92}>
-
-        {/* === PHẦN TRÊN: Driver + Đặt ngay === */}
-        <View style={styles.cardTop}>
+        
+        {/* === HEADER: TÀI XẾ === */}
+        <View style={styles.cardHeader}>
           <View style={styles.driverRow}>
-            {/* Avatar */}
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarLetter}>{(item.driverName || 'D').charAt(0).toUpperCase()}</Text>
+            <View style={styles.avatarWrap}>
+              <Text style={styles.avatarText}>{(item.driverName || 'D').charAt(0).toUpperCase()}</Text>
             </View>
-            {/* Tên + rating + xe */}
-            <View style={styles.driverMeta}>
-              <Text style={styles.driverNameText} numberOfLines={1}>{item.driverName || 'Tài xế RideUp'}</Text>
-              <Text style={styles.ratingText}>
-                <Text style={styles.starText}>{renderStars(item.driverRating)}</Text>
-                {'  '}{item.driverRating?.toFixed(1) || '5.0'}
-              </Text>
-              <Text style={styles.vehicleText} numberOfLines={1}>
-                🚗 {item.vehicleBrand} {item.vehicleModel}
+            <View style={styles.driverInfo}>
+              <Text style={styles.driverName} numberOfLines={1}>{item.driverName || 'Tài xế RideUp'}</Text>
+              <Text style={styles.vehicleInfo} numberOfLines={1}>
+                {renderStars(item.driverRating)} • 🚗 {item.vehicleBrand} {item.vehicleModel}
               </Text>
             </View>
           </View>
-
-          {/* Nút đặt ngay */}
-          <TouchableOpacity style={styles.bookNowBtn} onPress={() => handleOpenBooking(item)}>
-            <Text style={styles.bookNowText}>Đặt ngay</Text>
+          <TouchableOpacity style={styles.bookBtn} onPress={() => handleOpenBooking(item)}>
+            <Text style={styles.bookBtnText}>Đặt ngay</Text>
           </TouchableOpacity>
         </View>
 
-        {/* === DIVIDER === */}
-        <View style={styles.cardDivider} />
-
-        {/* === PHẦN GIỮA: Route === */}
-        <View style={styles.routeSection}>
-          {/* Điểm đi */}
+        {/* === BODY: LỘ TRÌNH === */}
+        <View style={styles.cardBody}>
           <View style={styles.routeRow}>
-            <View style={styles.timeCol}>
-              <Text style={styles.timeLabel}>{formatTime(item.departureTime)}</Text>
+            <View style={styles.timeBox}>
+              <Text style={styles.timeText}>{formatTime(item.departureTime)}</Text>
             </View>
-            <View style={styles.dotCol}>
-              <View style={styles.dotGreen} />
+            <View style={styles.iconBox}>
+              <Ionicons name="location" size={18} color={COLORS.primary} />
               <View style={styles.routeLine} />
             </View>
-            <View style={styles.addrCol}>
-              <Text style={styles.addrText} numberOfLines={1}>{item.startAddressText || 'Điểm đón'}</Text>
-              {item.stops?.filter(s => s.stopType === 'PICKUP').slice(0,2).map((s, i) => (
-                <Text key={i} style={styles.stopText} numberOfLines={1}>↳ {s.addressText}</Text>
+            <View style={styles.addressBox}>
+              <Text style={styles.addressText} numberOfLines={1}>{item.startAddressText || 'Điểm đón'}</Text>
+              {item.stops?.filter(s => s.stopType === 'PICKUP').slice(0, 1).map((s, i) => (
+                <Text key={i} style={styles.subAddressText} numberOfLines={1}>↳ {s.addressText}</Text>
               ))}
             </View>
           </View>
 
-          {/* Duration badge giữa */}
-          {duration && (
-            <View style={styles.durationRow}>
-              <View style={styles.durationBadge}>
-                <Ionicons name="time-outline" size={11} color={COLORS.textMuted} />
-                <Text style={styles.durationText}> {duration}</Text>
-              </View>
-            </View>
-          )}
-
-          {/* Điểm đến */}
           <View style={styles.routeRow}>
-            <View style={styles.timeCol}>
-              <Text style={styles.timeLabel}>{formatTime(item.estimatedArrivalTime)}</Text>
+            <View style={styles.timeBox}>
+              <Text style={styles.timeText}>{formatTime(item.estimatedArrivalTime)}</Text>
+              {duration && <Text style={styles.durationText}>{duration}</Text>}
             </View>
-            <View style={styles.dotCol}>
-              <View style={styles.dotRed} />
+            <View style={styles.iconBox}>
+              <Ionicons name="flag" size={18} color="#F59E0B" />
             </View>
-            <View style={styles.addrCol}>
-              <Text style={styles.addrText} numberOfLines={1}>{item.endAddressText || 'Điểm đến'}</Text>
-              {item.stops?.filter(s => s.stopType === 'DROPOFF').slice(0,2).map((s, i) => (
-                <Text key={i} style={styles.stopText} numberOfLines={1}>↳ {s.addressText}</Text>
+            <View style={styles.addressBox}>
+              <Text style={styles.addressText} numberOfLines={1}>{item.endAddressText || 'Điểm đến'}</Text>
+              {item.stops?.filter(s => s.stopType === 'DROPOFF').slice(0, 1).map((s, i) => (
+                <Text key={i} style={styles.subAddressText} numberOfLines={1}>↳ {s.addressText}</Text>
               ))}
             </View>
           </View>
         </View>
 
-        {/* === PHẦN DƯỚI: Giá + Chỗ còn === */}
-        <View style={styles.cardBottom}>
-          <Text style={styles.priceTag}>{formatMoney(item.priceVnd)}<Text style={styles.perSeat}>/người</Text></Text>
-          <View style={[styles.seatBadge, { borderColor: seatColor }]}>
-            <Ionicons name="people-outline" size={13} color={seatColor} />
-            <Text style={[styles.seatText, { color: seatColor }]}>
+        {/* === FOOTER: GIÁ + CHỖ === */}
+        <View style={styles.cardFooter}>
+          <View style={styles.priceWrap}>
+            <Text style={styles.priceLabel}>GIÁ VÉ</Text>
+            <Text style={styles.priceAmount}>{formatMoney(item.priceVnd)}<Text style={styles.priceUnit}>/người</Text></Text>
+          </View>
+          <View style={[styles.seatPill, { backgroundColor: seatColor + '15' }]}>
+            <Ionicons name="people" size={14} color={seatColor} />
+            <Text style={[styles.seatPillText, { color: seatColor }]}>
               {seats === 0 ? 'Hết chỗ' : `Còn ${seats} chỗ`}
             </Text>
           </View>
@@ -481,110 +470,115 @@ const SearchRideScreen = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.subtitle}>RideUp Premium</Text>
-          <Text style={styles.title}>Tìm chuyến đi</Text>
+          <Text style={styles.headerSub}>RIDEUP</Text>
+          <Text style={styles.headerTitle}>Tìm chuyến đi</Text>
         </View>
       </View>
 
       {/* Search Filter Card */}
       <View style={styles.filterCard}>
-        <View style={styles.cardHeader}>
+        <TouchableOpacity style={styles.cardHeader} onPress={() => setIsFilterExpanded(!isFilterExpanded)} activeOpacity={0.8}>
           <View>
             <Text style={styles.brandText}>RIDEUP NOW</Text>
             <Text style={styles.cardTitle}>Bạn muốn đi đâu hôm nay?</Text>
           </View>
-          <View style={styles.badgeGreen}>
-            <Text style={styles.badgeGreenText}>• Liên tục cập nhật</Text>
+          <View style={styles.toggleBtn}>
+            <Text style={styles.toggleBtnText}>{isFilterExpanded ? 'Thu gọn' : 'Mở rộng'}</Text>
+            <Ionicons name={isFilterExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.primary} />
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* Row 1: Điểm đi */}
-        <View style={styles.filterRow}>
-          <View style={styles.filterCol}>
-            <Text style={styles.filterLabel}>TỈNH/THÀNH ĐI</Text>
-            <DropdownSelect
-              label="Chọn Tỉnh/Thành đi"
-              placeholder="Chọn tỉnh/thành đi"
-              value={startProvinceId}
-              options={provinces}
-              onSelect={setStartProvinceId}
-            />
-          </View>
-          <View style={styles.filterCol}>
-            <Text style={styles.filterLabel}>PHƯỜNG/XÃ ĐI</Text>
-            {loadingStartWards
-              ? <ActivityIndicator size="small" color={COLORS.primary} style={{ height: 44, alignSelf: 'center' }} />
-              : <DropdownSelect
-                  label="Chọn Phường/Xã đi"
-                  placeholder="Chọn phường/xã đi"
-                  value={startWardId}
-                  options={startWards}
-                  onSelect={setStartWardId}
-                  disabled={startWards.length === 0}
+        {isFilterExpanded && (
+          <View style={styles.filterBody}>
+            {/* Row 1: Điểm đi */}
+            <View style={styles.filterRow}>
+              <View style={styles.filterCol}>
+                <Text style={styles.filterLabel}>TỈNH/THÀNH ĐI</Text>
+                <DropdownSelect
+                  label="Chọn Tỉnh/Thành đi"
+                  placeholder="Chọn tỉnh/thành đi"
+                  value={startProvinceId}
+                  options={provinces}
+                  onSelect={setStartProvinceId}
                 />
-            }
-          </View>
-        </View>
+              </View>
+              <View style={styles.filterCol}>
+                <Text style={styles.filterLabel}>PHƯỜNG/XÃ ĐI</Text>
+                {loadingStartWards
+                  ? <ActivityIndicator size="small" color={COLORS.primary} style={{ height: 44, alignSelf: 'center' }} />
+                  : <DropdownSelect
+                      label="Chọn Phường/Xã đi"
+                      placeholder="Chọn phường/xã đi"
+                      value={startWardId}
+                      options={startWards}
+                      onSelect={setStartWardId}
+                      disabled={startWards.length === 0}
+                    />
+                }
+              </View>
+            </View>
 
-        {/* Row 2: Điểm đến */}
-        <View style={styles.filterRow}>
-          <View style={styles.filterCol}>
-            <Text style={styles.filterLabel}>TỈNH/THÀNH ĐẾN</Text>
-            <DropdownSelect
-              label="Chọn Tỉnh/Thành đến"
-              placeholder="Chọn tỉnh/thành đến"
-              value={endProvinceId}
-              options={provinces}
-              onSelect={setEndProvinceId}
-            />
-          </View>
-          <View style={styles.filterCol}>
-            <Text style={styles.filterLabel}>PHƯỜNG/XÃ ĐẾN</Text>
-            {loadingEndWards
-              ? <ActivityIndicator size="small" color={COLORS.primary} style={{ height: 44, alignSelf: 'center' }} />
-              : <DropdownSelect
-                  label="Chọn Phường/Xã đến"
-                  placeholder="Chọn phường/xã đến"
-                  value={endWardId}
-                  options={endWards}
-                  onSelect={setEndWardId}
-                  disabled={endWards.length === 0}
+            {/* Row 2: Điểm đến */}
+            <View style={styles.filterRow}>
+              <View style={styles.filterCol}>
+                <Text style={styles.filterLabel}>TỈNH/THÀNH ĐẾN</Text>
+                <DropdownSelect
+                  label="Chọn Tỉnh/Thành đến"
+                  placeholder="Chọn tỉnh/thành đến"
+                  value={endProvinceId}
+                  options={provinces}
+                  onSelect={setEndProvinceId}
                 />
-            }
-          </View>
-        </View>
+              </View>
+              <View style={styles.filterCol}>
+                <Text style={styles.filterLabel}>PHƯỜNG/XÃ ĐẾN</Text>
+                {loadingEndWards
+                  ? <ActivityIndicator size="small" color={COLORS.primary} style={{ height: 44, alignSelf: 'center' }} />
+                  : <DropdownSelect
+                      label="Chọn Phường/Xã đến"
+                      placeholder="Chọn phường/xã đến"
+                      value={endWardId}
+                      options={endWards}
+                      onSelect={setEndWardId}
+                      disabled={endWards.length === 0}
+                    />
+                }
+              </View>
+            </View>
 
-        {/* Row 3: Ngày đi + Nút tìm */}
-        <View style={styles.filterRow}>
-          <View style={styles.filterCol}>
-            <Text style={styles.filterLabel}>NGÀY ĐI</Text>
-            <TouchableOpacity style={styles.dateBox} onPress={() => setShowDatePicker(true)}>
-              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={selectedDate ? styles.dateValue : styles.datePlaceholder}>
-                {selectedDate
-                  ? selectedDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                  : 'mm/dd/yyyy'}
-              </Text>
-              {selectedDate && (
-                <TouchableOpacity onPress={() => setSelectedDate(null)} hitSlop={{top:8,bottom:8,left:8,right:8}}>
-                  <Ionicons name="close-circle" size={16} color={COLORS.textMuted} />
+            {/* Row 3: Ngày đi + Nút tìm */}
+            <View style={styles.filterRow}>
+              <View style={styles.filterCol}>
+                <Text style={styles.filterLabel}>NGÀY ĐI</Text>
+                <TouchableOpacity style={styles.dateBox} onPress={() => setShowDatePicker(true)}>
+                  <Ionicons name="calendar-outline" size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
+                  <Text style={selectedDate ? styles.dateValue : styles.datePlaceholder}>
+                    {selectedDate
+                      ? selectedDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                      : 'mm/dd/yyyy'}
+                  </Text>
+                  {selectedDate && (
+                    <TouchableOpacity onPress={() => setSelectedDate(null)} hitSlop={{top:8,bottom:8,left:8,right:8}}>
+                      <Ionicons name="close-circle" size={16} color={COLORS.textMuted} />
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
-              )}
-            </TouchableOpacity>
-            <CustomCalendar
-              visible={showDatePicker}
-              selectedDate={selectedDate}
-              onSelect={setSelectedDate}
-              onClose={() => setShowDatePicker(false)}
-            />
+                <CustomCalendar
+                  visible={showDatePicker}
+                  selectedDate={selectedDate}
+                  onSelect={setSelectedDate}
+                  onClose={() => setShowDatePicker(false)}
+                />
+              </View>
+              <View style={[styles.filterCol, { justifyContent: 'flex-end' }]}>
+                <TouchableOpacity style={styles.searchBtn} onPress={fetchTrips}>
+                  <Ionicons name="search" size={15} color={COLORS.text} style={{ marginRight: 5 }} />
+                  <Text style={styles.searchBtnText}>Tìm chuyến</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-          <View style={[styles.filterCol, { justifyContent: 'flex-end' }]}>
-            <TouchableOpacity style={styles.searchBtn} onPress={fetchTrips}>
-              <Ionicons name="search" size={15} color={COLORS.text} style={{ marginRight: 5 }} />
-              <Text style={styles.searchBtnText}>Tìm chuyến</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        )}
       </View>
 
       {/* Trip List */}
@@ -601,10 +595,15 @@ const SearchRideScreen = ({ navigation }) => {
       )}
 
       {/* Booking Confirmation Modal */}
-      <Modal visible={!!selectedTrip} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal visible={!!selectedTrip} transparent={false} animationType="slide">
+        <SafeAreaView style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Xác nhận đặt chỗ</Text>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Xác nhận đặt chỗ</Text>
+              <TouchableOpacity onPress={() => setSelectedTrip(null)} style={styles.modalCloseIcon}>
+                <Ionicons name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>Bạn đang đặt chỗ trên chuyến xe của {selectedTrip?.driverName}.</Text>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
@@ -695,7 +694,7 @@ const SearchRideScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -703,17 +702,18 @@ const SearchRideScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { padding: 20, paddingTop: 40 },
-  subtitle: { color: COLORS.primary, fontSize: SIZES.small, fontWeight: 'bold', letterSpacing: 1, textTransform: 'uppercase' },
-  title: { fontSize: SIZES.title, fontWeight: 'bold', color: COLORS.text, marginTop: 4 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
+  headerSub: { color: COLORS.primary, fontSize: SIZES.small, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
 
   // Filter Card
-  filterCard: { backgroundColor: COLORS.surface, marginHorizontal: 16, marginBottom: 12, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  filterCard: { backgroundColor: COLORS.surface, marginHorizontal: 16, marginBottom: 12, borderRadius: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6, borderWidth: 1, borderColor: COLORS.border },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 10 },
   brandText: { color: COLORS.green, fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 4 },
   cardTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
-  badgeGreen: { backgroundColor: 'rgba(74, 222, 128, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  badgeGreenText: { color: COLORS.green, fontSize: 10, fontWeight: 'bold' },
+  toggleBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, gap: 4 },
+  toggleBtnText: { color: COLORS.primary, fontSize: 11, fontWeight: 'bold' },
+  filterBody: { borderTopWidth: 1, borderTopColor: '#F8FAFC', paddingTop: 16 },
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   filterCol: { flex: 1 },
   filterLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5, marginBottom: 5 },
@@ -731,7 +731,7 @@ const styles = StyleSheet.create({
   ddTitle: { color: COLORS.text, fontSize: SIZES.medium, fontWeight: 'bold' },
   ddSearchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
   ddSearchInput: { flex: 1, color: COLORS.text, fontSize: SIZES.font },
-  ddItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
+  ddItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   ddItemText: { color: COLORS.text, fontSize: SIZES.font, flex: 1 },
   ddEmpty: { color: COLORS.textMuted, textAlign: 'center', paddingVertical: 20 },
 
@@ -742,73 +742,62 @@ const styles = StyleSheet.create({
   datePlaceholder: { flex: 1, color: COLORS.textMuted, fontSize: 13 },
 
   // Search Button
-  searchBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#4b5563', borderRadius: 10, paddingVertical: 12, marginTop: 0 },
-  searchBtnText: { color: COLORS.text, fontWeight: 'bold', fontSize: SIZES.font },
+  searchBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 14, marginTop: 4, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  searchBtnText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: SIZES.font },
 
   // Trip List
   listContainer: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 },
   emptyText: { color: COLORS.textMuted, textAlign: 'center', marginTop: 40, fontSize: SIZES.font },
 
-  // ===== TRIP CARD - Grab Style =====
+  // ===== TRIP CARD - Super App Style =====
   tripCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-    // Shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    borderWidth: 1, borderColor: '#F1F5F9',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 4,
   },
-  // Top section
-  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, paddingBottom: 12 },
+  
+  // Header
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
   driverRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  avatarCircle: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#2a2a5e', borderWidth: 2, borderColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  avatarLetter: { color: COLORS.primary, fontWeight: 'bold', fontSize: 20 },
-  driverMeta: { flex: 1 },
-  driverNameText: { color: COLORS.text, fontWeight: 'bold', fontSize: 14, marginBottom: 2 },
-  ratingText: { color: COLORS.textMuted, fontSize: 12, marginBottom: 2 },
-  starText: { color: '#FFD700', fontSize: 11 },
-  vehicleText: { color: COLORS.textMuted, fontSize: 12 },
-  bookNowBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  bookNowText: { color: COLORS.background, fontWeight: 'bold', fontSize: 13 },
+  avatarWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(14, 165, 233, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  avatarText: { color: COLORS.primary, fontWeight: '900', fontSize: 16 },
+  driverInfo: { flex: 1 },
+  driverName: { color: COLORS.text, fontWeight: 'bold', fontSize: 14, marginBottom: 2 },
+  vehicleInfo: { color: COLORS.textMuted, fontSize: 12, fontWeight: '500' },
+  bookBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
+  bookBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
 
-  // Divider
-  cardDivider: { height: 1, backgroundColor: COLORS.border, marginHorizontal: 14 },
+  // Body
+  cardBody: { padding: 14, position: 'relative' },
+  routeRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  timeBox: { width: 44, paddingTop: 2 },
+  timeText: { color: COLORS.text, fontSize: 13, fontWeight: '800' },
+  durationText: { color: '#94A3B8', fontSize: 10, marginTop: 4, fontWeight: '600' },
+  
+  iconBox: { width: 24, alignItems: 'center', zIndex: 2 },
+  routeLine: { width: 2, height: 26, backgroundColor: '#E2E8F0', borderStyle: 'dashed', position: 'absolute', top: 20 },
+  
+  addressBox: { flex: 1, paddingLeft: 8 },
+  addressText: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
+  subAddressText: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
 
-  // Route section
-  routeSection: { paddingHorizontal: 14, paddingVertical: 12 },
-  routeRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  timeCol: { width: 48 },
-  timeLabel: { color: COLORS.textMuted, fontSize: 13, fontWeight: '700', marginTop: 1 },
-  dotCol: { width: 24, alignItems: 'center' },
-  dotGreen: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.green, borderWidth: 2, borderColor: '#166534' },
-  dotRed: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.error, borderWidth: 2, borderColor: '#7f1d1d' },
-  routeLine: { width: 2, height: 28, backgroundColor: COLORS.border, marginVertical: 3, marginLeft: 5 },
-  addrCol: { flex: 1, paddingLeft: 8 },
-  addrText: { color: COLORS.text, fontWeight: '600', fontSize: 14 },
-  stopText: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
-
-  // Duration badge
-  durationRow: { flexDirection: 'row', marginLeft: 72, marginVertical: 2 },
-  durationBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  durationText: { color: COLORS.textMuted, fontSize: 11 },
-
-  // Bottom section
-  cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,215,0,0.05)', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border },
-  priceTag: { color: COLORS.primary, fontWeight: 'bold', fontSize: 20 },
-  perSeat: { color: COLORS.textMuted, fontWeight: 'normal', fontSize: 13 },
-  seatBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 4 },
-  seatText: { fontSize: 13, fontWeight: '600' },
+  // Footer
+  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: '#F8FAFC', borderBottomLeftRadius: 16, borderBottomRightRadius: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  priceWrap: { flexDirection: 'column' },
+  priceLabel: { color: '#94A3B8', fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5, marginBottom: 2 },
+  priceAmount: { color: COLORS.primary, fontWeight: '900', fontSize: 18 },
+  priceUnit: { color: COLORS.textMuted, fontWeight: '600', fontSize: 12 },
+  seatPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  seatPillText: { fontSize: 12, fontWeight: 'bold' },
 
   // Booking Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalTitle: { fontSize: SIZES.extraLarge, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 },
+  modalOverlay: { flex: 1, backgroundColor: COLORS.background },
+  modalContent: { flex: 1, backgroundColor: COLORS.surface, padding: 20 },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  modalTitle: { fontSize: 24, fontWeight: '900', color: COLORS.text },
+  modalCloseIcon: { padding: 4 },
   modalSub: { color: COLORS.textMuted, fontSize: SIZES.font, marginBottom: 20 },
   modalRoute: { backgroundColor: COLORS.background, padding: 16, borderRadius: 12, marginBottom: 20 },
   addressSection: { marginBottom: 16, backgroundColor: COLORS.background, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border },
@@ -821,12 +810,12 @@ const styles = StyleSheet.create({
   counterBtn: { paddingHorizontal: 16, paddingVertical: 8 },
   counterText: { color: COLORS.primary, fontSize: SIZES.large, fontWeight: 'bold' },
   counterValue: { color: COLORS.text, fontSize: SIZES.medium, fontWeight: 'bold', marginHorizontal: 8 },
-  payBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.primary },
+  payBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: COLORS.primary, backgroundColor: COLORS.surface },
   payBtnActive: { backgroundColor: COLORS.primary },
-  payBtnText: { color: COLORS.primary, fontWeight: 'bold' },
-  modalPriceBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,215,0,0.08)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
-  modalPriceLabel: { color: COLORS.textMuted, fontSize: SIZES.small },
-  modalPrice: { color: COLORS.primary, fontSize: SIZES.large, fontWeight: 'bold' },
+  payBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 13 },
+  modalPriceBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(14, 165, 233, 0.08)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, marginTop: 12 },
+  modalPriceLabel: { color: COLORS.textMuted, fontSize: 12, fontWeight: 'bold' },
+  modalPrice: { color: COLORS.primary, fontSize: 20, fontWeight: '900' },
 
   noteBox: { marginTop: 12 },
   noteLabel: { color: COLORS.textMuted, fontSize: SIZES.small, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
