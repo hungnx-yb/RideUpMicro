@@ -6,38 +6,48 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   SafeAreaView, 
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Alert,
   ScrollView
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 
-const COLORS = { background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', text: '#0F172A', textMuted: '#64748B', error: '#ef4444', border: '#E2E8F0' };
-const SIZES = { base: 8, small: 12, medium: 16, large: 20, extraLarge: 28, title: 32 };
+const COLORS = { 
+  background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', 
+  text: '#0F172A', textMuted: '#64748B', error: '#ef4444', border: '#E2E8F0' 
+};
+const SIZES = { font: 14, medium: 16 };
 
 const RegisterScreen = ({ navigation }) => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({ name: '', password: '', email: '' });
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleRegister = async () => {
-    if (!formData.name || !formData.password || !formData.email) {
-      alert('Vui lòng nhập đầy đủ Tên, Email và Mật khẩu!');
+    if (!name || !email || !password) {
+      setErrorMsg('Vui lòng nhập đầy đủ Họ tên, Email và Mật khẩu.');
       return;
     }
-    
+    setErrorMsg('');
     setLoading(true);
     try {
-      const response = await apiService.register(formData);
+      const response = await apiService.register({ name, email, password });
       if (response.data.code === 1000) {
-        alert('ÄÄƒng kÃ½ thÃ nh cÃ´ng! Vui lÃ²ng kiá»ƒm tra email Ä‘á»ƒ xÃ¡c thá»±c.');
-        navigation.goBack();
+        Alert.alert('Thành công!', 'Đăng ký thành công! Vui lòng kiểm tra email để xác thực.', [
+          { text: 'Đăng nhập ngay', onPress: () => navigation.goBack() }
+        ]);
       } else {
-        alert(response.data.message || 'ÄÄƒng kÃ½ tháº¥t báº¡i!');
+        setErrorMsg(response.data.message || 'Đăng ký thất bại!');
       }
     } catch (error) {
       console.log('Register error:', error);
-      alert('ÄÃ£ xáº£y ra lá»—i khi Ä‘Äƒng kÃ½. Vui lÃ²ng thá»­ láº¡i.');
+      setErrorMsg(error.response?.data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -45,57 +55,72 @@ const RegisterScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>ÄÄƒng KÃ½</Text>
-          <Text style={styles.subtitle}>Táº¡o tÃ i khoáº£n RideUp Ä‘á»ƒ báº¯t Ä‘áº§u</Text>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} enabled={Platform.OS === 'ios'}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Há» vÃ  TÃªn *</Text>
+        <View style={styles.headerContainer}>
+          <Text style={styles.logoText}>Ride<Text style={{ color: COLORS.primary }}>Up</Text></Text>
+          <Text style={styles.subText}>Trở thành đối tác tài xế của chúng tôi</Text>
+        </View>
+
+        <View style={styles.formContainer}>
+          {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Họ và Tên</Text>
             <TextInput
               style={styles.input}
-              value={formData.name}
-              onChangeText={(text) => setFormData({...formData, name: text})}
-              placeholder="VD: Nguyá»…n VÄƒn A"
+              placeholder="Nguyễn Văn A"
               placeholderTextColor={COLORS.textMuted}
+              value={name}
+              onChangeText={setName}
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email *</Text>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
-              value={formData.email}
-              onChangeText={(text) => setFormData({...formData, email: text})}
-              placeholder="VD: user@example.com"
+              placeholder="email@example.com"
               placeholderTextColor={COLORS.textMuted}
-              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
               autoCapitalize="none"
+              keyboardType="email-address"
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Máº­t kháº©u *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.password}
-              onChangeText={(text) => setFormData({...formData, password: text})}
-              placeholder="Máº­t kháº©u cá»§a báº¡n"
-              placeholderTextColor={COLORS.textMuted}
-              secureTextEntry
-            />
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Mật khẩu</Text>
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Nhập mật khẩu"
+                placeholderTextColor={COLORS.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <TouchableOpacity style={styles.registerBtn} onPress={handleRegister} disabled={loading}>
-            {loading ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.registerBtnText}>ÄÄ‚NG KÃ NGAY</Text>}
+          <TouchableOpacity style={styles.registerButton} onPress={handleRegister} disabled={loading}>
+            {loading
+              ? <ActivityIndicator color={COLORS.background} />
+              : <Text style={styles.registerButtonText}>ĐĂNG KÝ</Text>
+            }
           </TouchableOpacity>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>ÄÃ£ cÃ³ tÃ i khoáº£n? </Text>
+            <Text style={styles.footerText}>Đã có tài khoản? </Text>
             <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Text style={styles.loginText}>ÄÄƒng nháº­p</Text>
+              <Text style={styles.loginText}>Đăng nhập</Text>
             </TouchableOpacity>
           </View>
+        </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -104,24 +129,39 @@ const RegisterScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: 24, justifyContent: 'center', minHeight: '100%' },
-  title: { fontSize: SIZES.title, fontWeight: 'bold', color: COLORS.primary, marginBottom: 8 },
-  subtitle: { fontSize: SIZES.medium, color: COLORS.textMuted, marginBottom: 32 },
-  
-  inputGroup: { marginBottom: 20 },
-  rowInputs: { flexDirection: 'row', justifyContent: 'space-between' },
-  label: { color: COLORS.text, marginBottom: 8, fontSize: SIZES.medium },
-  input: { backgroundColor: COLORS.surface, color: COLORS.text, borderRadius: 12, padding: 16, fontSize: SIZES.medium, borderWidth: 1, borderColor: COLORS.border },
-  
-  registerBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
-  registerBtnText: { color: COLORS.background, fontWeight: 'bold', fontSize: SIZES.medium },
-  
+  content: { padding: 24, paddingTop: Platform.OS === 'ios' ? 80 : 100, minHeight: '100%' },
+
+  headerContainer: { alignItems: 'center', marginBottom: 40 },
+  logoText: { fontSize: 48, fontWeight: 'bold', color: COLORS.text, letterSpacing: 1 },
+  subText: { fontSize: SIZES.medium, color: COLORS.textMuted, marginTop: 8, textAlign: 'center' },
+
+  formContainer: { width: '100%' },
+  inputContainer: { marginBottom: 20 },
+  label: { color: COLORS.text, fontSize: SIZES.font, marginBottom: 8, fontWeight: '500' },
+  input: {
+    backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 12, padding: 16, color: COLORS.text, fontSize: SIZES.medium,
+  },
+
+  passwordWrapper: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12,
+  },
+  passwordInput: { flex: 1, padding: 16, color: COLORS.text, fontSize: SIZES.medium },
+  eyeBtn: { paddingHorizontal: 16 },
+
+  registerButton: {
+    backgroundColor: COLORS.primary, borderRadius: 12, padding: 16, alignItems: 'center',
+    marginTop: 10, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+  },
+  registerButtonText: { color: COLORS.background, fontSize: SIZES.medium, fontWeight: 'bold', letterSpacing: 1 },
+
+  errorText: { color: COLORS.error, fontSize: SIZES.font, marginBottom: 16, textAlign: 'center' },
+
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 32 },
   footerText: { color: COLORS.textMuted, fontSize: SIZES.medium },
-  loginText: { color: COLORS.primary, fontWeight: 'bold', fontSize: SIZES.medium }
+  loginText: { color: COLORS.primary, fontWeight: 'bold', fontSize: SIZES.medium },
 });
 
 export default RegisterScreen;
-
-
-

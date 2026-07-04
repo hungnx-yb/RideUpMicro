@@ -26,7 +26,7 @@ const getStatus = (status) =>
   STATUS_CONFIG[status] || { label: status || 'Không rõ', color: COLORS.textMuted, icon: 'ellipse-outline', bg: 'rgba(160,160,160,0.1)' };
 
 // ===== TRIP CARD =====
-const BookingCard = ({ item, onPress }) => {
+const BookingCard = ({ item, onPress, onChatPress }) => {
   const status = getStatus(item.status);
   const money = (val) => `${Number(val || 0).toLocaleString('vi-VN')}đ`;
   const shortId = (item.bookingCode || item.id || '').slice(0, 8).toUpperCase();
@@ -96,6 +96,20 @@ const BookingCard = ({ item, onPress }) => {
         {/* Dòng kẻ nối 2 icon */}
         <View style={styles.routeLine} />
       </View>
+
+      {/* ── FOOTER: Chat Action ── */}
+      {(item.status === 'CONFIRMED' || item.status === 'RESERVED' || item.status === 'PENDING_PAYMENT') && (
+        <View style={styles.cardFooter}>
+          <TouchableOpacity 
+            style={styles.chatBtn} 
+            onPress={onChatPress}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chatbubble-ellipses" size={16} color={COLORS.primary} />
+            <Text style={styles.chatBtnText}>Nhắn tin tài xế</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -180,6 +194,12 @@ const MyTripsScreen = ({ navigation }) => {
             <BookingCard
               item={item}
               onPress={() => navigation.navigate('Map', { booking: item })}
+              onChatPress={() => navigation.navigate('BookingChat', { 
+                bookingId: item.id, 
+                driverName: item.trip?.driverName || 'Tài xế', 
+                driverAvatar: item.trip?.driverAvatar,
+                vehicleInfo: item.trip?.vehicleType || 'Xe máy'
+              })}
             />
           )}
           contentContainerStyle={styles.listContainer}
@@ -272,6 +292,11 @@ const styles = StyleSheet.create({
   routeAddr: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
   
   routeLine: { position: 'absolute', left: 23, top: 35, width: 2, height: 26, backgroundColor: '#E2E8F0', borderStyle: 'dashed', zIndex: 1 },
+
+  // Footer Card
+  cardFooter: { borderTopWidth: 1, borderTopColor: '#F8FAFC', padding: 12 },
+  chatBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingVertical: 8, borderRadius: 8, gap: 8 },
+  chatBtnText: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
 });
 
 export default MyTripsScreen;

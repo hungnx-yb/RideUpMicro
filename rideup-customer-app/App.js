@@ -1,10 +1,10 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-
 import LoginScreen from './src/screens/LoginScreen';
 import CustomerDashboardScreen from './src/screens/CustomerDashboardScreen';
 import SearchRideScreen from './src/screens/SearchRideScreen';
@@ -63,24 +63,23 @@ function MainTabNavigator() {
   );
 }
 
+const STRIPE_PUBLISHABLE_KEY = "pk_test_51Tnh1VCbDzrK5kTtfmmaD9oTXwuIzcgGGwn65xwB9vdB3JVuNQ7FALsVkad3s11A11MWmSqDwiV0Apq6GSWoqeLu00KUtkUqZ5";
+
 export default function App() {
   return (
-    <NavigationContainer>
-      <StatusBar style="dark" />
-      <Stack.Navigator 
-        initialRouteName="Login"
-        screenOptions={{
-          headerShown: false,
-          cardStyle: { backgroundColor: COLORS.background }
-        }}
-      >
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Register" component={RegisterScreen} />
-        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-        <Stack.Screen name="Map" component={MapScreen} />
-        <Stack.Screen name="Chat" component={BookingChatScreen} />
-        <Stack.Screen name="Rating" component={RatingScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+      <NavigationContainer>
+        <StatusBar style="auto" />
+        <Stack.Navigator initialRouteName="Login">
+          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Main" component={MainTabNavigator} options={{ headerShown: false }} />
+          <Stack.Screen name="SearchRide" component={SearchRideScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Map" component={MapScreen} options={{ title: 'Bản đồ chuyến đi', headerBackTitle: 'Trở lại' }} />
+          <Stack.Screen name="BookingChat" component={BookingChatScreen} options={{ title: 'Trò chuyện', headerBackTitle: 'Trở lại' }} />
+          <Stack.Screen name="Rating" component={RatingScreen} options={{ title: 'Đánh giá chuyến đi', headerBackTitle: 'Trở lại' }} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </StripeProvider>
   );
 }

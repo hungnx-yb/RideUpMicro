@@ -36,7 +36,7 @@ const LoginScreen = ({ navigation }) => {
       if (response.data.code === 1000) {
         const token = response.data.result.token;
         await AsyncStorage.setItem('accessToken', token);
-        navigation.replace('MainTabs');
+        navigation.replace('Main');
       } else {
         setErrorMsg(response.data.message || 'Sai thông tin đăng nhập');
       }

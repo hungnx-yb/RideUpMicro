@@ -44,7 +44,7 @@ const MapScreen = ({ route, navigation }) => {
               <Text style={{color: COLORS.textMuted, marginBottom: 16}}>{booking.pickupLocation} ➝ {booking.dropoffLocation}</Text>
               <TouchableOpacity 
                 style={styles.bookingButton}
-                onPress={() => navigation.navigate('Chat', { bookingId: booking.id })}
+                onPress={() => navigation.navigate('BookingChat', { bookingId: booking.id })}
               >
                 <Text style={styles.bookingText}>NHẮN TIN TÀI XẾ</Text>
               </TouchableOpacity>

@@ -54,8 +54,10 @@ export const apiService = {
   },
 
   // Booking Service
-  createBooking: async (payload) => {
-    return await apiClient.post('/api/booking/bookings', payload);
+  createBooking: async (payload, idempotencyKey) => {
+    return await apiClient.post('/api/booking/bookings', payload, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
   },
   getMyBookings: async () => {
     return await apiClient.get('/api/booking/bookings/my-bookings');
@@ -67,6 +69,9 @@ export const apiService = {
   // Payment Service
   getPaymentUrl: async (bookingId) => {
     return await apiClient.get(`/api/payment/payments/booking/${bookingId}`);
+  },
+  markPaymentPaid: async (paymentId, transactionId) => {
+    return await apiClient.post(`/api/payment/payments/${paymentId}/paid`, { transactionId });
   },
 
   // Trip Service

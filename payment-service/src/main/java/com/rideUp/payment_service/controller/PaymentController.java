@@ -41,13 +41,7 @@ public class PaymentController {
                 .build();
     }
 
-    @GetMapping("/{id}")
-    public ApiResponse<PaymentResponse> getPaymentById(@PathVariable String id) {
-        return ApiResponse.<PaymentResponse>builder()
-                .message("Payment retrieved successfully")
-                .result(paymentService.getPaymentById(id))
-                .build();
-    }
+
 
     @GetMapping("/booking/{bookingId}")
     public ApiResponse<PaymentResponse> getPaymentByBookingId(@PathVariable String bookingId) {
@@ -83,31 +77,4 @@ public class PaymentController {
                 .build();
     }
 
-        @GetMapping("/vnpay/callback")
-        public ApiResponse<PaymentResponse> vnpayCallback(@RequestParam Map<String, String> params) {
-                return ApiResponse.<PaymentResponse>builder()
-                                .message("VNPay callback processed")
-                                .result(paymentService.processVnpayCallback(params))
-                                .build();
-        }
-
-        @GetMapping("/payment_url")
-        public ApiResponse<String> getPaymentUrl(@RequestParam String  bookingId) {
-                return ApiResponse.<String>builder()
-                        .message("Get payment url successfully")
-                        .result(paymentService.getPaymentUrl(bookingId))
-                        .build();
-        }
-
-        @GetMapping("/vnpay/test-url")
-        public ApiResponse<String> generateTestVnpayUrl(
-                @RequestParam String bookingId,
-                @RequestParam BigDecimal amount,
-                HttpServletRequest httpServletRequest
-        ) {
-                return ApiResponse.<String>builder()
-                        .message("Generate VNPay test url successfully")
-                        .result(paymentService.generateTestVnpayUrl(bookingId, amount, httpServletRequest))
-                        .build();
-        }
 }

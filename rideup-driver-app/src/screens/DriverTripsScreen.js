@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
   TouchableOpacity, ActivityIndicator, Modal, RefreshControl, ScrollView, Platform
@@ -103,8 +104,13 @@ export default function DriverTripsScreen({ navigation }) {
 
   useEffect(() => {
     fetchProvinces();
-    fetchTrips();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTrips();
+    }, [filters])
+  );
 
   const fetchProvinces = async () => {
     try {

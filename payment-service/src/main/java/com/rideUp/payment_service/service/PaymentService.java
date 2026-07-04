@@ -1,6 +1,5 @@
 package com.rideUp.payment_service.service;
 
-import com.rideUp.payment_service.config.VnpayConfig;
 import com.rideUp.payment_service.dto.request.CreatePaymentRequest;
 import com.rideUp.payment_service.dto.request.MarkPaymentFailedRequest;
 import com.rideUp.payment_service.dto.request.MarkPaymentPaidRequest;
@@ -12,7 +11,7 @@ import com.rideUp.payment_service.exception.AppException;
 import com.rideUp.payment_service.exception.ErrorCode;
 import com.rideUp.payment_service.kafka.producer.PaymentServicePublisher;
 import com.rideUp.payment_service.repository.PaymentRepository;
-import com.rideUp.payment_service.util.VnpayUtil;
+
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +38,6 @@ public class PaymentService {
 
 	PaymentRepository paymentRepository;
 	PaymentServicePublisher paymentServicePublisher;
-	VnpayConfig vnpayConfig;
 	ModelMapper modelMapper;
 
 	@Transactional
@@ -76,78 +74,28 @@ public class PaymentService {
 
 		Payment savedPayment = paymentRepository.save(payment);
 
-		if (request.getPaymentMethod() == PaymentMethod.VNPAY) {
-			String clientIp = httpServletRequest == null ? "127.0.0.1" : VnpayUtil.getIpAddress(httpServletRequest);
-			String paymentUrl = generateVnpayPaymentUrl(savedPayment, clientIp);
-			savedPayment.setPaymentUrl(paymentUrl);
-			savedPayment.setTransactionId(savedPayment.getId());
-			savedPayment = paymentRepository.save(savedPayment);
+		if (request.getPaymentMethod() == PaymentMethod.STRIPE) {
+			try {
+				com.stripe.param.PaymentIntentCreateParams params =
+						com.stripe.param.PaymentIntentCreateParams.builder()
+								.setAmount(savedPayment.getAmount().longValue())
+								.setCurrency("vnd")
+								.putMetadata("bookingId", savedPayment.getBookingId())
+								.putMetadata("paymentId", savedPayment.getId())
+								.build();
+				com.stripe.model.PaymentIntent paymentIntent = com.stripe.model.PaymentIntent.create(params);
+				savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); // Dùng paymentUrl để lưu clientSecret luôn cho tiện
+				savedPayment.setTransactionId(paymentIntent.getId());
+				savedPayment = paymentRepository.save(savedPayment);
+			} catch (com.stripe.exception.StripeException e) {
+				log.error("Stripe error: ", e);
+				throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+			}
 		}
 
 		return modelMapper.map(savedPayment, PaymentResponse.class);
 	}
 
-	@Transactional
-	public PaymentResponse processVnpayCallback(Map<String, String> callbackParams) {
-		String receivedSignature = callbackParams.get("vnp_SecureHash");
-		if (receivedSignature == null || receivedSignature.isBlank()) {
-			throw new AppException(ErrorCode.INVALID_VNPAY_SIGNATURE);
-		}
-
-		Map<String, String> signData = new HashMap<>(callbackParams);
-		signData.remove("vnp_SecureHash");
-		signData.remove("vnp_SecureHashType");
-
-		String calculatedSignature = VnpayUtil.hmacSHA512(
-				vnpayConfig.getSecretKey(),
-				VnpayUtil.getPaymentURL(signData, false)
-		);
-
-		if (!receivedSignature.equalsIgnoreCase(calculatedSignature)) {
-			throw new AppException(ErrorCode.INVALID_VNPAY_SIGNATURE);
-		}
-
-		String paymentId = callbackParams.get("vnp_TxnRef");
-		if (paymentId == null || paymentId.isBlank()) {
-			throw new AppException(ErrorCode.INVALID_VNPAY_CALLBACK);
-		}
-
-		Payment payment = paymentRepository.findById(paymentId)
-				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
-
-		if (payment.getStatus() == PaymentStatus.PAID || payment.getStatus() == PaymentStatus.FAILED) {
-			return modelMapper.map(payment, PaymentResponse.class);
-		}
-
-		String responseCode = callbackParams.get("vnp_ResponseCode");
-		String transactionNo = callbackParams.get("vnp_TransactionNo");
-		String transactionDate = callbackParams.get("vnp_PayDate");
-		if ("00".equals(responseCode)) {
-			payment.setStatus(PaymentStatus.PAID);
-			payment.setTransactionId(
-					transactionNo == null || transactionNo.isBlank() ? payment.getTransactionId() : transactionNo);
-			payment.setPayDate(transactionDate);
-			payment.setFailureReason(null);
-			payment.setPaidAt(LocalDateTime.now());
-
-			Payment savedPayment = paymentRepository.save(payment);
-			publishPaymentCompleted(savedPayment);
-			return modelMapper.map(savedPayment, PaymentResponse.class);
-		}
-
-		payment.setStatus(PaymentStatus.FAILED);
-		payment.setFailureReason("VNPay response code: " + responseCode);
-		Payment savedPayment = paymentRepository.save(payment);
-		publishPaymentFailed(savedPayment, savedPayment.getFailureReason());
-		return modelMapper.map(savedPayment, PaymentResponse.class);
-	}
-
-	@Transactional(readOnly = true)
-	public PaymentResponse getPaymentById(String paymentId) {
-		Payment payment = paymentRepository.findById(paymentId)
-				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
-		return modelMapper.map(payment, PaymentResponse.class);
-	}
 
 	@Transactional(readOnly = true)
 	public PaymentResponse getPaymentByBookingId(String bookingId) {
@@ -161,7 +109,7 @@ public class PaymentService {
 		Payment payment = paymentRepository.findById(paymentId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-		if (payment.getMethod() != PaymentMethod.CASH) {
+		if (payment.getMethod() != PaymentMethod.CASH && payment.getMethod() != PaymentMethod.STRIPE) {
 			throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
 		}
 
@@ -225,57 +173,6 @@ public class PaymentService {
 
 
 
-	private String generateVnpayPaymentUrl(Payment payment, String clientIp) {
-		Map<String, String> params = vnpayConfig.getBaseParams();
 
-		Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
-		SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
-		String createDate = formatter.format(calendar.getTime());
-		calendar.add(Calendar.MINUTE, vnpayConfig.getExpireMinutes());
-		String expireDate = formatter.format(calendar.getTime());
-
-		BigDecimal amount = payment.getAmount();
-		long vnpAmount = amount.multiply(BigDecimal.valueOf(100)).longValue();
-
-		params.put("vnp_Amount", String.valueOf(vnpAmount));
-		params.put("vnp_IpAddr", clientIp);
-		params.put("vnp_TxnRef", payment.getId());
-		params.put("vnp_OrderInfo", "Thanh toan booking " + payment.getBookingId());
-		params.put("vnp_CreateDate", createDate);
-		params.put("vnp_ExpireDate", expireDate);
-
-		String queryUrl = VnpayUtil.getPaymentURL(params, true);
-		String hashData = VnpayUtil.getPaymentURL(params, false);
-		String secureHash = VnpayUtil.hmacSHA512(vnpayConfig.getSecretKey(), hashData);
-		return vnpayConfig.getPayUrl() + "?" + queryUrl + "&vnp_SecureHash=" + secureHash;
-	}
-
-	public String getPaymentUrl(String bookingId) {
-		return paymentRepository.findByBookingId(bookingId)
-				.map(payment -> payment.getPaymentUrl())
-				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_URL_NOT_FOUND));
-	}
-
-	@Transactional(readOnly = true)
-	public String generateTestVnpayUrl(String bookingId, BigDecimal amount, HttpServletRequest httpServletRequest) {
-		if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-			throw new AppException(ErrorCode.INVALID_PAYMENT_AMOUNT);
-		}
-
-		String resolvedBookingId = (bookingId == null || bookingId.isBlank())
-				? "TEST-BOOKING"
-				: bookingId;
-
-		Payment transientPayment = Payment.builder()
-				.id(UUID.randomUUID().toString())
-				.bookingId(resolvedBookingId)
-				.amount(amount)
-				.method(PaymentMethod.VNPAY)
-				.status(PaymentStatus.PENDING)
-				.build();
-
-		String clientIp = httpServletRequest == null ? "127.0.0.1" : VnpayUtil.getIpAddress(httpServletRequest);
-		return generateVnpayPaymentUrl(transientPayment, clientIp);
-	}
 
 }

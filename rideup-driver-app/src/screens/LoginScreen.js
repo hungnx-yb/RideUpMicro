@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView, 
   Platform,
   ActivityIndicator,
-  Alert
+  Alert,
+  ScrollView
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/apiService';
@@ -57,8 +58,9 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.content}>
-        <View style={styles.headerContainer}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }} enabled={Platform.OS === 'ios'}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.headerContainer}>
           <Text style={styles.logoText}>Ride<Text style={{color: COLORS.primary}}>Up</Text></Text>
           <Text style={styles.subText}>Cùng nhau đi muôn nơi</Text>
         </View>
@@ -93,6 +95,7 @@ const LoginScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -100,7 +103,7 @@ const LoginScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  content: { padding: 24, paddingTop: Platform.OS === 'ios' ? 80 : 100, minHeight: '100%' },
   headerContainer: { alignItems: 'center', marginBottom: 50 },
   logoText: { fontSize: 48, fontWeight: 'bold', color: COLORS.text, letterSpacing: 1 },
   subText: { fontSize: SIZES.medium, color: COLORS.textMuted, marginTop: 8 },

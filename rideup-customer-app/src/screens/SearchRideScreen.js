@@ -12,7 +12,10 @@ import {
   Linking,
   ScrollView,
   TextInput,
+  Alert,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { useStripe } from '@stripe/stripe-react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
@@ -92,7 +95,7 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
 
 // ===== COMPONENT: Custom Calendar =====
 const DAYS_OF_WEEK = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-const MONTHS_VN = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 
 const CustomCalendar = ({ visible, selectedDate, onSelect, onClose }) => {
   const today = new Date();
@@ -196,7 +199,8 @@ const CustomCalendar = ({ visible, selectedDate, onSelect, onClose }) => {
 
 
 // ===== MAIN SCREEN =====
-const SearchRideScreen = ({ navigation }) => {
+export default function SearchRideScreen({ navigation }) {
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -223,6 +227,11 @@ const SearchRideScreen = ({ navigation }) => {
   const [seatCount, setSeatCount] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [bookingNote, setBookingNote] = useState('');
+  const [bookingIdempotencyKey, setBookingIdempotencyKey] = useState('');
+
+  // Success Modal State
+  const [successBooking, setSuccessBooking] = useState(null);
+  const [isRedirectingPayment, setIsRedirectingPayment] = useState(false);
 
   const [pickupWardId, setPickupWardId] = useState('');
   const [pickupLocation, setPickupLocation] = useState({ lat: NaN, lng: NaN, addressText: '' });
@@ -298,6 +307,14 @@ const SearchRideScreen = ({ navigation }) => {
     }
   };
 
+  const generateUuid = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const handleOpenBooking = (trip) => {
     setSelectedTrip(trip);
     const pickups = trip.stops?.filter(s => s.stopType === 'PICKUP') || [];
@@ -309,6 +326,7 @@ const SearchRideScreen = ({ navigation }) => {
     setSeatCount(1);
     setPaymentMethod('CASH');
     setBookingNote('');
+    setBookingIdempotencyKey(generateUuid());
   };
 
   const confirmBooking = async () => {
@@ -340,31 +358,86 @@ const SearchRideScreen = ({ navigation }) => {
         note: bookingNote.trim() || 'Đặt qua Mobile App',
       };
 
-      const response = await apiService.createBooking(payload);
+      const response = await apiService.createBooking(payload, bookingIdempotencyKey);
       if (response.data.code === 1000) {
-        const bookingId = response.data.result.id;
-        if (paymentMethod === 'VNPAY') {
-          const paymentUrlRes = await apiService.getPaymentUrl(bookingId);
-          const paymentUrl = paymentUrlRes?.data?.result?.paymentUrl;
-          if (paymentUrl) {
-            alert('Đang mở cổng thanh toán VNPay...');
-            Linking.openURL(paymentUrl);
-          } else {
-            alert('Không lấy được link thanh toán.');
-          }
-        } else {
-          alert('Đặt chỗ thành công!');
-        }
+        const result = response.data.result;
         setSelectedTrip(null);
-        navigation.navigate('Map', { booking: response.data.result });
+        setBookingIdempotencyKey('');
+        setSuccessBooking({
+          id: result.id,
+          bookingCode: result.bookingCode || '',
+          paymentMethod: paymentMethod,
+        });
       } else {
-        alert(response.data.message || 'Lỗi đặt chuyến');
+        Alert.alert('Lỗi', response.data.message || 'Lỗi đặt chuyến');
       }
     } catch (error) {
-      console.log(error);
-      alert('Không thể tạo booking. Vui lòng thử lại.');
+      const errData = error?.response?.data;
+      const errMsg = errData?.message || error?.message || 'Không thể tạo booking. Vui lòng thử lại.';
+      Alert.alert('Lỗi đặt chỗ', errMsg);
     } finally {
       setIsBooking(false);
+    }
+  };
+
+  // Retry lấy link tối đa 6 lần
+  const getUrlWithRetry = async (bookingId) => {
+    const maxAttempts = 600; // Tăng lên 60 giây để debug backend thoải mái
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await apiService.getPaymentUrl(bookingId);
+        const result = res?.data?.result;
+        if (result?.paymentUrl) return result;
+      } catch (err) {
+        if (attempt === maxAttempts) throw err;
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    return null;
+  };
+
+  const handlePayNow = async () => {
+    if (!successBooking?.id || isRedirectingPayment) return;
+    setIsRedirectingPayment(true);
+    try {
+      const paymentData = await getUrlWithRetry(successBooking.id);
+      if (!paymentData || !paymentData.paymentUrl) {
+        Alert.alert('Chưa sẵn sàng', 'Chưa lấy được thông tin thanh toán. Vui lòng thử lại.');
+        setIsRedirectingPayment(false);
+        return;
+      }
+
+      if (successBooking.paymentMethod === 'STRIPE') {
+        const { error: initError } = await initPaymentSheet({
+          merchantDisplayName: 'RideUp',
+          paymentIntentClientSecret: paymentData.paymentUrl,
+        });
+        if (initError) {
+          Alert.alert('Lỗi khởi tạo', initError.message);
+          setIsRedirectingPayment(false);
+          return;
+        }
+
+        const { error: presentError } = await presentPaymentSheet();
+        if (presentError) {
+          Alert.alert('Thanh toán thất bại', presentError.message);
+        } else {
+          // Báo cho backend biết đã thanh toán thành công (thay cho webhook)
+          try {
+            await apiService.markPaymentPaid(paymentData.id, paymentData.transactionId);
+          } catch (e) {
+            console.warn('Lỗi cập nhật backend:', e);
+          }
+          Alert.alert('Thành công', 'Thanh toán Stripe thành công! Đơn đặt chỗ đã được xác nhận.');
+          setSuccessBooking(null);
+        }
+
+
+      }
+    } catch (error) {
+      Alert.alert('Lỗi thanh toán', 'Không thể khởi tạo thanh toán. Vui lòng thử lại.');
+    } finally {
+      setIsRedirectingPayment(false);
     }
   };
 
@@ -378,7 +451,7 @@ const SearchRideScreen = ({ navigation }) => {
     if (!dep || !arr) return null;
     const mins = Math.round((new Date(arr) - new Date(dep)) / 60000);
     if (mins < 60) return `${mins} phút`;
-    return `${Math.floor(mins/60)}g${mins%60 > 0 ? (mins%60)+'p' : ''}`;
+    return `${Math.floor(mins / 60)}g${mins % 60 > 0 ? (mins % 60) + 'p' : ''}`;
   };
 
   const renderStars = (rating) => {
@@ -393,7 +466,7 @@ const SearchRideScreen = ({ navigation }) => {
 
     return (
       <TouchableOpacity style={styles.tripCard} onPress={() => handleOpenBooking(item)} activeOpacity={0.92}>
-        
+
         {/* === HEADER: TÀI XẾ === */}
         <View style={styles.cardHeader}>
           <View style={styles.driverRow}>
@@ -507,13 +580,13 @@ const SearchRideScreen = ({ navigation }) => {
                 {loadingStartWards
                   ? <ActivityIndicator size="small" color={COLORS.primary} style={{ height: 44, alignSelf: 'center' }} />
                   : <DropdownSelect
-                      label="Chọn Phường/Xã đi"
-                      placeholder="Chọn phường/xã đi"
-                      value={startWardId}
-                      options={startWards}
-                      onSelect={setStartWardId}
-                      disabled={startWards.length === 0}
-                    />
+                    label="Chọn Phường/Xã đi"
+                    placeholder="Chọn phường/xã đi"
+                    value={startWardId}
+                    options={startWards}
+                    onSelect={setStartWardId}
+                    disabled={startWards.length === 0}
+                  />
                 }
               </View>
             </View>
@@ -535,13 +608,13 @@ const SearchRideScreen = ({ navigation }) => {
                 {loadingEndWards
                   ? <ActivityIndicator size="small" color={COLORS.primary} style={{ height: 44, alignSelf: 'center' }} />
                   : <DropdownSelect
-                      label="Chọn Phường/Xã đến"
-                      placeholder="Chọn phường/xã đến"
-                      value={endWardId}
-                      options={endWards}
-                      onSelect={setEndWardId}
-                      disabled={endWards.length === 0}
-                    />
+                    label="Chọn Phường/Xã đến"
+                    placeholder="Chọn phường/xã đến"
+                    value={endWardId}
+                    options={endWards}
+                    onSelect={setEndWardId}
+                    disabled={endWards.length === 0}
+                  />
                 }
               </View>
             </View>
@@ -558,7 +631,7 @@ const SearchRideScreen = ({ navigation }) => {
                       : 'mm/dd/yyyy'}
                   </Text>
                   {selectedDate && (
-                    <TouchableOpacity onPress={() => setSelectedDate(null)} hitSlop={{top:8,bottom:8,left:8,right:8}}>
+                    <TouchableOpacity onPress={() => setSelectedDate(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Ionicons name="close-circle" size={16} color={COLORS.textMuted} />
                     </TouchableOpacity>
                   )}
@@ -638,51 +711,51 @@ const SearchRideScreen = ({ navigation }) => {
                 accentColor="#0ea5e9"
               />
 
-            <View style={styles.selectionRow}>
-              <Text style={styles.selectionLabel}>Số lượng ghế:</Text>
-              <View style={styles.counterBox}>
-                <TouchableOpacity onPress={() => setSeatCount(Math.max(1, seatCount - 1))} style={styles.counterBtn}>
-                  <Text style={styles.counterText}>-</Text>
-                </TouchableOpacity>
-                <Text style={styles.counterValue}>{seatCount}</Text>
-                <TouchableOpacity onPress={() => setSeatCount(Math.min(selectedTrip?.seatAvailable || 1, seatCount + 1))} style={styles.counterBtn}>
-                  <Text style={styles.counterText}>+</Text>
-                </TouchableOpacity>
+              <View style={styles.selectionRow}>
+                <Text style={styles.selectionLabel}>Số lượng ghế:</Text>
+                <View style={styles.counterBox}>
+                  <TouchableOpacity onPress={() => setSeatCount(Math.max(1, seatCount - 1))} style={styles.counterBtn}>
+                    <Text style={styles.counterText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.counterValue}>{seatCount}</Text>
+                  <TouchableOpacity onPress={() => setSeatCount(Math.min(selectedTrip?.seatAvailable || 1, seatCount + 1))} style={styles.counterBtn}>
+                    <Text style={styles.counterText}>+</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.selectionRow}>
-              <Text style={styles.selectionLabel}>Thanh toán:</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity style={[styles.payBtn, paymentMethod === 'CASH' && styles.payBtnActive]} onPress={() => setPaymentMethod('CASH')}>
-                  <Text style={[styles.payBtnText, paymentMethod === 'CASH' && { color: COLORS.background }]}>Tiền mặt</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.payBtn, paymentMethod === 'VNPAY' && styles.payBtnActive]} onPress={() => setPaymentMethod('VNPAY')}>
-                  <Text style={[styles.payBtnText, paymentMethod === 'VNPAY' && { color: COLORS.background }]}>VNPay</Text>
-                </TouchableOpacity>
+              <View style={styles.selectionRow}>
+                <Text style={styles.selectionLabel}>Thanh toán:</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity style={[styles.payBtn, paymentMethod === 'CASH' && styles.payBtnActive]} onPress={() => setPaymentMethod('CASH')}>
+                    <Text style={[styles.payBtnText, paymentMethod === 'CASH' && { color: COLORS.background }]}>Tiền mặt</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.payBtn, paymentMethod === 'STRIPE' && styles.payBtnActive]} onPress={() => setPaymentMethod('STRIPE')}>
+                    <Text style={[styles.payBtnText, paymentMethod === 'STRIPE' && { color: COLORS.background }]}>Stripe (Thẻ)</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.modalPriceBox}>
-              <Text style={styles.modalPriceLabel}>Tổng thanh toán</Text>
-              <Text style={styles.modalPrice}>{formatMoney((selectedTrip?.priceVnd || 0) * seatCount)}</Text>
-            </View>
+              <View style={styles.modalPriceBox}>
+                <Text style={styles.modalPriceLabel}>Tổng thanh toán</Text>
+                <Text style={styles.modalPrice}>{formatMoney((selectedTrip?.priceVnd || 0) * seatCount)}</Text>
+              </View>
 
-            <View style={styles.noteBox}>
-              <Text style={styles.noteLabel}>Ghi chú cho tài xế</Text>
-              <TextInput
-                style={styles.noteInput}
-                placeholder="VD: Đi được từ 7h, gọi trước 10 phút..."
-                placeholderTextColor={COLORS.textMuted}
-                value={bookingNote}
-                onChangeText={setBookingNote}
-                multiline
-                numberOfLines={3}
-                maxLength={200}
-                textAlignVertical="top"
-              />
-              <Text style={styles.noteCount}>{bookingNote.length}/200</Text>
-            </View>
+              <View style={styles.noteBox}>
+                <Text style={styles.noteLabel}>Ghi chú cho tài xế</Text>
+                <TextInput
+                  style={styles.noteInput}
+                  placeholder="VD: Đi được từ 7h, gọi trước 10 phút..."
+                  placeholderTextColor={COLORS.textMuted}
+                  value={bookingNote}
+                  onChangeText={setBookingNote}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={200}
+                  textAlignVertical="top"
+                />
+                <Text style={styles.noteCount}>{bookingNote.length}/200</Text>
+              </View>
 
             </ScrollView>
             <View style={styles.modalActions}>
@@ -696,6 +769,41 @@ const SearchRideScreen = ({ navigation }) => {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Success Modal */}
+      <Modal visible={!!successBooking} transparent animationType="fade">
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <Ionicons name="checkmark-circle" size={70} color={COLORS.green} style={styles.successIcon} />
+            <Text style={styles.successTitle}>Đặt chỗ thành công!</Text>
+            <Text style={styles.successSub}>
+              Mã booking: <Text style={styles.successCode}>{successBooking?.bookingCode || successBooking?.id}</Text>
+            </Text>
+
+            {successBooking?.paymentMethod === 'STRIPE' ? (
+              <View style={styles.stripeBox}>
+                <Text style={styles.stripeDesc}>
+                  Vui lòng thanh toán bằng thẻ tín dụng qua cổng Stripe để hoàn tất đặt chỗ.
+                </Text>
+                <TouchableOpacity style={styles.stripeBtn} onPress={handlePayNow} disabled={isRedirectingPayment}>
+                  {isRedirectingPayment ? <ActivityIndicator color="#fff" /> : <Text style={styles.stripeBtnText}>💳 Thanh toán bằng thẻ</Text>}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.doneBtn}
+                onPress={() => {
+                  setSuccessBooking(null);
+                  navigation.navigate('MyTrips');
+                }}
+              >
+                <Text style={styles.doneBtnText}>Xong</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 };
@@ -757,7 +865,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#F1F5F9',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 4,
   },
-  
+
   // Header
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
   driverRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
@@ -775,10 +883,10 @@ const styles = StyleSheet.create({
   timeBox: { width: 44, paddingTop: 2 },
   timeText: { color: COLORS.text, fontSize: 13, fontWeight: '800' },
   durationText: { color: '#94A3B8', fontSize: 10, marginTop: 4, fontWeight: '600' },
-  
+
   iconBox: { width: 24, alignItems: 'center', zIndex: 2 },
   routeLine: { width: 2, height: 26, backgroundColor: '#E2E8F0', borderStyle: 'dashed', position: 'absolute', top: 20 },
-  
+
   addressBox: { flex: 1, paddingLeft: 8 },
   addressText: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
   subAddressText: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
@@ -846,6 +954,17 @@ const styles = StyleSheet.create({
   calFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
   calClearBtn: { color: COLORS.textMuted, fontSize: SIZES.medium, fontWeight: 'bold', padding: 8 },
   calTodayBtn: { color: COLORS.primary, fontSize: SIZES.medium, fontWeight: 'bold', padding: 8 },
+
+  // Success Modal
+  successOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  successCard: { backgroundColor: COLORS.surface, width: '100%', borderRadius: 24, padding: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 },
+  successIcon: { marginBottom: 16 },
+  successTitle: { fontSize: 24, fontWeight: '900', color: COLORS.text, marginBottom: 8, textAlign: 'center' },
+  successSub: { fontSize: 14, color: COLORS.textMuted, marginBottom: 24, textAlign: 'center' },
+  successCode: { fontWeight: 'bold', color: COLORS.text },
+  payLaterBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
+  payLaterBtnText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 14 },
+  doneBtn: { backgroundColor: COLORS.green, paddingVertical: 14, borderRadius: 16, width: '100%', alignItems: 'center', shadowColor: COLORS.green, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  doneBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
 
-export default SearchRideScreen;

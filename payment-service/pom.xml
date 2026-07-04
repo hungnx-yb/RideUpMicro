@@ -115,6 +115,13 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Stripe -->
+		<dependency>
+			<groupId>com.stripe</groupId>
+			<artifactId>stripe-java</artifactId>
+			<version>24.5.0</version>
+		</dependency>
+
 		<!-- ELK & Tracing -->
 		<dependency>
 			<groupId>net.logstash.logback</groupId>
