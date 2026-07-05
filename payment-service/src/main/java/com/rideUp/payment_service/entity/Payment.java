@@ -64,5 +64,4 @@ public class Payment {
     @UpdateTimestamp
     LocalDateTime updatedAt;
 
-    String payDate;
 }

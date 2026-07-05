@@ -12,6 +12,9 @@ import com.rideUp.payment_service.exception.ErrorCode;
 import com.rideUp.payment_service.kafka.producer.PaymentServicePublisher;
 import com.rideUp.payment_service.repository.PaymentRepository;
 
+import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
+import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +44,7 @@ public class PaymentService {
 	ModelMapper modelMapper;
 
 	@Transactional
-	public PaymentResponse createPayment(CreatePaymentRequest request, HttpServletRequest httpServletRequest) {
+	public PaymentResponse createPayment(CreatePaymentRequest request) {
 		log.info("Creating payment for bookingId={}, method={}, correlationId={}",
 				request.getBookingId(), request.getPaymentMethod(), request.getCorrelationId());
 
@@ -76,18 +79,18 @@ public class PaymentService {
 
 		if (request.getPaymentMethod() == PaymentMethod.STRIPE) {
 			try {
-				com.stripe.param.PaymentIntentCreateParams params =
+				PaymentIntentCreateParams params =
 						com.stripe.param.PaymentIntentCreateParams.builder()
 								.setAmount(savedPayment.getAmount().longValue())
 								.setCurrency("vnd")
 								.putMetadata("bookingId", savedPayment.getBookingId())
 								.putMetadata("paymentId", savedPayment.getId())
 								.build();
-				com.stripe.model.PaymentIntent paymentIntent = com.stripe.model.PaymentIntent.create(params);
+				PaymentIntent paymentIntent = PaymentIntent.create(params);
 				savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); // Dùng paymentUrl để lưu clientSecret luôn cho tiện
 				savedPayment.setTransactionId(paymentIntent.getId());
 				savedPayment = paymentRepository.save(savedPayment);
-			} catch (com.stripe.exception.StripeException e) {
+			} catch (StripeException e) {
 				log.error("Stripe error: ", e);
 				throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
 			}
@@ -119,6 +122,20 @@ public class PaymentService {
 
 		if (payment.getStatus() == PaymentStatus.FAILED) {
 			throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+		}
+
+		// Bảo mật (Cách 1): Xác minh lại với Stripe để chống gian lận
+		if (payment.getMethod() == PaymentMethod.STRIPE) {
+			try {
+				PaymentIntent paymentIntent = PaymentIntent.retrieve(request.getTransactionId());
+				if (!"succeeded".equals(paymentIntent.getStatus())) {
+					log.error("Stripe verification failed for payment {}. Actual Stripe status: {}", paymentId, paymentIntent.getStatus());
+					throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
+				}
+			} catch (com.stripe.exception.StripeException e) {
+				log.error("Error retrieving Stripe PaymentIntent: ", e);
+				throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+			}
 		}
 
 		payment.setStatus(PaymentStatus.PAID);

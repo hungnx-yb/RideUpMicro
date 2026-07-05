@@ -30,19 +30,6 @@ public class PaymentController {
 
     PaymentService paymentService;
 
-    @PostMapping
-    public ApiResponse<PaymentResponse> createPayment(
-            @Valid @RequestBody CreatePaymentRequest request,
-            HttpServletRequest httpServletRequest
-    ) {
-        return ApiResponse.<PaymentResponse>builder()
-                .message("Payment created successfully")
-                .result(paymentService.createPayment(request, httpServletRequest))
-                .build();
-    }
-
-
-
     @GetMapping("/booking/{bookingId}")
     public ApiResponse<PaymentResponse> getPaymentByBookingId(@PathVariable String bookingId) {
         return ApiResponse.<PaymentResponse>builder()

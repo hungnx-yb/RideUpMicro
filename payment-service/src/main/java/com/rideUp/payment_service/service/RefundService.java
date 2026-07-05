@@ -2,7 +2,6 @@ package com.rideUp.payment_service.service;
 
 import com.rideUp.payment_service.enums.PaymentMethod;
 import com.rideUp.payment_service.dto.request.RefundRequest;
-import com.rideUp.payment_service.dto.response.PaymentResponse;
 import com.rideUp.payment_service.dto.response.RefundResponse;
 import com.rideUp.payment_service.entity.Payment;
 import com.rideUp.payment_service.entity.Refund;
@@ -13,6 +12,7 @@ import com.rideUp.payment_service.exception.ErrorCode;
 import com.rideUp.payment_service.kafka.producer.PaymentServicePublisher;
 import com.rideUp.payment_service.repository.PaymentRepository;
 import com.rideUp.payment_service.repository.RefundRepository;
+import com.stripe.param.RefundCreateParams;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -21,12 +21,8 @@ import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+
 import java.util.UUID;
 
 @Slf4j
@@ -68,14 +64,14 @@ public class RefundService {
 
         try {
             if (payment.getMethod() == PaymentMethod.STRIPE) {
-                com.stripe.param.RefundCreateParams refundParams = com.stripe.param.RefundCreateParams.builder()
+                RefundCreateParams refundParams = RefundCreateParams.builder()
                         .setPaymentIntent(payment.getTransactionId())
                         .build();
                 com.stripe.model.Refund stripeRefund = com.stripe.model.Refund.create(refundParams);
 
                 if ("succeeded".equals(stripeRefund.getStatus())) {
                     refund.setStatus(RefundStatus.SUCCESS);
-                    refund.setResponseCode("00"); // 00 for success to maintain compatibility
+                    refund.setResponseCode("00");
                     refund.setRefundedAt(LocalDateTime.now());
                     payment.setStatus(PaymentStatus.REFUNDED);
                     paymentServicePublisher.publishRefundCompleted(refund, refundRequest.getBookingId());

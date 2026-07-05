@@ -68,8 +68,7 @@ public class PaymentServiceConsumer {
                             .amount(event.getAmount())
                             .paymentMethod(paymentMethod)
                             .correlationId(correlationId)
-                            .build(),
-                    null
+                            .build()
             );
         } catch (AppException ex) {
             if (ex.getErrorCode() == ErrorCode.INVALID_PAYMENT_AMOUNT) {
