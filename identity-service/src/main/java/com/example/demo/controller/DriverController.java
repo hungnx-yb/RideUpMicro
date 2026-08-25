@@ -107,7 +107,24 @@ public class DriverController {
                 .result(driverService.getDriverDetailList(driverIds))
                 .message("Driver details retrieved successfully")
                 .build();
-
     }
 
+    @GetMapping("/me/wallet")
+    public ApiResponse<java.math.BigDecimal> getMyWallet() {
+        com.example.demo.entity.User currentUser = driverService.getMyDriverProfile().getUserId() != null ? 
+            null : null; // Hack to use driverService
+        return ApiResponse.<java.math.BigDecimal>builder()
+                .result(driverService.getDriverDebt(driverService.getMyDriverProfile().getId()))
+                .message("Wallet retrieved successfully")
+                .build();
+    }
+
+    @PostMapping("/internal/{driverId}/add-debt")
+    public ApiResponse<Void> addDebtInternal(@PathVariable String driverId, @RequestParam java.math.BigDecimal amount) {
+        driverService.addDriverDebt(driverId, amount);
+        return ApiResponse.<Void>builder()
+                .message("Debt added successfully")
+                .build();
+    }
 }
+

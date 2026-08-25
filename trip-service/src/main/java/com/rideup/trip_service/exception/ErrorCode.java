@@ -53,7 +53,10 @@ public enum ErrorCode {
     TRIP_NOT_FOUND(5001, "Trip not found", HttpStatus.NOT_FOUND),
     INVALID_SEAT_COUNT(5002, "Seat count must be greater than zero", HttpStatus.BAD_REQUEST),
     SEAT_NOT_AVAILABLE(5003, "Not enough available seats", HttpStatus.BAD_REQUEST),
-    VERSION_CONFLICT(5004, "Trip was updated, please retry", HttpStatus.CONFLICT);
+    VERSION_CONFLICT(5004, "Trip was updated, please retry", HttpStatus.CONFLICT),
+    
+    // Wallet / Debt errors
+    ACCOUNT_BLOCKED_DUE_TO_DEBT(6001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN);
 
     private Integer code;
     private String message;

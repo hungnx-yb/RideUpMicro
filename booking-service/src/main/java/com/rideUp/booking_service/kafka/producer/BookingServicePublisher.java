@@ -89,6 +89,29 @@ public class BookingServicePublisher {
         }
     }
 
+    @NonFinal
+    @Value("${app.kafka.topics.booking-approved}")
+    String bookingApprovedTopic;
+
+    @NonFinal
+    @Value("${app.kafka.topics.booking-rejected}")
+    String bookingRejectedTopic;
+
+    @NonFinal
+    @Value("${app.kafka.topics.booking-waiting-approval}")
+    String bookingWaitingApprovalTopic;
+
+    public void publishBookingWaitingApproval(com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(bookingWaitingApprovalTopic, event.getBookingId(), payload);
+            log.info("Published BookingWaitingApprovalEvent eventId={}, bookingId={}, correlationId={}",
+                    event.getEventId(), event.getBookingId(), event.getCorrelationId());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize BookingWaitingApprovalEvent", ex);
+        }
+    }
+
     public void publishBookingCompleted(com.rideUp.booking_service.dto.event.BookingCompletedEvent event) {
         try {
             String payload = objectMapper.writeValueAsString(event);
@@ -100,4 +123,25 @@ public class BookingServicePublisher {
         }
     }
 
+    public void publishBookingApproved(com.rideUp.booking_service.dto.event.BookingApprovedEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(bookingApprovedTopic, event.getBookingId(), payload);
+            log.info("Published BookingApprovedEvent eventId={}, bookingId={}, correlationId={}",
+                    event.getEventId(), event.getBookingId(), event.getCorrelationId());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize BookingApprovedEvent", ex);
+        }
+    }
+
+    public void publishBookingRejected(com.rideUp.booking_service.dto.event.BookingRejectedEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(bookingRejectedTopic, event.getBookingId(), payload);
+            log.info("Published BookingRejectedEvent eventId={}, bookingId={}, correlationId={}",
+                    event.getEventId(), event.getBookingId(), event.getCorrelationId());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize BookingRejectedEvent", ex);
+        }
+    }
 }

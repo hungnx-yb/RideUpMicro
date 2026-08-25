@@ -19,4 +19,6 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     List<Booking> findByTripIdOrderByCreatedAtDesc(String tripId);
 
     List<Booking> findByStatusAndExpiresAtBefore(BookingStatus status, LocalDateTime now);
+
+    List<Booking> findByStatusInAndExpiresAtBefore(List<BookingStatus> statuses, LocalDateTime now);
 }

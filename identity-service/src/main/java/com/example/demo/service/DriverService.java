@@ -220,4 +220,20 @@ public class DriverService {
     public List<DriverResponse>  getDriverDetailList(List<String> driverIds){
         return driverProfileRepository.getDriverDetailList(driverIds);
     }
+
+    public java.math.BigDecimal getDriverDebt(String driverId) {
+        DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+        return driverProfile.getSystemDebt();
+    }
+
+    @Transactional
+    public void addDriverDebt(String driverId, java.math.BigDecimal amount) {
+        DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+        
+        java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
+        driverProfile.setSystemDebt(currentDebt.add(amount));
+        driverProfileRepository.save(driverProfile);
+    }
 }

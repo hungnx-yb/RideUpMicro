@@ -1,6 +1,7 @@
 package com.rideup.notification_service.kafka.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rideup.notification_service.dto.event.BookingWaitingApprovalEvent;
 import com.rideup.notification_service.feignClient.BookingFeignClient;
 import com.rideup.notification_service.feignClient.TripFeignClient;
 import com.rideup.notification_service.dto.event.BookingCancelledEvent;
@@ -116,6 +117,32 @@ public class NotificationConsumer {
 				title,
 				message,
 				NotificationType.BOOKING_COMPLETED,
+				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId())
+		);
+		ack.acknowledge();
+	}
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(topics = "${app.kafka.topics.booking-waiting-approval}", groupId = "${spring.kafka.consumer.group-id}")
+	public void onBookingWaitingApproval(String payload, Acknowledgment ack) throws Exception {
+		BookingWaitingApprovalEvent event = objectMapper.readValue(payload,BookingWaitingApprovalEvent.class);
+		TripResponse trip = resolveTrip(event.getTripId());
+		if (trip == null || trip.getDriverId() == null) {
+			log.warn("Skip booking-waiting-approval notification, trip/driver not found for {}", event.getTripId());
+			ack.acknowledge();
+			return;
+		}
+
+		String driverId = trip.getDriverId();
+		String title = "CÓ YÊU CẦU ĐẶT XE MỚI";
+		String message = String.format("Bạn có một yêu cầu đặt xe mới (%s ghế, %s đ). Hệ thống sẽ tự động hủy sau 15 phút nếu bạn không nhận chuyến.",
+				event.getSeatCount(), event.getTotalAmount());
+				
+		notificationService.createNotification(
+				driverId,
+				title,
+				message,
+				NotificationType.SYSTEM,
 				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId())
 		);
 		ack.acknowledge();

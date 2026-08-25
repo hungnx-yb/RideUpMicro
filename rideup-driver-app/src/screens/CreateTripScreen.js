@@ -264,7 +264,21 @@ export default function CreateTripScreen({ navigation }) {
       });
       setSuccessModalVisible(true);
     } catch (e) {
-      Alert.alert('Lỗi', e.response?.data?.message || 'Không thể tạo chuyến lúc này');
+      const errorCode = e.response?.data?.code;
+      const errorMessage = e.response?.data?.message || '';
+      
+      if (errorCode === 6001 || errorCode === 8001 || errorMessage.includes('ACCOUNT_BLOCKED_DUE_TO_DEBT')) {
+        Alert.alert(
+          'Tạm khóa tạo chuyến',
+          'Dư nợ của bạn đã vượt mức 500.000đ. Vui lòng thanh toán hoa hồng để tiếp tục hoạt động.',
+          [
+            { text: 'Đóng', style: 'cancel' },
+            { text: 'Đi tới Ví', onPress: () => navigation.navigate('Wallet') }
+          ]
+        );
+      } else {
+        Alert.alert('Lỗi', errorMessage || 'Không thể tạo chuyến lúc này');
+      }
     } finally { setSubmitting(false); }
   };
 

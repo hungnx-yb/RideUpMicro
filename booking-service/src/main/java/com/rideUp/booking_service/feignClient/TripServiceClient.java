@@ -6,6 +6,7 @@ import com.rideUp.booking_service.dto.request.SeatReleaseRequest;
 import com.rideUp.booking_service.dto.request.SeatReserveRequest;
 import com.rideUp.booking_service.dto.request.SeatResponse;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -21,4 +22,7 @@ public interface TripServiceClient {
 
     @PostMapping("/seats/release")
     ApiResponse<SeatResponse> releaseSeats(@RequestBody SeatReleaseRequest request);
+
+    @GetMapping("/{id}")
+    ApiResponse<com.rideUp.booking_service.dto.response.TripResponse> getTripById(@org.springframework.web.bind.annotation.PathVariable("id") String id);
 }

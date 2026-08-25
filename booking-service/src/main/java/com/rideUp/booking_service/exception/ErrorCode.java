@@ -33,7 +33,10 @@ public enum ErrorCode {
     // Payment related errors
     PAYMENT_SERVICE_ERROR(7001, "Payment service error occurred", HttpStatus.SERVICE_UNAVAILABLE),
     PAYMENT_FAILED(7002, "Payment processing failed", HttpStatus.BAD_REQUEST),
-    INVALID_TRANSACTION_ID(7003, "Invalid transaction ID", HttpStatus.BAD_REQUEST);
+    INVALID_TRANSACTION_ID(7003, "Invalid transaction ID", HttpStatus.BAD_REQUEST),
+
+    // Wallet / Debt errors
+    ACCOUNT_BLOCKED_DUE_TO_DEBT(8001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN);
 
     private Integer code;
     private String message;

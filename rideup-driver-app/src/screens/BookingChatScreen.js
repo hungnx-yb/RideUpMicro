@@ -22,15 +22,17 @@ const BookingChatScreen = ({ route, navigation }) => {
 
   const loadConversationAndConnect = async () => {
     try {
-      // 1. Lấy hoặc tạo Conversation
-      const convo = await apiService.createConversationByBookingId(bookingId);
+      // 1. Lấy hoặc tạo Conversation — backend trả về ApiResponse<ConversationResponse>, lấy .data.result
+      const convoRes = await apiService.createConversationByBookingId(bookingId);
+      const convo = convoRes?.data?.result;
       setConversation(convo);
 
-      // 2. Lấy lịch sử tin nhắn
+      // 2. Lấy lịch sử tin nhắn — backend trả về ApiResponse<List<MessageResponse>>, lấy .data.result
       if (convo && convo.id) {
         const historyRes = await apiService.listConversationMessages(convo.id, 0, 50);
-        // API trả về mảng tin nhắn mới nhất, cần đảo ngược (hoặc FlatList tự xử lý nếu dùng inverted)
-        setMessages(historyRes.reverse() || []);
+        const messages = historyRes?.data?.result || [];
+        // API trả về mảng tin nhắn mới nhất trước, cần đảo ngược để FlatList hiện đúng thứ tự
+        setMessages([...messages].reverse());
       }
 
       // 3. Kết nối WebSocket toàn cục nếu chưa connect, sau đó subscribe
@@ -50,7 +52,16 @@ const BookingChatScreen = ({ route, navigation }) => {
     // Đăng ký nhận tin nhắn mới
     const unsubscribe = chatSocket.subscribe((newMsg) => {
       if (newMsg.conversationId === conversation.id) {
-        setMessages(prev => [...prev, newMsg]);
+        setMessages(prev => {
+          const existingTempIdx = prev.findIndex(m => m.id?.toString().startsWith('temp-') && m.content === newMsg.content);
+          if (existingTempIdx !== -1) {
+            const newArr = [...prev];
+            newArr[existingTempIdx] = newMsg;
+            return newArr;
+          }
+          if (prev.find(m => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
       }
     });
 
@@ -62,6 +73,16 @@ const BookingChatScreen = ({ route, navigation }) => {
   const sendMessage = async () => {
     if (inputMessage.trim() && conversation) {
       chatSocket.sendMessage(conversation.id, inputMessage.trim());
+      
+      const tempMsg = {
+        id: `temp-${Date.now()}`,
+        conversationId: conversation.id,
+        senderId: 'ME', 
+        content: inputMessage.trim(),
+        createdAt: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, tempMsg]);
+      
       setInputMessage('');
     }
   };
@@ -81,7 +102,7 @@ const BookingChatScreen = ({ route, navigation }) => {
         <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
           <Text style={[styles.messageText, isMyMessage && { color: COLORS.background }]}>{item.content}</Text>
           <Text style={[styles.timeText, isMyMessage && { color: 'rgba(0,0,0,0.5)' }]}>
-            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {new Date(item.createdAt || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
       </View>
@@ -90,7 +111,7 @@ const BookingChatScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtnWrapper}>
             <Ionicons name="chevron-back" size={28} color={COLORS.text} />

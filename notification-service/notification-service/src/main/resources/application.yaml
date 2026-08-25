@@ -135,5 +135,6 @@ app:
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
       booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}
+      booking-waiting-approval: ${KAFKA_TOPIC_BOOKING_WAITING_APPROVAL:booking.waiting.approval}
 
 

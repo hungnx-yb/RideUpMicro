@@ -38,14 +38,14 @@ public class PaymentController {
                 .build();
     }
 
-    @PostMapping("/{id}/paid")
-    public ApiResponse<PaymentResponse> markPaymentPaid(
+    @PostMapping("/{id}/authorize")
+    public ApiResponse<PaymentResponse> authorizePayment(
             @PathVariable String id,
             @Valid @RequestBody MarkPaymentPaidRequest request
     ) {
         return ApiResponse.<PaymentResponse>builder()
-                .message("Payment marked as paid")
-                .result(paymentService.markPaymentPaid(id, request))
+                .message("Payment authorized successfully")
+                .result(paymentService.authorizePayment(id, request))
                 .build();
     }
 
@@ -64,4 +64,19 @@ public class PaymentController {
                 .build();
     }
 
+    @PostMapping("/wallet/deposit")
+    public ApiResponse<PaymentResponse> depositWallet() {
+        return ApiResponse.<PaymentResponse>builder()
+                .message("Deposit initialized")
+                .result(paymentService.depositWallet())
+                .build();
+    }
+
+    @PostMapping("/wallet/confirm")
+    public ApiResponse<Void> confirmDeposit(@RequestParam("transactionId") String transactionId) {
+        paymentService.confirmDeposit(transactionId);
+        return ApiResponse.<Void>builder()
+                .message("Debt cleared successfully")
+                .build();
+    }
 }

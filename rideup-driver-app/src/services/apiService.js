@@ -5,7 +5,7 @@ import { BASE_URL } from '../config/api';
 // 1. Tạo instance của Axios dùng chung
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000, // Timeout 10s
+  timeout: 600000, // Timeout 10 phút (để dễ test/debug)
 });
 
 // 2. Tự động đính kèm Token vào Header trước khi gửi API
@@ -58,6 +58,9 @@ export const apiService = {
   getMyVehicle: async () => {
     return await apiClient.get('/api/identity/vehicles/me');
   },
+  getMyWallet: async () => {
+    return await apiClient.get('/api/identity/drivers/me/wallet');
+  },
 
   // Booking Service
   createBooking: async (payload) => {
@@ -69,13 +72,28 @@ export const apiService = {
   getBookingsByTripId: async (tripId) => {
     return await apiClient.get(`/api/booking/bookings/trip/${tripId}`);
   },
+  getBookingDetail: async (bookingId) => {
+    return await apiClient.get(`/api/booking/bookings/${bookingId}`);
+  },
   rateTrip: async (bookingId, payload) => {
     return await apiClient.post(`/api/booking/bookings/${bookingId}/rate`, payload);
+  },
+  approveBooking: async (bookingId) => {
+    return await apiClient.post(`/api/booking/bookings/${bookingId}/approve`);
+  },
+  rejectBooking: async (bookingId) => {
+    return await apiClient.post(`/api/booking/bookings/${bookingId}/reject`);
   },
 
   // Payment Service
   getPaymentUrl: async (bookingId) => {
     return await apiClient.get(`/api/payment/payments/booking/${bookingId}`);
+  },
+  depositWallet: async () => {
+    return await apiClient.post('/api/payment/payments/wallet/deposit');
+  },
+  confirmDeposit: async (transactionId) => {
+    return await apiClient.post(`/api/payment/payments/wallet/confirm?transactionId=${transactionId}`);
   },
 
   // Trip Service
@@ -104,6 +122,9 @@ export const apiService = {
   getMyNotifications: async () => {
     return await apiClient.get('/api/notification/notifications/my');
   },
+  getUnreadNotificationCount: async () => {
+    return await apiClient.get('/api/notification/notifications/unread-count');
+  },
   markNotificationRead: async (id) => {
     return await apiClient.post(`/api/notification/notifications/${id}/read`);
   },
@@ -112,22 +133,12 @@ export const apiService = {
   },
   // Driver Chat Service
   createConversationByBookingId: async (bookingId) => {
-    try {
-      const response = await fetch(`${BASE_URL}/api/chat/conversations/booking/${bookingId}`, {
-        method: 'POST',
-        headers: await getHeaders(),
-      });
-      return handleResponse(response);
-    } catch (error) { throw error; }
+    return await apiClient.post(`/api/chat/conversations/booking/${bookingId}`);
   },
   listConversationMessages: async (conversationId, page = 0, size = 20) => {
-    try {
-      const response = await fetch(`${BASE_URL}/api/chat/conversations/${conversationId}/messages?page=${page}&size=${size}`, {
-        method: 'GET',
-        headers: await getHeaders(),
-      });
-      return handleResponse(response);
-    } catch (error) { throw error; }
+    return await apiClient.get(`/api/chat/conversations/${conversationId}/messages`, {
+      params: { page, size }
+    });
   }
 };
 

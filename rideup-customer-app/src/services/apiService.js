@@ -5,7 +5,7 @@ import { BASE_URL } from '../config/api';
 // 1. Tạo instance của Axios dùng chung
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000, // Timeout 10s
+  timeout: 600000, // Timeout 10 phút (để dễ test/debug)
 });
 
 // 2. Tự động đính kèm Token vào Header trước khi gửi API
@@ -71,7 +71,7 @@ export const apiService = {
     return await apiClient.get(`/api/payment/payments/booking/${bookingId}`);
   },
   markPaymentPaid: async (paymentId, transactionId) => {
-    return await apiClient.post(`/api/payment/payments/${paymentId}/paid`, { transactionId });
+    return await apiClient.post(`/api/payment/payments/${paymentId}/authorize`, { transactionId });
   },
 
   // Trip Service
@@ -94,11 +94,24 @@ export const apiService = {
   getMyNotifications: async () => {
     return await apiClient.get('/api/notification/notifications/my');
   },
+  getUnreadNotificationCount: async () => {
+    return await apiClient.get('/api/notification/notifications/unread-count');
+  },
   markNotificationRead: async (id) => {
     return await apiClient.post(`/api/notification/notifications/${id}/read`);
   },
   markAllNotificationsRead: async () => {
     return await apiClient.post('/api/notification/notifications/read-all');
+  },
+  
+  // Customer Chat Service
+  createConversationByBookingId: async (bookingId) => {
+    return await apiClient.post(`/api/chat/conversations/booking/${bookingId}`);
+  },
+  listConversationMessages: async (conversationId, page = 0, size = 20) => {
+    return await apiClient.get(`/api/chat/conversations/${conversationId}/messages`, {
+      params: { page, size }
+    });
   }
 };
 

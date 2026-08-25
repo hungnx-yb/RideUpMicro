@@ -12,6 +12,11 @@ public class GlobalExceptionHandler {
     private static final String MIN_ATTRIBUTE = "min";
 
 
+    @ExceptionHandler(value = org.springframework.http.converter.HttpMessageNotWritableException.class)
+    public void handleHttpMessageNotWritableException(org.springframework.http.converter.HttpMessageNotWritableException exception) {
+        log.warn("Ignored HttpMessageNotWritableException (usually from SockJS JSONP fallback): {}", exception.getMessage());
+    }
+
     @ExceptionHandler(value = Exception.class)
     ResponseEntity<ApiResponse<?>> handlingRuntimeException(Exception exception) {
         log.error("Unhandled Exception: ", exception);

@@ -40,6 +40,28 @@ public class PaymentServicePublisher {
     @Value("${app.kafka.topics.refund-completed}")
     String refundCompletedTopic;
 
+    @NonFinal
+    @Value("${app.kafka.topics.payment-authorized}")
+    String paymentAuthorizedTopic;
+
+    public void publishPaymentAuthorized(Payment payment) {
+        com.rideUp.payment_service.dto.event.PaymentAuthorizedEvent event = com.rideUp.payment_service.dto.event.PaymentAuthorizedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .correlationId(payment.getCorrelationId())
+                .bookingId(payment.getBookingId())
+                .paymentId(payment.getId())
+                .transactionId(payment.getTransactionId())
+                .build();
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(paymentAuthorizedTopic, event.getBookingId(), payload);
+            log.info("Published PaymentAuthorizedEvent eventId={}, bookingId={}, paymentId={}",
+                    event.getEventId(), event.getBookingId(), event.getPaymentId());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize PaymentAuthorizedEvent", ex);
+        }
+    }
+
     public void publishPaymentCompleted(Payment payment) {
         PaymentCompletedEvent event = PaymentCompletedEvent.builder()
                 .eventId(UUID.randomUUID().toString())

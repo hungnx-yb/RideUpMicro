@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Linking, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Linking, Image, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import { chatSocket } from '../services/chatSocket';
@@ -11,50 +12,77 @@ const BookingChatScreen = ({ route, navigation }) => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [conversation, setConversation] = useState(null);
+  const [loading, setLoading] = useState(true);
   const flatListRef = useRef(null);
 
   useEffect(() => {
-    let unsubscribe = null;
-    let isMounted = true;
+    loadConversationAndConnect();
+  }, []);
 
-    const setupChat = async () => {
-      try {
-        const convo = await apiService.createConversationByBookingId(bookingId);
-        if (!isMounted) return;
-        setConversation(convo);
+  const loadConversationAndConnect = async () => {
+    try {
+      // 1. Lấy hoặc tạo Conversation — backend trả về ApiResponse<ConversationResponse>, lấy .data.result
+      const convoRes = await apiService.createConversationByBookingId(bookingId);
+      const convo = convoRes?.data?.result;
+      setConversation(convo);
 
-        if (convo?.id) {
-          const historyRes = await apiService.listConversationMessages(convo.id, 0, 50);
-          if (historyRes && isMounted) {
-            setMessages(historyRes.reverse() || []); 
-          }
-        }
-
-        if (!chatSocket.isConnected) {
-          await chatSocket.connect();
-        }
-
-        unsubscribe = chatSocket.subscribe((newMsg) => {
-          if (newMsg.conversationId === convo.id) {
-            setMessages(prev => [...prev, newMsg]);
-          }
-        });
-      } catch (error) {
-        console.log('Customer Chat Setup Error:', error);
+      // 2. Lấy lịch sử tin nhắn — backend trả về ApiResponse<List<MessageResponse>>, lấy .data.result
+      if (convo && convo.id) {
+        const historyRes = await apiService.listConversationMessages(convo.id, 0, 50);
+        const messages = historyRes?.data?.result || [];
+        setMessages([...messages].reverse());
       }
-    };
 
-    setupChat();
+      // 3. Kết nối WebSocket toàn cục nếu chưa connect
+      if (!chatSocket.isConnected) {
+        await chatSocket.connect();
+      }
+    } catch (err) {
+      console.log('Customer Chat Setup Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!conversation) return;
+
+    // Đăng ký nhận tin nhắn mới
+    const unsubscribe = chatSocket.subscribe((newMsg) => {
+      if (newMsg.conversationId === conversation.id) {
+        setMessages(prev => {
+          // Tránh trùng lặp tin nhắn thật từ socket với tin nhắn tạm (optimistic)
+          const existingTempIdx = prev.findIndex(m => m.id?.toString().startsWith('temp-') && m.content === newMsg.content);
+          if (existingTempIdx !== -1) {
+            const newArr = [...prev];
+            newArr[existingTempIdx] = newMsg;
+            return newArr;
+          }
+          if (prev.find(m => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
+      }
+    });
 
     return () => {
-      isMounted = false;
-      if (unsubscribe) unsubscribe();
+      unsubscribe();
     };
-  }, []);
+  }, [conversation]);
 
   const sendMessage = () => {
     if (inputMessage.trim() && conversation) {
       chatSocket.sendMessage(conversation.id, inputMessage.trim());
+      
+      // Optimistic UI: Hiển thị tin nhắn ngay lập tức
+      const tempMsg = {
+        id: `temp-${Date.now()}`,
+        conversationId: conversation.id,
+        senderId: 'ME', 
+        content: inputMessage.trim(),
+        createdAt: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, tempMsg]);
+      
       setInputMessage('');
     }
   };
@@ -72,16 +100,25 @@ const BookingChatScreen = ({ route, navigation }) => {
         <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
           <Text style={[styles.messageText, isMyMessage && { color: COLORS.background }]}>{item.content}</Text>
           <Text style={[styles.timeText, isMyMessage && { color: 'rgba(0,0,0,0.5)' }]}>
-            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {new Date(item.createdAt || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
       </View>
     );
   };
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={{ color: COLORS.textMuted, marginTop: 12, fontSize: 14 }}>Đang kết nối cuộc trò chuyện...</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtnWrapper}>
             <Ionicons name="chevron-back" size={28} color={COLORS.text} />
@@ -114,7 +151,7 @@ const BookingChatScreen = ({ route, navigation }) => {
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item, index) => item.id || index.toString()}
+          keyExtractor={(item, index) => item.id?.toString() || index.toString()}
           renderItem={renderMessage}
           contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}

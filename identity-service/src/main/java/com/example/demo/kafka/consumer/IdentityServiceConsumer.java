@@ -65,6 +65,43 @@ public class IdentityServiceConsumer {
         }
     }
 
+    @RetryableTopic(exclude = {JsonProcessingException.class, IllegalArgumentException.class})
+    @Transactional
+    @KafkaListener(
+            topics = "${app.kafka.topics.booking-completed}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void consumeBookingCompleted(String payload, Acknowledgment ack) {
+        log.info("[Kafka] Received BookingCompletedEvent: {}", payload);
+        try {
+            com.example.demo.dto.event.BookingCompletedEvent event = objectMapper.readValue(payload, com.example.demo.dto.event.BookingCompletedEvent.class);
+            if (event.getDriverId() != null && event.getTotalAmount() != null) {
+                // Calculate 20% commission
+                java.math.BigDecimal commission = event.getTotalAmount().multiply(new java.math.BigDecimal("0.20"));
+                
+                User user = userRepository.findById(event.getDriverId()).orElse(null);
+                if (user != null && user.getDriverProfile() != null) {
+                    DriverProfile driverProfile = user.getDriverProfile();
+                    java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
+                    driverProfile.setSystemDebt(currentDebt.add(commission));
+                    driverProfileRepository.save(driverProfile);
+                    log.info("[Kafka] Added commission {} to driver {}. Total debt: {}", commission, event.getDriverId(), driverProfile.getSystemDebt());
+                } else {
+                    log.warn("[Kafka] DriverProfile not found for driverId: {}", event.getDriverId());
+                }
+            } else {
+                log.warn("[Kafka] BookingCompletedEvent missing driverId or totalAmount. payload={}", payload);
+            }
+            ack.acknowledge();
+        } catch (JsonProcessingException e) {
+            log.error("[Kafka][POISON-PILL] Cannot deserialize BookingCompletedEvent, sending to DLT. payload={}", payload, e);
+            throw new IllegalArgumentException("Poison pill detected", e);
+        } catch (Exception e) {
+            log.error("[Kafka] Transient error processing BookingCompletedEvent.", e);
+            throw e;
+        }
+    }
+
     @DltHandler
     public void handleDlt(String payload, Exception ex) {
         log.error("[DLT] Message permanently failed after all retries. " +

@@ -65,6 +65,7 @@ const LoginScreen = ({ navigation }) => {
             <TextInput
               style={styles.input} placeholder="Nhập email của bạn" placeholderTextColor={COLORS.textMuted}
               value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address"
+              autoComplete="off" textContentType="none" importantForAutofill="no"
             />
           </View>
 
@@ -73,6 +74,7 @@ const LoginScreen = ({ navigation }) => {
             <TextInput
               style={styles.input} placeholder="Nhập mật khẩu" placeholderTextColor={COLORS.textMuted}
               secureTextEntry value={password} onChangeText={setPassword}
+              autoComplete="off" textContentType="oneTimeCode" importantForAutofill="no"
             />
           </View>
 

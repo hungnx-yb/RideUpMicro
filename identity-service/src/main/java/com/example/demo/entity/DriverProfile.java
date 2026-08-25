@@ -41,6 +41,10 @@ public class DriverProfile {
     @Column(name = "created_at", nullable = false, updatable = false)
     LocalDateTime createdAt;
 
+    @Column(name = "system_debt", precision = 15, scale = 2)
+    @Builder.Default
+    java.math.BigDecimal systemDebt = java.math.BigDecimal.ZERO;
+
     @UpdateTimestamp
     @Column(name = "updated_at")
     LocalDateTime updatedAt;

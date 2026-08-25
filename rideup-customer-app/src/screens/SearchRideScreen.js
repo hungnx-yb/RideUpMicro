@@ -13,6 +13,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useStripe } from '@stripe/stripe-react-native';
@@ -396,6 +397,8 @@ export default function SearchRideScreen({ navigation }) {
     return null;
   };
 
+  const [stripeSuccessBooking, setStripeSuccessBooking] = useState(null);
+
   const handlePayNow = async () => {
     if (!successBooking?.id || isRedirectingPayment) return;
     setIsRedirectingPayment(true);
@@ -418,21 +421,26 @@ export default function SearchRideScreen({ navigation }) {
           return;
         }
 
+        // Đợi 1 chút trước khi hiển thị Stripe để UI ổn định (nhưng KHÔNG ĐÓNG modal cũ, tránh xung đột View gốc của HĐH)
+        const currentBooking = successBooking;
+
         const { error: presentError } = await presentPaymentSheet();
+        
         if (presentError) {
           Alert.alert('Thanh toán thất bại', presentError.message);
         } else {
-          // Báo cho backend biết đã thanh toán thành công (thay cho webhook)
+          // Báo cho backend biết đã thanh toán thành công
           try {
             await apiService.markPaymentPaid(paymentData.id, paymentData.transactionId);
           } catch (e) {
             console.warn('Lỗi cập nhật backend:', e);
           }
-          Alert.alert('Thành công', 'Thanh toán Stripe thành công! Đơn đặt chỗ đã được xác nhận.');
+          // Chuyển đổi mượt mà từ Modal thông báo sang Modal Thành công xịn xò
           setSuccessBooking(null);
+          setTimeout(() => {
+            setStripeSuccessBooking(currentBooking);
+          }, 300);
         }
-
-
       }
     } catch (error) {
       Alert.alert('Lỗi thanh toán', 'Không thể khởi tạo thanh toán. Vui lòng thử lại.');
@@ -669,7 +677,8 @@ export default function SearchRideScreen({ navigation }) {
 
       {/* Booking Confirmation Modal */}
       <Modal visible={!!selectedTrip} transparent={false} animationType="slide">
-        <SafeAreaView style={styles.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <SafeAreaView style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Xác nhận đặt chỗ</Text>
@@ -767,39 +776,95 @@ export default function SearchRideScreen({ navigation }) {
               </TouchableOpacity>
             </View>
           </View>
-        </SafeAreaView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* Success Modal */}
-      <Modal visible={!!successBooking} transparent animationType="fade">
-        <View style={styles.successOverlay}>
-          <View style={styles.successCard}>
-            <Ionicons name="checkmark-circle" size={70} color={COLORS.green} style={styles.successIcon} />
-            <Text style={styles.successTitle}>Đặt chỗ thành công!</Text>
-            <Text style={styles.successSub}>
-              Mã booking: <Text style={styles.successCode}>{successBooking?.bookingCode || successBooking?.id}</Text>
-            </Text>
+      {/* Success Modal (Before Payment) - Premium UI */}
+      <Modal visible={!!successBooking} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.85)', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 32, alignItems: 'center', shadowColor: '#0ea5e9', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 30, elevation: 20 }}>
+            {/* Header Icon */}
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 2, borderColor: 'rgba(14, 165, 233, 0.3)' }}>
+              <Ionicons name="receipt" size={40} color="#0ea5e9" />
+            </View>
+            
+            <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>Phiếu Đặt Chỗ</Text>
+            
+            <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8, marginBottom: 20 }}>
+              <Text style={{ fontSize: 13, color: '#475569', fontWeight: 'bold' }}>Mã: {successBooking?.bookingCode || successBooking?.id}</Text>
+            </View>
 
             {successBooking?.paymentMethod === 'STRIPE' ? (
-              <View style={styles.stripeBox}>
-                <Text style={styles.stripeDesc}>
-                  Vui lòng thanh toán bằng thẻ tín dụng qua cổng Stripe để hoàn tất đặt chỗ.
+              <View style={{ width: '100%', alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+                  Vui lòng thanh toán bảo đảm bằng thẻ tín dụng qua cổng Stripe để hoàn tất yêu cầu đặt xe.
                 </Text>
-                <TouchableOpacity style={styles.stripeBtn} onPress={handlePayNow} disabled={isRedirectingPayment}>
-                  {isRedirectingPayment ? <ActivityIndicator color="#fff" /> : <Text style={styles.stripeBtnText}>💳 Thanh toán bằng thẻ</Text>}
+                <TouchableOpacity 
+                  style={{ backgroundColor: '#0F172A', width: '100%', paddingVertical: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }} 
+                  onPress={handlePayNow} 
+                  disabled={isRedirectingPayment}
+                >
+                  {isRedirectingPayment ? <ActivityIndicator color="#fff" /> : (
+                    <>
+                      <Ionicons name="card" size={20} color="#fff" style={{ marginRight: 8 }} />
+                      <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>THANH TOÁN BẰNG THẺ</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                style={styles.doneBtn}
-                onPress={() => {
-                  setSuccessBooking(null);
-                  navigation.navigate('MyTrips');
-                }}
-              >
-                <Text style={styles.doneBtnText}>Xong</Text>
-              </TouchableOpacity>
+              <View style={{ width: '100%', alignItems: 'center' }}>
+                <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+                  Yêu cầu đặt chỗ của bạn đã được gửi. Bạn sẽ thanh toán bằng tiền mặt trực tiếp cho tài xế.
+                </Text>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#10b981', width: '100%', paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }}
+                  onPress={() => {
+                    setSuccessBooking(null);
+                    navigation.navigate('MyTrips');
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>XONG</Text>
+                </TouchableOpacity>
+              </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Stripe Success Modal - Premium UI */}
+      <Modal visible={!!stripeSuccessBooking} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.85)', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 32, alignItems: 'center', shadowColor: '#0ea5e9', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 30, elevation: 20 }}>
+            {/* Header Icon */}
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(16, 185, 129, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 2, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+              <Ionicons name="checkmark-done" size={48} color="#10b981" />
+            </View>
+            
+            <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>Thanh toán thành công!</Text>
+            <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+              Hệ thống đã giữ tiền an toàn qua thẻ tín dụng. Đang chờ tài xế xác nhận yêu cầu của bạn.
+            </Text>
+            
+            {/* Receipt Box */}
+            <View style={{ width: '100%', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>Mã chuyến đi</Text>
+                <Text style={{ color: '#0F172A', fontSize: 15, fontWeight: 'bold' }}>{stripeSuccessBooking?.bookingCode || stripeSuccessBooking?.id}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#0ea5e9', width: '100%', paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: '#0ea5e9', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 }}
+              activeOpacity={0.8}
+              onPress={() => {
+                setStripeSuccessBooking(null);
+                navigation.navigate('MyTrips');
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5 }}>HOÀN TẤT & THEO DÕI</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -966,5 +1031,10 @@ const styles = StyleSheet.create({
   payLaterBtnText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 14 },
   doneBtn: { backgroundColor: COLORS.green, paddingVertical: 14, borderRadius: 16, width: '100%', alignItems: 'center', shadowColor: COLORS.green, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   doneBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  
+  stripeBox: { backgroundColor: 'rgba(14, 165, 233, 0.05)', padding: 20, borderRadius: 16, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(14, 165, 233, 0.2)' },
+  stripeDesc: { color: COLORS.text, fontSize: 13, textAlign: 'center', marginBottom: 16, lineHeight: 20, fontWeight: '500' },
+  stripeBtn: { backgroundColor: COLORS.primary, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 14, width: '100%', alignItems: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  stripeBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
 });
 

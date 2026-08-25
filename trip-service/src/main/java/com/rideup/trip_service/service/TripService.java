@@ -40,6 +40,21 @@ public class TripService {
 
     @Transactional
     public TripResponse createTrip(CreateTripRequest request) {
+        // Kiểm tra nợ của tài xế (Khóa cứng tại Backend)
+        try {
+            var debtResponse = identityServiceClient.getMyWallet();
+            if (debtResponse != null && debtResponse.getResult() != null) {
+                java.math.BigDecimal currentDebt = debtResponse.getResult();
+                if (currentDebt.compareTo(new java.math.BigDecimal("500000")) >= 0) {
+                    throw new AppException(ErrorCode.ACCOUNT_BLOCKED_DUE_TO_DEBT);
+                }
+            }
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Failed to check wallet debt: {}", e.getMessage());
+        }
+
         UserResponse userResponse = identityServiceClient.getUserInfo().getResult();
         List<String> userIds = List.of(userResponse.getId());
         List<DriverResponse> driverResponses = identityServiceClient.getDriverDetail(userIds).getResult();

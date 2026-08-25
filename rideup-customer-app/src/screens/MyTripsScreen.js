@@ -16,10 +16,13 @@ const SIZES = { small: 12, font: 14, medium: 16, large: 20, extraLarge: 24 };
 // ===== STATUS CONFIG =====
 const STATUS_CONFIG = {
   PENDING_PAYMENT: { label: 'Chờ thanh toán', color: '#f97316', icon: 'time-outline', bg: 'rgba(249,115,22,0.12)' },
-  RESERVED:        { label: 'Đã đặt chỗ',     color: COLORS.blue,   icon: 'checkmark-circle-outline', bg: 'rgba(96,165,250,0.12)' },
+  WAITING_DRIVER_APPROVAL: { label: 'Đang chờ tài xế duyệt...', color: '#f59e0b', icon: 'hourglass-outline', bg: 'rgba(245,158,11,0.12)' },
   CONFIRMED:       { label: 'Đã xác nhận',    color: COLORS.green,  icon: 'shield-checkmark-outline', bg: 'rgba(74,222,128,0.12)' },
-  CANCELLED:       { label: 'Đã huỷ',         color: COLORS.error,  icon: 'close-circle-outline',     bg: 'rgba(255,76,76,0.12)' },
   COMPLETED:       { label: 'Hoàn thành',     color: COLORS.green,  icon: 'checkmark-done-outline',   bg: 'rgba(74,222,128,0.12)' },
+  REJECTED_BY_DRIVER: { label: 'Bị từ chối (Đã hoàn tiền)', color: COLORS.error, icon: 'close-circle-outline', bg: 'rgba(255,76,76,0.12)' },
+  EXPIRED:         { label: 'Hết hạn', color: COLORS.error, icon: 'time-outline', bg: 'rgba(255,76,76,0.12)' },
+  CANCELLED_USER:  { label: 'Đã huỷ', color: COLORS.error, icon: 'close-circle-outline', bg: 'rgba(255,76,76,0.12)' },
+  CANCELLED_PAYMENT_FAILED: { label: 'Lỗi thanh toán', color: COLORS.error, icon: 'close-circle-outline', bg: 'rgba(255,76,76,0.12)' }
 };
 
 const getStatus = (status) =>

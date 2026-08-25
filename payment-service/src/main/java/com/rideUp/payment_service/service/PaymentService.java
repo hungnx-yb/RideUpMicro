@@ -42,6 +42,7 @@ public class PaymentService {
 	PaymentRepository paymentRepository;
 	PaymentServicePublisher paymentServicePublisher;
 	ModelMapper modelMapper;
+    com.rideUp.payment_service.feignClient.IdentityServiceClient identityServiceClient;
 
 	@Transactional
 	public PaymentResponse createPayment(CreatePaymentRequest request) {
@@ -83,11 +84,12 @@ public class PaymentService {
 						com.stripe.param.PaymentIntentCreateParams.builder()
 								.setAmount(savedPayment.getAmount().longValue())
 								.setCurrency("vnd")
+								.setCaptureMethod(PaymentIntentCreateParams.CaptureMethod.MANUAL)
 								.putMetadata("bookingId", savedPayment.getBookingId())
 								.putMetadata("paymentId", savedPayment.getId())
 								.build();
 				PaymentIntent paymentIntent = PaymentIntent.create(params);
-				savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); // Dùng paymentUrl để lưu clientSecret luôn cho tiện
+				savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); 
 				savedPayment.setTransactionId(paymentIntent.getId());
 				savedPayment = paymentRepository.save(savedPayment);
 			} catch (StripeException e) {
@@ -108,15 +110,15 @@ public class PaymentService {
 	}
 
 	@Transactional
-	public PaymentResponse markPaymentPaid(String paymentId, MarkPaymentPaidRequest request) {
+	public PaymentResponse authorizePayment(String paymentId, MarkPaymentPaidRequest request) {
 		Payment payment = paymentRepository.findById(paymentId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-		if (payment.getMethod() != PaymentMethod.CASH && payment.getMethod() != PaymentMethod.STRIPE) {
+		if (payment.getMethod() != PaymentMethod.STRIPE) {
 			throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
 		}
 
-		if (payment.getStatus() == PaymentStatus.PAID) {
+		if (payment.getStatus() == PaymentStatus.HOLDING || payment.getStatus() == PaymentStatus.PAID) {
 			return modelMapper.map(payment, PaymentResponse.class);
 		}
 
@@ -124,27 +126,23 @@ public class PaymentService {
 			throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
 		}
 
-		// Bảo mật (Cách 1): Xác minh lại với Stripe để chống gian lận
-		if (payment.getMethod() == PaymentMethod.STRIPE) {
-			try {
-				PaymentIntent paymentIntent = PaymentIntent.retrieve(request.getTransactionId());
-				if (!"succeeded".equals(paymentIntent.getStatus())) {
-					log.error("Stripe verification failed for payment {}. Actual Stripe status: {}", paymentId, paymentIntent.getStatus());
-					throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
-				}
-			} catch (com.stripe.exception.StripeException e) {
-				log.error("Error retrieving Stripe PaymentIntent: ", e);
-				throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+		try {
+			PaymentIntent paymentIntent = PaymentIntent.retrieve(request.getTransactionId());
+			if (!"requires_capture".equals(paymentIntent.getStatus())) {
+				log.error("Stripe verification failed for payment {}. Actual Stripe status: {}", paymentId, paymentIntent.getStatus());
+				throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
 			}
+		} catch (com.stripe.exception.StripeException e) {
+			log.error("Error retrieving Stripe PaymentIntent: ", e);
+			throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
 		}
 
-		payment.setStatus(PaymentStatus.PAID);
+		payment.setStatus(PaymentStatus.HOLDING);
 		payment.setTransactionId(request.getTransactionId());
 		payment.setFailureReason(null);
-		payment.setPaidAt(LocalDateTime.now());
 
 		Payment savedPayment = paymentRepository.save(payment);
-		publishPaymentCompleted(savedPayment);
+		publishPaymentAuthorized(savedPayment);
 		return modelMapper.map(savedPayment, PaymentResponse.class);
 	}
 
@@ -190,6 +188,138 @@ public class PaymentService {
 
 
 
+	private void publishPaymentAuthorized(Payment payment) {
+		try {
+			paymentServicePublisher.publishPaymentAuthorized(payment);
+		} catch (Exception ex) {
+			log.error("Failed to publish payment-authorized event for bookingId={}", payment.getBookingId(), ex);
+			throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
+		}
+	}
 
+	@Transactional
+	public void capturePayment(String bookingId) {
+		Payment payment = paymentRepository.findByBookingId(bookingId)
+				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
+		if (payment.getMethod() != PaymentMethod.STRIPE || payment.getStatus() != PaymentStatus.HOLDING) {
+			return;
+		}
+
+		try {
+			PaymentIntent paymentIntent = PaymentIntent.retrieve(payment.getTransactionId());
+			paymentIntent.capture();
+			payment.setStatus(PaymentStatus.PAID);
+			payment.setPaidAt(LocalDateTime.now());
+			paymentRepository.save(payment);
+			publishPaymentCompleted(payment);
+		} catch (StripeException e) {
+			log.error("Failed to capture payment for bookingId={}", bookingId, e);
+			payment.setStatus(PaymentStatus.FAILED);
+			payment.setFailureReason("Capture failed: " + e.getMessage());
+			paymentRepository.save(payment);
+			publishPaymentFailed(payment, e.getMessage());
+		}
+	}
+
+	@Transactional
+	public void cancelPayment(String bookingId) {
+		Payment payment = paymentRepository.findByBookingId(bookingId)
+				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+
+		if (payment.getMethod() != PaymentMethod.STRIPE || payment.getStatus() != PaymentStatus.HOLDING) {
+			if (payment.getMethod() == PaymentMethod.CASH) {
+				payment.setStatus(PaymentStatus.VOIDED);
+				paymentRepository.save(payment);
+			}
+			return;
+		}
+
+		try {
+			PaymentIntent paymentIntent = PaymentIntent.retrieve(payment.getTransactionId());
+			paymentIntent.cancel();
+			payment.setStatus(PaymentStatus.VOIDED);
+			paymentRepository.save(payment);
+		} catch (StripeException e) {
+			log.error("Failed to cancel payment for bookingId={}", bookingId, e);
+		}
+	}
+
+    @Transactional
+    public PaymentResponse depositWallet() {
+        var userResponse = identityServiceClient.getUserInfo();
+        if (userResponse == null || userResponse.getResult() == null) {
+            throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+        }
+        String driverId = userResponse.getResult().getId();
+
+        var walletResponse = identityServiceClient.getMyWallet();
+        if (walletResponse == null || walletResponse.getResult() == null) {
+            throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+        }
+        BigDecimal debt = walletResponse.getResult();
+
+        if (debt.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new AppException(ErrorCode.INVALID_PAYMENT_AMOUNT); // Cannot deposit if no debt
+        }
+
+        Payment payment = Payment.builder()
+                .bookingId("DEPOSIT-" + driverId) // Mock bookingId for deposit
+                .correlationId(UUID.randomUUID().toString())
+                .amount(debt)
+                .method(PaymentMethod.STRIPE)
+                .status(PaymentStatus.PENDING)
+                .build();
+        
+        Payment savedPayment = paymentRepository.save(payment);
+
+        try {
+            PaymentIntentCreateParams params =
+                    com.stripe.param.PaymentIntentCreateParams.builder()
+                            .setAmount(savedPayment.getAmount().longValue())
+                            .setCurrency("vnd")
+                            .setCaptureMethod(PaymentIntentCreateParams.CaptureMethod.AUTOMATIC)
+                            .putMetadata("paymentId", savedPayment.getId())
+                            .putMetadata("driverId", driverId)
+                            .build();
+            PaymentIntent paymentIntent = PaymentIntent.create(params);
+            savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); 
+            savedPayment.setTransactionId(paymentIntent.getId());
+            savedPayment = paymentRepository.save(savedPayment);
+        } catch (StripeException e) {
+            log.error("Stripe error during deposit: ", e);
+            throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+        }
+
+        return modelMapper.map(savedPayment, PaymentResponse.class);
+    }
+
+    @Transactional
+    public void confirmDeposit(String transactionId) {
+        try {
+            PaymentIntent paymentIntent = PaymentIntent.retrieve(transactionId);
+            if ("succeeded".equals(paymentIntent.getStatus())) {
+                String paymentId = paymentIntent.getMetadata().get("paymentId");
+                String driverId = paymentIntent.getMetadata().get("driverId");
+
+                Payment payment = paymentRepository.findById(paymentId).orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+                if (payment.getStatus() == PaymentStatus.PAID) {
+                    return; // Already processed
+                }
+                
+                payment.setStatus(PaymentStatus.PAID);
+                paymentRepository.save(payment);
+
+                // Clear debt by adding a negative amount equal to the debt paid
+                BigDecimal debtPaid = payment.getAmount();
+                identityServiceClient.addDebtInternal(driverId, debtPaid.negate());
+                log.info("Successfully cleared debt of {} for driver {}", debtPaid, driverId);
+            } else {
+                throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+            }
+        } catch (StripeException e) {
+            log.error("Stripe error retrieving deposit: ", e);
+            throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+        }
+    }
 }

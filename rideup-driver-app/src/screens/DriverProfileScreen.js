@@ -241,8 +241,8 @@ export default function DriverProfileScreen({ navigation }) {
             />
             <View style={styles.divider} />
             <MenuItem 
-              icon="card" title="Ví tài xế & Rút tiền" subtitle="Số dư: 0 đ"
-              onPress={() => Alert.alert('Tính năng', 'Ví điện tử sắp ra mắt')} 
+              icon="card" title="Ví & Hoa hồng" subtitle="Thanh toán chiết khấu"
+              onPress={() => navigation.navigate('Wallet')} 
             />
           </View>
         </View>

@@ -113,6 +113,40 @@ public class PaymentServiceConsumer {
         ack.acknowledge();
     }
 
+    @RetryableTopic(exclude = {JsonProcessingException.class})
+    @KafkaListener(
+            topics = "${app.kafka.topics.booking-approved}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onBookingApproved(String payload, Acknowledgment ack) throws Exception {
+        com.rideUp.payment_service.dto.event.BookingApprovedEvent event = objectMapper.readValue(payload, com.rideUp.payment_service.dto.event.BookingApprovedEvent.class);
+        log.info("[BookingApprovedEvent] eventId={}, bookingId={}", event.getEventId(), event.getBookingId());
+        try {
+            paymentService.capturePayment(event.getBookingId());
+        } catch (Exception ex) {
+            log.error("Failed to capture payment for bookingId={}", event.getBookingId(), ex);
+            throw ex;
+        }
+        ack.acknowledge();
+    }
+
+    @RetryableTopic(exclude = {JsonProcessingException.class})
+    @KafkaListener(
+            topics = "${app.kafka.topics.booking-rejected}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onBookingRejected(String payload, Acknowledgment ack) throws Exception {
+        com.rideUp.payment_service.dto.event.BookingRejectedEvent event = objectMapper.readValue(payload, com.rideUp.payment_service.dto.event.BookingRejectedEvent.class);
+        log.info("[BookingRejectedEvent] eventId={}, bookingId={}", event.getEventId(), event.getBookingId());
+        try {
+            paymentService.cancelPayment(event.getBookingId());
+        } catch (Exception ex) {
+            log.error("Failed to cancel payment for bookingId={}", event.getBookingId(), ex);
+            throw ex;
+        }
+        ack.acknowledge();
+    }
+
     @DltHandler
     public void handleDlt(ConsumerRecord<String, String> record, Exception ex) {
         log.error("[DLT][payment-service] Message permanently failed after all retries. " +

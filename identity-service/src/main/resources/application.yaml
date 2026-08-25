@@ -125,3 +125,4 @@ app:
   kafka:
     topics:
       driver-rating-updated: driver-rating-updated
+      booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}

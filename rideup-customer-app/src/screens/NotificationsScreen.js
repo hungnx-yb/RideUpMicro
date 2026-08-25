@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { NotificationContext } from '../context/NotificationContext';
 import { 
   View, 
   Text, 
@@ -13,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
+import { notificationSocket } from '../services/notificationSocket';
 
 const COLORS = { 
   background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', 
@@ -85,6 +87,7 @@ const NotificationItem = ({ item, onPress }) => {
 };
 
 const NotificationsScreen = () => {
+  const { decrementUnreadCount, clearUnreadCount, fetchUnreadCount } = useContext(NotificationContext);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -107,8 +110,22 @@ const NotificationsScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
+      let unsubscribe = null;
+      
       fetchNotifications();
-    }, [fetchNotifications])
+      fetchUnreadCount(); // Đảm bảo số lượng luôn mới nhất khi mở lại tab này
+      
+      // Lắng nghe socket để update list realtime khi đang mở tab này
+      if (notificationSocket.isConnected) {
+        unsubscribe = notificationSocket.subscribe((newNoti) => {
+          setNotifications(prev => [newNoti, ...prev]);
+        });
+      }
+
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }, [fetchNotifications, fetchUnreadCount])
   );
 
   const handlePress = async (item) => {
@@ -116,6 +133,8 @@ const NotificationsScreen = () => {
     
     // Optimistic update
     setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
+    decrementUnreadCount();
+
     try {
       await apiService.markNotificationRead(item.id);
     } catch (error) {
@@ -135,6 +154,8 @@ const NotificationsScreen = () => {
         onPress: async () => {
           const old = [...notifications];
           setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+          clearUnreadCount();
+          
           try {
             await apiService.markAllNotificationsRead();
           } catch (error) {

@@ -62,19 +62,29 @@ public class BookingService {
         String correlationId = UUID.randomUUID().toString();
         Booking booking = modelMapper.map(request, Booking.class);
         booking.setBookingCode(generateBookingCode());
-        booking.setStatus(request.getPaymentMethod() == PaymentMethod.CASH ? BookingStatus.CONFIRMED : BookingStatus.PENDING);
+        booking.setStatus(request.getPaymentMethod() == PaymentMethod.CASH ? BookingStatus.WAITING_DRIVER_APPROVAL : BookingStatus.PENDING_PAYMENT);
         booking.setPaymentStatus(PaymentStatus.PENDING);
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
         booking.setReservedAt(now);
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
-        booking.setExpiresAt(request.getPaymentMethod() != PaymentMethod.CASH ? now.plusSeconds(expirySeconds) : null);
+        booking.setExpiresAt(now.plusSeconds(expirySeconds)); // Áp dụng cho cả Cash và Stripe
         Booking saved = bookingRepository.save(booking);
         publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId);
 
         if (request.getPaymentMethod() == PaymentMethod.CASH) {
-            publishBookingConfirmed(saved, correlationId);
+            com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent waitEvent = com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .correlationId(correlationId)
+                    .bookingId(saved.getId())
+                    .customerId(saved.getCustomerId())
+                    .tripId(saved.getTripId())
+                    .seatCount(saved.getSeatCount())
+                    .paymentMethod(String.valueOf(request.getPaymentMethod()))
+                    .totalAmount(saved.getTotalAmount())
+                    .createdAt(now)
+                    .build();
+            bookingServicePublisher.publishBookingWaitingApproval(waitEvent);
         }
-
         return modelMapper.map(saved, BookingResponse.class);
     }
 
@@ -86,27 +96,36 @@ public class BookingService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (booking.getStatus() != BookingStatus.PENDING
-                && booking.getStatus() != BookingStatus.CONFIRMED) {
-            return modelMapper.map(booking, BookingResponse.class);
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            booking.setPaymentId(request.getPaymentId());
+            booking.setPaymentStatus(PaymentStatus.PAID);
+            Booking saved = bookingRepository.save(booking);
+            return modelMapper.map(saved, BookingResponse.class);
         }
 
-        boolean wasPending = booking.getStatus() == BookingStatus.PENDING;
+        return modelMapper.map(booking, BookingResponse.class);
+    }
 
-        booking.setPaymentId(request.getPaymentId());
-        if (wasPending) {
-            booking.setStatus(BookingStatus.CONFIRMED);
-        }
-        booking.setPaymentStatus(PaymentStatus.PAID);
-        booking.setExpiresAt(null);
-        booking.setCancelReason(null);
-        booking.setCancelledAt(null);
+    @Transactional
+    public void markBookingWaitingApproval(String bookingId) {
+        Booking booking = bookingRepository.findById(bookingId).orElse(null);
+        if (booking != null && booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+            booking.setStatus(BookingStatus.WAITING_DRIVER_APPROVAL);
+            bookingRepository.save(booking);
 
-        Booking saved = bookingRepository.save(booking);
-        if (wasPending) {
-            publishBookingConfirmed(saved, request.getCorrelationId());
+            com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent waitEvent = com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .correlationId(UUID.randomUUID().toString())
+                    .bookingId(booking.getId())
+                    .customerId(booking.getCustomerId())
+                    .tripId(booking.getTripId())
+                    .seatCount(booking.getSeatCount())
+                    .paymentMethod(PaymentMethod.STRIPE.name())
+                    .totalAmount(booking.getTotalAmount())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            bookingServicePublisher.publishBookingWaitingApproval(waitEvent);
         }
-        return modelMapper.map(saved, BookingResponse.class);
     }
 
     @Transactional
@@ -117,12 +136,7 @@ public class BookingService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (booking.getStatus() == BookingStatus.CANCELLED_PAYMENT_FAILED || booking.getStatus() == BookingStatus.EXPIRED
-                || booking.getStatus() == BookingStatus.CANCELLED_USER) {
-            return modelMapper.map(booking, BookingResponse.class);
-        }
-
-        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+        if (booking.getStatus() == BookingStatus.CONFIRMED || booking.getStatus() == BookingStatus.COMPLETED) {
             return modelMapper.map(booking, BookingResponse.class);
         }
 
@@ -135,9 +149,79 @@ public class BookingService {
                         ? "Payment failed"
                         : request.getReason()
         );
+        booking.setExpiresAt(null);
 
         Booking saved = bookingRepository.save(booking);
         publishBookingCancelled(saved, request.getCorrelationId(), saved.getCancelReason());
+        return modelMapper.map(saved, BookingResponse.class);
+    }
+
+    @Transactional
+    public BookingResponse approveBooking(String bookingId) {
+        // Kiểm tra nợ của tài xế
+        try {
+            var debtResponse = identityServiceClient.getMyWallet();
+            if (debtResponse != null && debtResponse.getResult() != null) {
+                java.math.BigDecimal currentDebt = debtResponse.getResult();
+                if (currentDebt.compareTo(new java.math.BigDecimal("500000")) >= 0) {
+                    throw new AppException(ErrorCode.ACCOUNT_BLOCKED_DUE_TO_DEBT);
+                }
+            }
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Failed to check wallet debt during approveBooking: {}", e.getMessage());
+        }
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (booking.getStatus() != BookingStatus.WAITING_DRIVER_APPROVAL) {
+            throw new AppException(ErrorCode.BOOKING_NOT_FOUND); 
+        }
+
+        booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setExpiresAt(null);
+        Booking saved = bookingRepository.save(booking);
+
+        String correlationId = UUID.randomUUID().toString();
+        publishBookingConfirmed(saved, correlationId);
+
+        com.rideUp.booking_service.dto.event.BookingApprovedEvent event = com.rideUp.booking_service.dto.event.BookingApprovedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .correlationId(correlationId)
+                .bookingId(saved.getId())
+                .build();
+        bookingServicePublisher.publishBookingApproved(event);
+
+        return modelMapper.map(saved, BookingResponse.class);
+    }
+
+    @Transactional
+    public BookingResponse rejectBooking(String bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (booking.getStatus() != BookingStatus.WAITING_DRIVER_APPROVAL) {
+            throw new AppException(ErrorCode.BOOKING_NOT_FOUND); 
+        }
+
+        booking.setStatus(BookingStatus.REJECTED_BY_DRIVER);
+        booking.setCancelledAt(LocalDateTime.now());
+        booking.setCancelReason("Driver rejected");
+        booking.setExpiresAt(null);
+        Booking saved = bookingRepository.save(booking);
+
+        String correlationId = UUID.randomUUID().toString();
+        publishBookingCancelled(saved, correlationId, saved.getCancelReason());
+
+        com.rideUp.booking_service.dto.event.BookingRejectedEvent event = com.rideUp.booking_service.dto.event.BookingRejectedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .correlationId(correlationId)
+                .bookingId(saved.getId())
+                .build();
+        bookingServicePublisher.publishBookingRejected(event);
+
         return modelMapper.map(saved, BookingResponse.class);
     }
 
@@ -146,7 +230,23 @@ public class BookingService {
     public BookingResponse getBookingDetail(String bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
-        return modelMapper.map(booking, BookingResponse.class);
+        
+        BookingResponse response = modelMapper.map(booking, BookingResponse.class);
+        
+        if (booking.getCustomerId() != null && !booking.getCustomerId().isBlank()) {
+            try {
+                var userResponseList = identityServiceClient.getUsersInfoByIds(List.of(booking.getCustomerId())).getResult();
+                if (userResponseList != null && !userResponseList.isEmpty()) {
+                    var user = userResponseList.get(0);
+                    response.setUserName(user.getFullName());
+                    response.setUserAvatar(user.getAvatarUrl());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch user info for booking detail: {}", e.getMessage());
+            }
+        }
+        
+        return response;
     }
 
     public List<BookingResponse> getMyBookings() {
@@ -233,12 +333,24 @@ public class BookingService {
 
         String correlationId = UUID.randomUUID().toString();
         
+        String driverId = null;
+        try {
+            var tripResponse = tripServiceClient.getTripById(saved.getTripId());
+            if (tripResponse != null && tripResponse.getResult() != null) {
+                driverId = tripResponse.getResult().getDriverId();
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to get driverId for trip: {}", saved.getTripId());
+        }
+        
         com.rideUp.booking_service.dto.event.BookingCompletedEvent event = com.rideUp.booking_service.dto.event.BookingCompletedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .correlationId(correlationId)
                 .bookingId(saved.getId())
                 .customerId(saved.getCustomerId())
+                .driverId(driverId)
                 .tripId(saved.getTripId())
+                .totalAmount(saved.getTotalAmount())
                 .completedAt(LocalDateTime.now())
                 .build();
                 
@@ -251,7 +363,7 @@ public class BookingService {
     public int expirePendingBookings() {
         LocalDateTime now = LocalDateTime.now();
         List<Booking> pendingExpiredBookings = bookingRepository
-            .findByStatusAndExpiresAtBefore(BookingStatus.PENDING, now);
+            .findByStatusInAndExpiresAtBefore(List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.WAITING_DRIVER_APPROVAL), now);
 
         if (pendingExpiredBookings.isEmpty()) {
             return 0;
@@ -259,15 +371,27 @@ public class BookingService {
         int expiredCount = 0;
         for (Booking booking : pendingExpiredBookings) {
             try {
-                booking.setStatus(BookingStatus.EXPIRED);
                 booking.setPaymentStatus(PaymentStatus.FAILED);
                 booking.setCancelledAt(now);
-                booking.setCancelReason("Payment timeout");
+                booking.setCancelReason(booking.getStatus() == BookingStatus.PENDING_PAYMENT ? "Payment timeout" : "Driver approval timeout");
                 booking.setStatus(BookingStatus.EXPIRED);
+                booking.setExpiresAt(null);
+                
                 publishBookingCancelled(booking, UUID.randomUUID().toString(), booking.getCancelReason());
+                
+                // Bắn event rejected nếu là đơn chờ duyệt timeout để hoàn tiền hold
+                if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL) {
+                    com.rideUp.booking_service.dto.event.BookingRejectedEvent event = com.rideUp.booking_service.dto.event.BookingRejectedEvent.builder()
+                            .eventId(UUID.randomUUID().toString())
+                            .correlationId(UUID.randomUUID().toString())
+                            .bookingId(booking.getId())
+                            .build();
+                    bookingServicePublisher.publishBookingRejected(event);
+                }
+                
                 expiredCount++;
-            } catch (AppException ex) {
-                log.warn("Failed to auto-expire booking {} due to release error: {}", booking.getId(), ex.getMessage());
+            } catch (Exception ex) {
+                log.warn("Failed to auto-expire booking {}: {}", booking.getId(), ex.getMessage());
             }
         }
         bookingRepository.saveAll(pendingExpiredBookings);

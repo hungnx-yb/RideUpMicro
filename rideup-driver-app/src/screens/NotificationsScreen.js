@@ -135,6 +135,12 @@ const NotificationsScreen = ({ navigation }) => {
   );
 
   const handlePress = async (item) => {
+    // Chuyển hướng tới màn hình Dashboard để xử lý cuốc xe (Approve/Reject)
+    const titleLower = (item.title || '').toLowerCase();
+    if (titleLower.includes('đặt') || titleLower.includes('booking') || titleLower.includes('chờ duyệt') || titleLower.includes('mới')) {
+      navigation.navigate('Dashboard');
+    }
+
     if (item.isRead) return;
     
     // Optimistic update

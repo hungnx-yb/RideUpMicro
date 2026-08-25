@@ -114,10 +114,14 @@ app:
       payment-requested: ${KAFKA_TOPIC_PAYMENT_REQUESTED:booking.payment.requested}
       payment-completed: ${KAFKA_TOPIC_PAYMENT_COMPLETED:payment.completed}
       payment-failed: ${KAFKA_TOPIC_PAYMENT_FAILED:payment.failed}
+      payment-authorized: ${KAFKA_TOPIC_PAYMENT_AUTHORIZED:payment.authorized}
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
       booking-cancell-request: ${KAFKA_TOPIC_BOOKING_CANCELL_REQUEST:booking.cancell.request}
       booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}
+      booking-approved: ${KAFKA_TOPIC_BOOKING_APPROVED:booking.approved}
+      booking-rejected: ${KAFKA_TOPIC_BOOKING_REJECTED:booking.rejected}
+      booking-waiting-approval: ${KAFKA_TOPIC_BOOKING_WAITING_APPROVAL:booking.waiting.approval}
 
 booking:
   expire:

@@ -34,14 +34,36 @@ function isValid(lat, lng) {
 
 async function reverseGeocode(lat, lng) {
   try {
-    const res = await fetch(
-      `${NOMINATIM_URL}?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=vi`
-    );
-    const data = await res.json();
-    return data?.display_name || '';
-  } catch {
-    return '';
+    // Thử API mới: Photon (Dữ liệu từ OpenStreetMap nhưng KHÔNG chặn IP/User-Agent như Nominatim)
+    const photonRes = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
+    if (photonRes.ok) {
+      const data = await photonRes.json();
+      const props = data.features?.[0]?.properties;
+      if (props) {
+        // Gom các thành phần địa chỉ lại: Tên đường, Quận, Thành phố, Quốc gia
+        const parts = [props.name, props.street, props.district, props.city, props.country].filter(Boolean);
+        if (parts.length > 0) return [...new Set(parts)].join(', ');
+      }
+    }
+  } catch (err) {
+    console.log('Photon Geocode failed', err.message);
   }
+
+  // Fallback sang BigDataCloud nếu Nominatim bị Rate-Limit chặn IP
+  try {
+    const fallbackRes = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=vi`
+    );
+    if (fallbackRes.ok) {
+      const data = await fallbackRes.json();
+      const parts = [data.locality, data.city, data.principalSubdivision, data.countryName].filter(Boolean);
+      // Lọc các giá trị trùng lặp
+      return [...new Set(parts)].join(', ');
+    }
+  } catch (err) {
+    console.log('Fallback Geocode failed', err.message);
+  }
+  return '';
 }
 
 // ── Component ──────────────────────────────────────────────────────────────

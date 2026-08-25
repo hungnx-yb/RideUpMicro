@@ -18,4 +18,7 @@ public interface IdentityServiceClient {
 
     @PostMapping("/users")
     ApiResponse<List<UserResponse>> getUsersInfoByIds(@RequestBody List<String> userIds);
+
+    @org.springframework.web.bind.annotation.GetMapping("/drivers/me/wallet")
+    ApiResponse<java.math.BigDecimal> getMyWallet();
 }

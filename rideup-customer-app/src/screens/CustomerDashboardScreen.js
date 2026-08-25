@@ -43,7 +43,7 @@ const CustomerDashboardScreen = ({ navigation }) => {
 
   const fetchProfile = async () => {
     try {
-      const res = await apiService.getMyProfile();
+      const res = await apiService.getMyUserInfo();
       if (res?.data?.result) {
         setUserName(res.data.result.fullName || 'Khách hàng');
         setAvatar(res.data.result.avatarUrl);

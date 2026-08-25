@@ -82,4 +82,20 @@ public class BookingController {
                 .result(bookingService.completeBooking(id))
                 .build();
     }
+
+    @PostMapping("/{id}/approve")
+    public ApiResponse<BookingResponse> approveBooking(@PathVariable String id) {
+        return ApiResponse.<BookingResponse>builder()
+                .message("Booking approved successfully")
+                .result(bookingService.approveBooking(id))
+                .build();
+    }
+
+    @PostMapping("/{id}/reject")
+    public ApiResponse<BookingResponse> rejectBooking(@PathVariable String id) {
+        return ApiResponse.<BookingResponse>builder()
+                .message("Booking rejected successfully")
+                .result(bookingService.rejectBooking(id))
+                .build();
+    }
 }

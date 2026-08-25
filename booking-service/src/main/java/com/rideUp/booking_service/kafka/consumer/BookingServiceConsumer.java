@@ -68,6 +68,21 @@ public class BookingServiceConsumer {
         ack.acknowledge();
     }
 
+    @RetryableTopic(exclude = {JsonProcessingException.class})
+    @KafkaListener(
+            topics = "${app.kafka.topics.payment-authorized}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onPaymentAuthorized(String payload, Acknowledgment ack) throws Exception {
+        com.rideUp.booking_service.dto.event.PaymentAuthorizedEvent event = objectMapper.readValue(payload, com.rideUp.booking_service.dto.event.PaymentAuthorizedEvent.class);
+        log.info("[PaymentAuthorizedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
+                event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
+        
+        bookingService.markBookingWaitingApproval(event.getBookingId());
+        
+        ack.acknowledge();
+    }
+
     @DltHandler
     public void handleDlt(ConsumerRecord<String, String> record, Exception ex) {
         log.error("[DLT][booking-service] Message permanently failed after all retries. " +

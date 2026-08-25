@@ -24,4 +24,7 @@ public interface IdentityServiceClient {
 
     @PostMapping("/drivers/detail")
     ApiResponse<List<DriverResponse>> getDriverDetail(@RequestBody List<String> userIds);
+
+    @GetMapping("/drivers/me/wallet")
+    ApiResponse<java.math.BigDecimal> getMyWallet();
 }
