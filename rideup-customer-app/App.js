@@ -88,7 +88,7 @@ export default function App() {
             <Stack.Screen name="Main" component={MainTabNavigator} options={{ headerShown: false }} />
             <Stack.Screen name="SearchRide" component={SearchRideScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Map" component={MapScreen} options={{ title: 'Bản đồ chuyến đi', headerBackTitle: 'Trở lại' }} />
-            <Stack.Screen name="BookingChat" component={BookingChatScreen} options={{ title: 'Trò chuyện', headerBackTitle: 'Trở lại' }} />
+            <Stack.Screen name="BookingChat" component={BookingChatScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Rating" component={RatingScreen} options={{ title: 'Đánh giá chuyến đi', headerBackTitle: 'Trở lại' }} />
           </Stack.Navigator>
         </NavigationContainer>

@@ -173,7 +173,8 @@ public class ConversationService {
                 return null;
             }
             return users.get(0);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            log.error("Failed to fetch otherUser info from IdentityService: ", e);
             return null;
         }
     }

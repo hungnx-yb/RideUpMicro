@@ -23,6 +23,7 @@ public class ChatController {
 
     @MessageMapping("/chat.send")
     public MessageResponse sendMessage(ChatSendMessageRequest request, Principal principal) {
+        System.out.println("======> /chat.send CALLED: " + request.getContent());
         return messageService.sendMessage(request, principal);
     }
 

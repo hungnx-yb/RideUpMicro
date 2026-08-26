@@ -16,8 +16,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.HandlerMapping;
 
+import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/conversations")
 @RequiredArgsConstructor
@@ -30,6 +32,7 @@ public class ConversationController {
 
     @PostMapping("/booking/{bookingId}")
     public ApiResponse<ConversationResponse> createConversation(@PathVariable String bookingId) {
+        log.info("API createConversationByBookingId is called for bookingId: {}", bookingId);
         ConversationResponse response = conversationService.createOrGetByBookingId(bookingId);
         return ApiResponse.<ConversationResponse>builder()
                 .message("Conversation ready")
@@ -71,6 +74,7 @@ public class ConversationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
         ) {
+        log.info("API listMessages is called for conversationId: {}, page: {}, size: {}", conversationId, page, size);
         Page<MessageResponse> result = messageService.listMessages(conversationId, page, size);
         return ApiResponse.<List<MessageResponse>>builder()
                 .result(result.getContent())

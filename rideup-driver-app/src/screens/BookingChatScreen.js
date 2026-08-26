@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Linking, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Linking, Image, ActivityIndicator, ActionSheetIOS, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import { chatSocket } from '../services/chatSocket';
+import * as ImagePicker from 'expo-image-picker';
+import { Video, ResizeMode } from 'expo-av';
 
 const COLORS = { background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', text: '#0F172A', textMuted: '#64748B', error: '#ef4444', border: '#E2E8F0' };
 const SIZES = { base: 8, small: 12, font: 14, medium: 16, large: 20, extraLarge: 24, title: 32 };
+
+const getMediaUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http') || path.startsWith('file://')) return path;
+  return `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${path}`;
+};
 
 const BookingChatScreen = ({ route, navigation }) => {
   const { bookingId, passengerName, passengerPhone, passengerAvatar } = route.params || {};
@@ -14,6 +22,7 @@ const BookingChatScreen = ({ route, navigation }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [conversation, setConversation] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const flatListRef = useRef(null);
 
   useEffect(() => {
@@ -31,8 +40,8 @@ const BookingChatScreen = ({ route, navigation }) => {
       if (convo && convo.id) {
         const historyRes = await apiService.listConversationMessages(convo.id, 0, 50);
         const messages = historyRes?.data?.result || [];
-        // API trả về mảng tin nhắn mới nhất trước, cần đảo ngược để FlatList hiện đúng thứ tự
-        setMessages([...messages].reverse());
+        // Backend trả về cũ trước mới sau (ascending) — giữ nguyên là đúng
+        setMessages(messages);
       }
 
       // 3. Kết nối WebSocket toàn cục nếu chưa connect, sau đó subscribe
@@ -60,7 +69,7 @@ const BookingChatScreen = ({ route, navigation }) => {
             return newArr;
           }
           if (prev.find(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
+          return [...prev, newMsg]; // Thêm vào cuối — hiển ở dưới cùng
         });
       }
     });
@@ -72,42 +81,113 @@ const BookingChatScreen = ({ route, navigation }) => {
 
   const sendMessage = async () => {
     if (inputMessage.trim() && conversation) {
-      chatSocket.sendMessage(conversation.id, inputMessage.trim());
+      chatSocket.sendMessage(conversation.id, inputMessage.trim(), 'TEXT');
       
       const tempMsg = {
         id: `temp-${Date.now()}`,
         conversationId: conversation.id,
         senderId: 'ME', 
         content: inputMessage.trim(),
+        type: 'TEXT',
         createdAt: new Date().toISOString()
       };
       setMessages(prev => [...prev, tempMsg]);
-      
       setInputMessage('');
     }
   };
 
+  const handlePickMedia = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Hủy', 'Chọn ảnh từ thư viện', 'Chụp ảnh', 'Chọn video'], cancelButtonIndex: 0 },
+        (idx) => {
+          if (idx === 1) pickMedia('library', 'images');
+          else if (idx === 2) pickMedia('camera', 'images');
+          else if (idx === 3) pickMedia('library', 'videos');
+        }
+      );
+    } else {
+      Alert.alert('Gửi file', 'Chọn loại', [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Chọn ảnh', onPress: () => pickMedia('library', 'images') },
+        { text: 'Chụp ảnh', onPress: () => pickMedia('camera', 'images') },
+        { text: 'Video', onPress: () => pickMedia('library', 'videos') },
+      ]);
+    }
+  };
+
+  const pickMedia = async (source, mediaTypes) => {
+    const permResult = source === 'camera'
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permResult.granted) { Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền trong Cài đặt'); return; }
+
+    const result = source === 'camera'
+      ? await ImagePicker.launchCameraAsync({ mediaTypes, quality: 0.8 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes, quality: 0.8, videoMaxDuration: 60 });
+
+    if (result.canceled || !result.assets?.length) return;
+    const asset = result.assets[0];
+    const isVideo = asset.type === 'video';
+    const mimeType = isVideo ? 'video/mp4' : (asset.mimeType || 'image/jpeg');
+    const fileName = asset.fileName || `chat_${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`;
+
+    try {
+      setUploading(true);
+      const uploadRes = await apiService.uploadChatFile(asset.uri, fileName, mimeType);
+      const mediaUrl = uploadRes?.data?.result;
+      if (!mediaUrl) throw new Error('Upload thất bại');
+      const msgType = isVideo ? 'VIDEO' : 'IMAGE';
+      chatSocket.sendMessage(conversation.id, '', msgType, mediaUrl);
+      setMessages(prev => [...prev, {
+        id: `temp-${Date.now()}`, conversationId: conversation.id,
+        senderId: 'ME', content: '', type: msgType,
+        mediaUrl: asset.uri, createdAt: new Date().toISOString()
+      }]);
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể gửi file.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const renderMessage = ({ item }) => {
-    // API trả về senderId, ta tạm định danh "Driver" là chính mình (nếu đúng ID sẽ tốt hơn)
-    // Tạm giả định senderId là id của otherUser (khách hàng), nếu khác thì là mình
     const isMyMessage = conversation?.otherUser?.id ? item.senderId !== conversation.otherUser.id : item.senderId !== 'Customer';
+    const isImage = item.type === 'IMAGE';
+    const isVideo = item.type === 'VIDEO';
 
     return (
       <View style={[styles.messageWrapper, isMyMessage ? styles.myMessageWrapper : styles.otherMessageWrapper]}>
         {!isMyMessage && (
           <View style={styles.avatarMini}>
-            <Text style={styles.avatarMiniText}>{(passengerName || 'K').charAt(0).toUpperCase()}</Text>
+            {conversation?.otherUser?.avatarUrl || passengerAvatar ? (
+              <Image source={{ uri: conversation?.otherUser?.avatarUrl || passengerAvatar }} style={styles.avatarMiniImage} />
+            ) : (
+              <Text style={styles.avatarMiniText}>{(conversation?.otherUser?.fullName || passengerName || 'K').charAt(0).toUpperCase()}</Text>
+            )}
           </View>
         )}
-        <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
-          <Text style={[styles.messageText, isMyMessage && { color: COLORS.background }]}>{item.content}</Text>
-          <Text style={[styles.timeText, isMyMessage && { color: 'rgba(0,0,0,0.5)' }]}>
+        <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage,
+          (isImage || isVideo) && { padding: 4, backgroundColor: 'transparent', borderWidth: 0 }]}>
+          {isImage && item.mediaUrl ? (
+            <Image source={{ uri: getMediaUrl(item.mediaUrl) }} style={styles.mediaImage} resizeMode="cover" />
+          ) : isVideo && item.mediaUrl ? (
+            <Video source={{ uri: getMediaUrl(item.mediaUrl) }} style={styles.mediaVideo} useNativeControls resizeMode={ResizeMode.CONTAIN} isLooping={false} />
+          ) : (
+            <Text style={[styles.messageText, isMyMessage && { color: COLORS.background }]}>{item.content}</Text>
+          )}
+          <Text style={[styles.timeText, isMyMessage && { color: 'rgba(255,255,255,0.6)' },
+            (isImage || isVideo) && { color: COLORS.textMuted }]}>
             {new Date(item.createdAt || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
       </View>
     );
   };
+
+  const displayPassengerName = conversation?.otherUser?.fullName || (passengerName && passengerName !== 'Khách hàng' ? passengerName : null) || 'Khách hàng';
+  const displayPassengerAvatar = conversation?.otherUser?.avatarUrl || passengerAvatar;
+  const displayPassengerPhone = conversation?.otherUser?.phoneNumber || passengerPhone || '0987654321';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -118,23 +198,23 @@ const BookingChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
           <View style={styles.headerInfo}>
             <View style={styles.avatarContainer}>
-              {passengerAvatar ? (
-                <Image source={{ uri: passengerAvatar }} style={styles.avatarImage} />
+              {displayPassengerAvatar ? (
+                <Image source={{ uri: displayPassengerAvatar }} style={styles.avatarImage} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarText}>{(passengerName || 'K').charAt(0).toUpperCase()}</Text>
+                  <Text style={styles.avatarText}>{displayPassengerName.charAt(0).toUpperCase()}</Text>
                 </View>
               )}
               <View style={styles.onlineBadge} />
             </View>
             <View>
-              <Text style={styles.headerTitle}>{passengerName || 'Khách hàng'}</Text>
+              <Text style={styles.headerTitle}>{displayPassengerName}</Text>
               <Text style={styles.headerSubTitle}>Đang hoạt động</Text>
             </View>
           </View>
           <TouchableOpacity
             style={styles.callBtn}
-            onPress={() => Linking.openURL(`tel:${passengerPhone || '0987654321'}`)}
+            onPress={() => Linking.openURL(`tel:${displayPassengerPhone}`)}
             activeOpacity={0.8}
           >
             <Ionicons name="call" size={18} color="#FFFFFF" />
@@ -146,15 +226,17 @@ const BookingChatScreen = ({ route, navigation }) => {
           data={messages}
           keyExtractor={(item, index) => index.toString()}
           renderItem={renderMessage}
-          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', padding: 16, paddingBottom: 24 }}
+          showsVerticalScrollIndicator={true}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          showsVerticalScrollIndicator={false}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
 
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachBtn}>
-            <Ionicons name="add-circle" size={28} color={COLORS.textMuted} />
+          <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia} disabled={uploading}>
+            {uploading
+              ? <ActivityIndicator size="small" color={COLORS.primary} />
+              : <Ionicons name="add-circle" size={28} color={COLORS.primary} />}
           </TouchableOpacity>
           <View style={styles.inputWrapper}>
             <TextInput
@@ -202,6 +284,7 @@ const styles = StyleSheet.create({
   myMessageWrapper: { justifyContent: 'flex-end' },
   otherMessageWrapper: { justifyContent: 'flex-start' },
   avatarMini: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  avatarMiniImage: { width: '100%', height: '100%', borderRadius: 14 },
   avatarMiniText: { color: COLORS.text, fontSize: 12, fontWeight: 'bold' },
 
   messageBubble: { maxWidth: '75%', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20 },
@@ -215,6 +298,8 @@ const styles = StyleSheet.create({
   inputWrapper: { flex: 1, backgroundColor: COLORS.background, borderRadius: 24, minHeight: 44, maxHeight: 100, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 10, marginHorizontal: 8, borderWidth: 1, borderColor: COLORS.border },
   input: { color: COLORS.text, fontSize: 15, paddingTop: 0, paddingBottom: 0 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
+  mediaImage: { width: 220, height: 180, borderRadius: 14 },
+  mediaVideo: { width: 220, height: 160, borderRadius: 14 },
 });
 
 export default BookingChatScreen;

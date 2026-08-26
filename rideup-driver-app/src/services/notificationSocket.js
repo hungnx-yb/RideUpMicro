@@ -1,5 +1,4 @@
-import SockJS from 'sockjs-client';
-import { Stomp } from '@stomp/stompjs';
+import { Client } from '@stomp/stompjs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../config/api';
 
@@ -16,26 +15,39 @@ class NotificationSocketService {
     if (!token) return;
 
     try {
-      const socket = new SockJS(`${BASE_URL}/api/notification/ws/notifications`);
-      this.client = Stomp.over(socket);
-      this.client.debug = () => {};
+      const wsUrl = BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/api/notification/ws/notifications/websocket';
       
-      this.client.connect({ Authorization: `Bearer ${token}` }, (frame) => {
-        console.log('Customer Notification Socket Connected');
-        this.isConnected = true;
-        
-        this.client.subscribe(`/user/queue/notifications`, (message) => {
-          if (message.body) {
-            try {
-              const parsed = JSON.parse(message.body);
-              this.subscribers.forEach(cb => cb(parsed));
-            } catch (e) { console.error('Parse notification message error', e); }
-          }
-        });
-      }, (error) => {
-         console.log('Notification Socket Connection Error: ', error);
-         this.isConnected = false;
+      this.client = new Client({
+        webSocketFactory: () => new WebSocket(wsUrl),
+        connectHeaders: { Authorization: `Bearer ${token}` },
+        forceBinaryWSFrames: true,
+        appendMissingNULLonIncoming: true,
+        debug: function (str) {},
+        reconnectDelay: 5000,
+        heartbeatIncoming: 4000,
+        heartbeatOutgoing: 4000,
+        onConnect: (frame) => {
+          console.log('Global Notification Socket Connected:', frame);
+          this.isConnected = true;
+          
+          this.client.subscribe(`/user/queue/notifications`, (message) => {
+            if (message.body) {
+              try {
+                const parsed = JSON.parse(message.body);
+                this.subscribers.forEach(cb => cb(parsed));
+              } catch (e) { console.error('Parse notification error', e); }
+            }
+          });
+        },
+        onStompError: (frame) => {
+          this.isConnected = false;
+        },
+        onWebSocketClose: () => {
+          this.isConnected = false;
+        }
       });
+      
+      this.client.activate();
     } catch (err) {
       console.log('Notification Socket Init Error:', err);
     }

@@ -1,5 +1,4 @@
-import SockJS from 'sockjs-client';
-import { Stomp } from '@stomp/stompjs';
+import { Client } from '@stomp/stompjs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../config/api';
 
@@ -8,6 +7,7 @@ class ChatSocketService {
     this.client = null;
     this.subscribers = new Set();
     this.isConnected = false;
+    this.messageQueue = [];
   }
 
   async connect() {
@@ -16,25 +16,52 @@ class ChatSocketService {
     if (!token) return;
 
     try {
-      const socket = new SockJS(`${BASE_URL}/api/chat/ws/chat`);
-      this.client = Stomp.over(socket);
+      const wsUrl = BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/api/chat/ws/chat/websocket';
       
-      this.client.connect({ Authorization: `Bearer ${token}` }, (frame) => {
-        console.log('Global Chat Socket Connected:', frame);
-        this.isConnected = true;
-        
-        this.client.subscribe(`/user/queue/messages`, (message) => {
-          if (message.body) {
-            try {
-              const parsed = JSON.parse(message.body);
-              this.subscribers.forEach(cb => cb(parsed));
-            } catch (e) { console.error('Parse message error', e); }
+      this.client = new Client({
+        webSocketFactory: () => new WebSocket(wsUrl),
+        connectHeaders: { Authorization: `Bearer ${token}` },
+        forceBinaryWSFrames: true,
+        appendMissingNULLonIncoming: true,
+        debug: function (str) {
+          // console.log(str);
+        },
+        reconnectDelay: 5000,
+        heartbeatIncoming: 4000,
+        heartbeatOutgoing: 4000,
+        onConnect: (frame) => {
+          console.log('Global Chat Socket Connected:', frame);
+          this.isConnected = true;
+
+          while (this.messageQueue.length > 0) {
+            const msg = this.messageQueue.shift();
+            this.client.publish(msg);
           }
-        });
-      }, (error) => {
-         console.log('Socket Connection Error: ', error);
-         this.isConnected = false;
+          
+          this.client.subscribe(`/user/queue/messages`, (message) => {
+            if (message.body) {
+              try {
+                const parsed = JSON.parse(message.body);
+                this.subscribers.forEach(cb => cb(parsed));
+              } catch (e) { console.error('Parse message error', e); }
+            }
+          });
+        },
+        onStompError: (frame) => {
+          console.log('Socket STOMP Error: ', frame.headers['message']);
+          this.isConnected = false;
+        },
+        onWebSocketClose: () => {
+          console.log('Socket Closed');
+          this.isConnected = false;
+        },
+        onWebSocketError: (error) => {
+          console.log('Socket WS Error: ', error);
+          this.isConnected = false;
+        }
       });
+      
+      this.client.activate();
     } catch (err) {
       console.log('Socket Init Error:', err);
     }
@@ -53,15 +80,23 @@ class ChatSocketService {
     return () => this.subscribers.delete(callback);
   }
 
-  sendMessage(conversationId, content) {
+  sendMessage(conversationId, content, type = 'TEXT', mediaUrl = null) {
+    const body = { conversationId, type, content };
+    if (mediaUrl) body.mediaUrl = mediaUrl;
+
+    const payload = {
+      destination: '/app/chat.send',
+      body: JSON.stringify(body)
+    };
+
     if (this.client && this.isConnected) {
-      this.client.send('/app/chat.send', {}, JSON.stringify({
-        conversationId,
-        type: 'TEXT',
-        content
-      }));
+      this.client.publish(payload);
     } else {
-      console.log('Socket not connected, cannot send message');
+      console.log('Socket not connected, queuing message...');
+      this.messageQueue.push(payload);
+      if (!this.client || !this.client.active) {
+        this.connect();
+      }
     }
   }
 }

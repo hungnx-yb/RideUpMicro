@@ -112,6 +112,13 @@ export const apiService = {
     return await apiClient.get(`/api/chat/conversations/${conversationId}/messages`, {
       params: { page, size }
     });
+  },
+  uploadChatFile: async (fileUri, fileName, mimeType) => {
+    const formData = new FormData();
+    formData.append('file', { uri: fileUri, name: fileName, type: mimeType });
+    return await apiClient.post('/api/chat/file/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
   }
 };
 

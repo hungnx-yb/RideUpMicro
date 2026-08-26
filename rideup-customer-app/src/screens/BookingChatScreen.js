@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Linking, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Linking, Image, ActivityIndicator, ActionSheetIOS, Alert, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import { chatSocket } from '../services/chatSocket';
+import * as ImagePicker from 'expo-image-picker';
+import { Video, ResizeMode } from 'expo-av';
 
 const COLORS = { background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', text: '#0F172A', textMuted: '#64748B', border: '#E2E8F0', success: '#10b981' };
+
+const getMediaUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http') || path.startsWith('file://')) return path; // Dành cho URI local (Optimistic UI) hoặc đã có đầy đủ protocol
+  return `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${path}`;
+};
 
 const BookingChatScreen = ({ route, navigation }) => {
   const { bookingId, driverName, driverPhone, driverAvatar, vehicleInfo } = route.params || {};
@@ -13,6 +21,7 @@ const BookingChatScreen = ({ route, navigation }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [conversation, setConversation] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const flatListRef = useRef(null);
 
   useEffect(() => {
@@ -21,6 +30,7 @@ const BookingChatScreen = ({ route, navigation }) => {
 
   const loadConversationAndConnect = async () => {
     try {
+      console.log('Customer App: Calling createConversationByBookingId for bookingId =', bookingId);
       // 1. Lấy hoặc tạo Conversation — backend trả về ApiResponse<ConversationResponse>, lấy .data.result
       const convoRes = await apiService.createConversationByBookingId(bookingId);
       const convo = convoRes?.data?.result;
@@ -30,7 +40,8 @@ const BookingChatScreen = ({ route, navigation }) => {
       if (convo && convo.id) {
         const historyRes = await apiService.listConversationMessages(convo.id, 0, 50);
         const messages = historyRes?.data?.result || [];
-        setMessages([...messages].reverse());
+        // Backend trả về cũ trước mới sau (ascending) — giữ nguyên là đúng
+        setMessages(messages);
       }
 
       // 3. Kết nối WebSocket toàn cục nếu chưa connect
@@ -59,7 +70,7 @@ const BookingChatScreen = ({ route, navigation }) => {
             return newArr;
           }
           if (prev.find(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
+          return [...prev, newMsg]; // Thêm vào cuối — hiển ở dưới cùng
         });
       }
     });
@@ -71,7 +82,7 @@ const BookingChatScreen = ({ route, navigation }) => {
 
   const sendMessage = () => {
     if (inputMessage.trim() && conversation) {
-      chatSocket.sendMessage(conversation.id, inputMessage.trim());
+      chatSocket.sendMessage(conversation.id, inputMessage.trim(), 'TEXT');
       
       // Optimistic UI: Hiển thị tin nhắn ngay lập tức
       const tempMsg = {
@@ -79,27 +90,123 @@ const BookingChatScreen = ({ route, navigation }) => {
         conversationId: conversation.id,
         senderId: 'ME', 
         content: inputMessage.trim(),
+        type: 'TEXT',
         createdAt: new Date().toISOString()
       };
-      setMessages(prev => [...prev, tempMsg]);
+      setMessages(prev => [...prev, tempMsg]); // Thêm vào cuối — hiển ở dưới cùng
       
       setInputMessage('');
     }
   };
 
+  const handlePickMedia = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Hủy', 'Chọn ảnh từ thư viện', 'Chụp ảnh', 'Chọn video từ thư viện'],
+          cancelButtonIndex: 0,
+        },
+        (idx) => {
+          if (idx === 1) pickImage('library', 'images');
+          else if (idx === 2) pickImage('camera', 'images');
+          else if (idx === 3) pickImage('library', 'videos');
+        }
+      );
+    } else {
+      Alert.alert('Gửi file', 'Chọn loại', [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Chọn ảnh', onPress: () => pickImage('library', 'images') },
+        { text: 'Chụp ảnh', onPress: () => pickImage('camera', 'images') },
+        { text: 'Video', onPress: () => pickImage('library', 'videos') },
+      ]);
+    }
+  };
+
+  const pickImage = async (source, mediaTypes) => {
+    const permResult = source === 'camera'
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permResult.granted) {
+      Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền truy cập trong Cài đặt');
+      return;
+    }
+
+    const result = source === 'camera'
+      ? await ImagePicker.launchCameraAsync({ mediaTypes, quality: 0.8, allowsEditing: false })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes, quality: 0.8, allowsEditing: false, videoMaxDuration: 60 });
+
+    if (result.canceled || !result.assets?.length) return;
+
+    const asset = result.assets[0];
+    const isVideo = asset.type === 'video';
+    const mimeType = isVideo ? 'video/mp4' : (asset.mimeType || 'image/jpeg');
+    const fileName = asset.fileName || `chat_${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`;
+
+    try {
+      setUploading(true);
+      const uploadRes = await apiService.uploadChatFile(asset.uri, fileName, mimeType);
+      const mediaUrl = uploadRes?.data?.result;
+      if (!mediaUrl) throw new Error('Upload thất bại');
+
+      const msgType = isVideo ? 'VIDEO' : 'IMAGE';
+      chatSocket.sendMessage(conversation.id, '', msgType, mediaUrl);
+
+      // Optimistic UI
+      const tempMsg = {
+        id: `temp-${Date.now()}`,
+        conversationId: conversation.id,
+        senderId: 'ME',
+        content: '',
+        type: msgType,
+        mediaUrl: asset.uri, // dùng local URI tạm
+        createdAt: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, tempMsg]);
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể gửi file. Vui lòng thử lại.');
+      console.log('Upload error:', e);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const renderMessage = ({ item }) => {
     const isMyMessage = conversation?.otherUser?.id ? item.senderId !== conversation.otherUser.id : item.senderId !== 'Driver';
+    const isImage = item.type === 'IMAGE';
+    const isVideo = item.type === 'VIDEO';
 
     return (
       <View style={[styles.messageWrapper, isMyMessage ? styles.myMessageWrapper : styles.otherMessageWrapper]}>
         {!isMyMessage && (
           <View style={styles.avatarMini}>
-            <Text style={styles.avatarMiniText}>{(driverName || 'T').charAt(0).toUpperCase()}</Text>
+            {conversation?.otherUser?.avatarUrl || driverAvatar ? (
+              <Image source={{ uri: conversation?.otherUser?.avatarUrl || driverAvatar }} style={styles.avatarMiniImage} />
+            ) : (
+              <Text style={styles.avatarMiniText}>{(conversation?.otherUser?.fullName || driverName || 'T').charAt(0).toUpperCase()}</Text>
+            )}
           </View>
         )}
-        <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
-          <Text style={[styles.messageText, isMyMessage && { color: COLORS.background }]}>{item.content}</Text>
-          <Text style={[styles.timeText, isMyMessage && { color: 'rgba(0,0,0,0.5)' }]}>
+        <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage,
+          (isImage || isVideo) && { padding: 4, backgroundColor: 'transparent', borderWidth: 0 }]}>
+          {isImage && item.mediaUrl ? (
+            <Image
+              source={{ uri: getMediaUrl(item.mediaUrl) }}
+              style={styles.mediaImage}
+              resizeMode="cover"
+            />
+          ) : isVideo && item.mediaUrl ? (
+            <Video
+              source={{ uri: getMediaUrl(item.mediaUrl) }}
+              style={styles.mediaVideo}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              isLooping={false}
+            />
+          ) : (
+            <Text style={[styles.messageText, isMyMessage && { color: COLORS.background }]}>{item.content}</Text>
+          )}
+          <Text style={[styles.timeText, isMyMessage && { color: 'rgba(255,255,255,0.6)' },
+            (isImage || isVideo) && { color: COLORS.textMuted }]}>
             {new Date(item.createdAt || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
@@ -116,6 +223,10 @@ const BookingChatScreen = ({ route, navigation }) => {
     );
   }
 
+  const displayDriverName = conversation?.otherUser?.fullName || (driverName && driverName !== 'Tài xế' ? driverName : null) || 'Tài xế';
+  const displayDriverAvatar = conversation?.otherUser?.avatarUrl || driverAvatar;
+  const displayDriverPhone = conversation?.otherUser?.phoneNumber || driverPhone || '0987654321';
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
@@ -125,23 +236,23 @@ const BookingChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
           <View style={styles.headerInfo}>
             <View style={styles.avatarContainer}>
-              {driverAvatar ? (
-                <Image source={{ uri: driverAvatar }} style={styles.avatarImage} />
+              {displayDriverAvatar ? (
+                <Image source={{ uri: displayDriverAvatar }} style={styles.avatarImage} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarText}>{(driverName || 'T').charAt(0).toUpperCase()}</Text>
+                  <Text style={styles.avatarText}>{displayDriverName.charAt(0).toUpperCase()}</Text>
                 </View>
               )}
               <View style={styles.onlineBadge} />
             </View>
             <View>
-              <Text style={styles.headerTitle}>{driverName || 'Tài xế'}</Text>
+              <Text style={styles.headerTitle}>{displayDriverName}</Text>
               <Text style={styles.headerSubTitle}>{vehicleInfo || 'Đang hoạt động'}</Text>
             </View>
           </View>
           <TouchableOpacity
             style={styles.callBtn}
-            onPress={() => Linking.openURL(`tel:${driverPhone || '0987654321'}`)}
+            onPress={() => Linking.openURL(`tel:${displayDriverPhone}`)}
             activeOpacity={0.8}
           >
             <Ionicons name="call" size={18} color="#FFFFFF" />
@@ -153,15 +264,17 @@ const BookingChatScreen = ({ route, navigation }) => {
           data={messages}
           keyExtractor={(item, index) => item.id?.toString() || index.toString()}
           renderItem={renderMessage}
-          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', padding: 16, paddingBottom: 24 }}
+          showsVerticalScrollIndicator={true}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          showsVerticalScrollIndicator={false}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
 
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachBtn}>
-            <Ionicons name="add-circle" size={28} color={COLORS.textMuted} />
+          <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia} disabled={uploading}>
+            {uploading
+              ? <ActivityIndicator size="small" color={COLORS.primary} />
+              : <Ionicons name="add-circle" size={28} color={COLORS.primary} />}
           </TouchableOpacity>
           <View style={styles.inputWrapper}>
             <TextInput
@@ -209,6 +322,7 @@ const styles = StyleSheet.create({
   myMessageWrapper: { justifyContent: 'flex-end' },
   otherMessageWrapper: { justifyContent: 'flex-start' },
   avatarMini: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  avatarMiniImage: { width: '100%', height: '100%', borderRadius: 14 },
   avatarMiniText: { color: COLORS.text, fontSize: 12, fontWeight: 'bold' },
 
   messageBubble: { maxWidth: '75%', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20 },
@@ -222,6 +336,8 @@ const styles = StyleSheet.create({
   inputWrapper: { flex: 1, backgroundColor: COLORS.background, borderRadius: 24, minHeight: 44, maxHeight: 100, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 10, marginHorizontal: 8, borderWidth: 1, borderColor: COLORS.border },
   input: { color: COLORS.text, fontSize: 15, paddingTop: 0, paddingBottom: 0 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
+  mediaImage: { width: 220, height: 180, borderRadius: 14 },
+  mediaVideo: { width: 220, height: 160, borderRadius: 14 },
 });
 
 export default BookingChatScreen;
