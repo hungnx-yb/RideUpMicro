@@ -55,6 +55,19 @@ public enum ErrorCode {
     SEAT_NOT_AVAILABLE(5003, "Not enough available seats", HttpStatus.BAD_REQUEST),
     VERSION_CONFLICT(5004, "Trip was updated, please retry", HttpStatus.CONFLICT),
     
+    // Marketplace errors
+    TRIP_REQUEST_NOT_FOUND(5101, "Trip request not found", HttpStatus.NOT_FOUND),
+    TRIP_REQUEST_INVITATION_NOT_FOUND(5102, "Invitation not found", HttpStatus.NOT_FOUND),
+    INVITATION_ALREADY_SENT(5103, "You have already sent an invitation for this request", HttpStatus.BAD_REQUEST),
+    REQUEST_NOT_OPEN(5104, "This trip request is no longer open", HttpStatus.BAD_REQUEST),
+    NOT_YOUR_REQUEST(5105, "You do not own this trip request", HttpStatus.FORBIDDEN),
+    DEPARTURE_TIME_TOO_SOON(5106, "Departure time must be at least 30 minutes from now", HttpStatus.BAD_REQUEST),
+    DUPLICATE_TRIP_REQUEST(5107, "You already have an open trip request for this route and time", HttpStatus.BAD_REQUEST),
+    CUSTOMER_ALREADY_HAS_BOOKING(5108, "You already have a confirmed booking for this time slot", HttpStatus.BAD_REQUEST),
+    TRIP_REQUEST_EXPIRED(5109, "This trip request has expired", HttpStatus.BAD_REQUEST),
+    TRIP_NOT_AVAILABLE(5110, "Your trip is not available for sending invitations", HttpStatus.BAD_REQUEST),
+    TOO_MANY_PENDING_INVITATIONS(5111, "This trip request has reached the maximum number of pending invitations", HttpStatus.BAD_REQUEST),
+
     // Wallet / Debt errors
     ACCOUNT_BLOCKED_DUE_TO_DEBT(6001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN);
 

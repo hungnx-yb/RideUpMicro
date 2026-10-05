@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import com.example.demo.dto.request.user.DriverRegisterRequest;
 import com.example.demo.dto.request.user.DriverUpdateRequest;
+import com.example.demo.dto.request.user.OperatingProvincesRequest;
 import com.example.demo.dto.response.user.DriverResponse;
 import com.example.demo.dto.response.user.DriverStatusResponse;
 import com.example.demo.entity.DriverProfile;
@@ -235,5 +236,27 @@ public class DriverService {
         java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
         driverProfile.setSystemDebt(currentDebt.add(amount));
         driverProfileRepository.save(driverProfile);
+    }
+
+    @Transactional
+    public DriverResponse updateOperatingProvinces(OperatingProvincesRequest request) {
+        User currentUser = userService.getCurrentUser();
+        DriverProfile driverProfile = driverProfileRepository.findByUser(currentUser)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+        
+        if (request.getOperatingProvinceIds() != null && request.getOperatingProvinceIds().size() > 5) {
+            throw new AppException(ErrorCode.DRIVER_OPERATING_PROVINCES_EXCEED_LIMIT);
+        }
+
+        driverProfile.setOperatingProvinceIds(request.getOperatingProvinceIds());
+        driverProfile = driverProfileRepository.save(driverProfile);
+        return mapToDriverResponse(driverProfile);
+    }
+
+    public List<DriverResponse> getDriversByOperatingProvinces(String startProvinceId, String endProvinceId) {
+        return driverProfileRepository.findApprovedByOperatingProvinces(startProvinceId, endProvinceId)
+                .stream()
+                .map(this::mapToDriverResponse)
+                .toList();
     }
 }

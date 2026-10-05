@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TripServiceConsumer {
 
     TripService tripService;
+    com.rideup.trip_service.service.TripRequestService tripRequestService;
     ObjectMapper objectMapper;
 
     @RetryableTopic(exclude = {JsonProcessingException.class})
@@ -42,6 +43,24 @@ public class TripServiceConsumer {
                         .seatCount(event.getSeatCount())
                         .build()
         );
+        ack.acknowledge();
+    }
+
+    @RetryableTopic(exclude = {JsonProcessingException.class})
+    @Transactional
+    @KafkaListener(
+            topics = "${app.kafka.topics.booking-confirmed}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onBookingConfirmed(String payload, Acknowledgment ack) throws Exception {
+        com.rideup.trip_service.dto.event.BookingConfirmedEvent event = objectMapper.readValue(payload, com.rideup.trip_service.dto.event.BookingConfirmedEvent.class);
+        log.info("[BookingConfirmedEvent] eventId={}, bookingId={}, customerId={}, tripId={}, correlationId={}",
+                event.getEventId(), event.getBookingId(), event.getCustomerId(), event.getTripId(), event.getCorrelationId());
+        
+        if (event.getCustomerId() != null) {
+            tripRequestService.cancelAllOpenRequests(event.getCustomerId(), "Auto-cancelled due to confirmed booking");
+        }
+        
         ack.acknowledge();
     }
 

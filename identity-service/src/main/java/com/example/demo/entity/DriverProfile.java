@@ -6,6 +6,8 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,6 +50,11 @@ public class DriverProfile {
     @UpdateTimestamp
     @Column(name = "updated_at")
     LocalDateTime updatedAt;
+
+    @Column(name = "operating_provinces", columnDefinition = "json")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Builder.Default
+    List<String> operatingProvinceIds = new ArrayList<>();
 
     // User liên kết (1-1)
     @OneToOne(fetch = FetchType.LAZY)

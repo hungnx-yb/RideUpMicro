@@ -149,6 +149,57 @@ public class NotificationConsumer {
 	}
 
 
+    @RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+    @KafkaListener(topics = "trip-request-invited", groupId = "${spring.kafka.consumer.group-id}")
+    public void onTripRequestInvited(String payload, Acknowledgment ack) throws Exception {
+        Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+        String passengerId = event.get("passengerId");
+        String title = "Bạn có lời mời chuyến đi mới";
+        String message = "Một tài xế vừa gửi lời mời đi chung xe cho nhu cầu của bạn.";
+        notificationService.createNotification(
+                passengerId,
+                title,
+                message,
+                NotificationType.SYSTEM,
+                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+        );
+        ack.acknowledge();
+    }
+
+    @RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+    @KafkaListener(topics = "trip-request-invitation-rejected", groupId = "${spring.kafka.consumer.group-id}")
+    public void onTripRequestInvitationRejected(String payload, Acknowledgment ack) throws Exception {
+        Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+        String driverId = event.get("driverId");
+        String title = "Lời mời bị từ chối";
+        String message = "Khách hàng đã từ chối lời mời chuyến đi của bạn.";
+        notificationService.createNotification(
+                driverId,
+                title,
+                message,
+                NotificationType.SYSTEM,
+                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+        );
+        ack.acknowledge();
+    }
+
+    @RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+    @KafkaListener(topics = "marketplace-invitation-accepted", groupId = "${spring.kafka.consumer.group-id}")
+    public void onMarketplaceInvitationAccepted(String payload, Acknowledgment ack) throws Exception {
+        Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+        String driverId = event.get("driverId");
+        String title = "Khách hàng đồng ý lời mời";
+        String message = "Khách hàng đã đồng ý lời mời chuyến đi của bạn và đang tiến hành đặt cọc/thanh toán.";
+        notificationService.createNotification(
+                driverId,
+                title,
+                message,
+                NotificationType.SYSTEM,
+                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+        );
+        ack.acknowledge();
+    }
+
 	private String buildMetadata(String key1, String value1, String key2, String value2) {
 		try {
 			Map<String, String> metadata = new HashMap<>();

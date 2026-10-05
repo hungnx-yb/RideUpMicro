@@ -22,6 +22,14 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, St
     long countByStatus(DriverStatus status);
     List<DriverProfile> findAllByStatus(DriverStatus status);
 
+    @Query(value = """
+        SELECT * FROM driver_profile dp 
+        WHERE JSON_CONTAINS(dp.operating_provinces, CONCAT('"', :startProvinceId, '"')) 
+          AND JSON_CONTAINS(dp.operating_provinces, CONCAT('"', :endProvinceId, '"')) 
+          AND dp.status = 'APPROVED'
+        """, nativeQuery = true)
+    List<DriverProfile> findApprovedByOperatingProvinces(@Param("startProvinceId") String startProvinceId, @Param("endProvinceId") String endProvinceId);
+
     @Query("""
     SELECT new com.example.demo.dto.response.user.DriverResponse(
         u.id,

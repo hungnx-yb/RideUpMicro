@@ -6,6 +6,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -29,6 +30,7 @@ public class DriverResponse {
     String rejectionReason;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    List<String> operatingProvinceIds;
     
     // User info
     String userId;

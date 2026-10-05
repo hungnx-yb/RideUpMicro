@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.request.user.DriverRegisterRequest;
 import com.example.demo.dto.request.user.DriverUpdateRequest;
+import com.example.demo.dto.request.user.OperatingProvincesRequest;
 import com.example.demo.dto.response.ApiResponse;
 import com.example.demo.dto.response.user.DriverResponse;
 import com.example.demo.dto.response.user.DriverStatusResponse;
@@ -124,6 +125,24 @@ public class DriverController {
         driverService.addDriverDebt(driverId, amount);
         return ApiResponse.<Void>builder()
                 .message("Debt added successfully")
+                .build();
+    }
+
+    @PutMapping("/me/operating-provinces")
+    public ApiResponse<DriverResponse> updateOperatingProvinces(@Valid @RequestBody OperatingProvincesRequest request) {
+        return ApiResponse.<DriverResponse>builder()
+                .result(driverService.updateOperatingProvinces(request))
+                .message("Operating provinces updated successfully")
+                .build();
+    }
+
+    @GetMapping("/internal/by-operating-provinces")
+    public ApiResponse<List<DriverResponse>> getDriversByOperatingProvinces(
+            @RequestParam String startProvinceId, 
+            @RequestParam String endProvinceId) {
+        return ApiResponse.<List<DriverResponse>>builder()
+                .result(driverService.getDriversByOperatingProvinces(startProvinceId, endProvinceId))
+                .message("Drivers retrieved successfully")
                 .build();
     }
 }

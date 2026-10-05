@@ -57,7 +57,18 @@ public class BookingService {
 
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request) {
+        if (request.getInvitationId() != null && !request.getInvitationId().isEmpty()) {
+            ApiResponse<com.rideUp.booking_service.dto.response.TripRequestInvitationResponse> invResponse = tripServiceClient.getInvitation(request.getInvitationId());
+            if (invResponse == null || invResponse.getResult() == null) {
+                throw new AppException(ErrorCode.BOOKING_NOT_FOUND); // Reusing error
+            }
+            if (!"PENDING".equals(invResponse.getResult().getStatus())) {
+                throw new AppException(ErrorCode.BOOKING_ALREADY_CONFIRMED); // Better map to an invitation error, using what's available
+            }
+        }
+
         BigDecimal tripPricePerSeat = reserveTripSeats(request.getTripId(), request.getSeatCount());
+        
         LocalDateTime now = LocalDateTime.now();
         String correlationId = UUID.randomUUID().toString();
         Booking booking = modelMapper.map(request, Booking.class);
@@ -69,7 +80,13 @@ public class BookingService {
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
         booking.setExpiresAt(now.plusSeconds(expirySeconds)); // Áp dụng cho cả Cash và Stripe
         Booking saved = bookingRepository.save(booking);
+        
+        if (request.getInvitationId() != null && !request.getInvitationId().isEmpty()) {
+            tripServiceClient.acceptInvitation(request.getInvitationId());
+        }
+        
         publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId);
+
 
         if (request.getPaymentMethod() == PaymentMethod.CASH) {
             com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent waitEvent = com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent.builder()
@@ -468,6 +485,7 @@ public class BookingService {
                 .eventId(UUID.randomUUID().toString())
                 .correlationId(correlationId)
                 .bookingId(booking.getId())
+                .customerId(booking.getCustomerId())
                 .tripId(booking.getTripId())
                 .seatCount(booking.getSeatCount())
                 .createdAt(LocalDateTime.now())
