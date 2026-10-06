@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
+import InvitationCard from '../components/InvitationCard';
 
 const COLORS = {
   background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9',
@@ -126,10 +127,28 @@ const TABS = [
 
 // ===== MAIN SCREEN =====
 const MyTripsScreen = ({ navigation }) => {
+  const [mainTab, setMainTab] = useState('BOOKINGS'); // 'BOOKINGS' | 'REQUESTS'
   const [bookings, setBookings] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(null);
+
+  const fetchMyRequests = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const res = await apiService.getMyTripRequests({});
+      if (res.data.code === 1000) {
+        setRequests(res.data.result.content || []);
+      }
+    } catch (e) {
+      console.warn('Fetch requests error:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   const fetchMyBookings = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -146,9 +165,43 @@ const MyTripsScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => { fetchMyBookings(); }, []);
+  const handleRefresh = useCallback(() => {
+    if (mainTab === 'BOOKINGS') {
+      fetchMyBookings(true);
+    } else {
+      fetchMyRequests(true);
+    }
+  }, [mainTab, fetchMyBookings]);
 
-  const filtered = activeTab ? bookings.filter(b => b.status === activeTab) : bookings;
+  useEffect(() => { 
+    if (mainTab === 'BOOKINGS') fetchMyBookings();
+    else fetchMyRequests();
+  }, [mainTab]);
+
+  const filteredBookings = activeTab ? bookings.filter(b => b.status === activeTab) : bookings;
+
+  const handleRejectInvitation = async (inv) => {
+    try {
+      await apiService.rejectTripRequestInvitation(inv.id);
+      // Optimistic update: remove from local state
+      setRequests(prev => prev.map(req => {
+        if (req.id === inv.tripRequestId) {
+          return { ...req, invitations: req.invitations.filter(i => i.id !== inv.id) };
+        }
+        return req;
+      }));
+    } catch (e) {
+      console.warn('Reject error', e);
+    }
+  };
+
+  const handleAcceptInvitation = (invitation, tripRequest) => {
+    // Chuyển hướng về SearchRide kèm theo thông tin lời mời để Đặt vé
+    navigation.navigate('SearchRide', { 
+      prefillInvitation: invitation,
+      tripRequest: tripRequest
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -160,56 +213,90 @@ const MyTripsScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* ── FILTER TABS ── */}
-      <View style={styles.tabsWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsContainer}
-          style={styles.tabsScroll}
+      {/* ── MASTER TABS (Vé vs Yêu cầu) ── */}
+      <View style={styles.masterTabContainer}>
+        <TouchableOpacity 
+          style={[styles.masterTab, mainTab === 'BOOKINGS' && styles.masterTabActive]}
+          onPress={() => setMainTab('BOOKINGS')}
         >
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <TouchableOpacity
-                key={String(tab.key)}
-                style={[styles.tab, isActive && styles.tabActive]}
-                onPress={() => setActiveTab(tab.key)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+          <Text style={[styles.masterTabText, mainTab === 'BOOKINGS' && styles.masterTabTextActive]}>Vé Đã Đặt</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.masterTab, mainTab === 'REQUESTS' && styles.masterTabActive]}
+          onPress={() => setMainTab('REQUESTS')}
+        >
+          <Text style={[styles.masterTabText, mainTab === 'REQUESTS' && styles.masterTabTextActive]}>Yêu Cầu Tìm Xe</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* ── FILTER TABS (Only for Bookings) ── */}
+      {mainTab === 'BOOKINGS' && (
+        <View style={styles.tabsWrapper}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer} style={styles.tabsScroll}>
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <TouchableOpacity key={String(tab.key)} style={[styles.tab, isActive && styles.tabActive]} onPress={() => setActiveTab(tab.key)}>
+                  <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* ── CONTENT ── */}
       {loading ? (
         <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 60 }} />
       ) : (
         <FlatList
-          data={filtered}
+          data={mainTab === 'BOOKINGS' ? filteredBookings : requests}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <BookingCard
-              item={item}
-              onPress={() => navigation.navigate('Map', { booking: item })}
-              onChatPress={() => navigation.navigate('BookingChat', { 
-                bookingId: item.id, 
-                driverName: item.trip?.driverName || 'Tài xế', 
-                driverAvatar: item.trip?.driverAvatar,
-                vehicleInfo: item.trip?.vehicleType || 'Xe máy'
-              })}
-            />
-          )}
+          renderItem={({ item }) => {
+            if (mainTab === 'BOOKINGS') {
+              return (
+                <BookingCard
+                  item={item}
+                  onPress={() => navigation.navigate('Map', { booking: item })}
+                  onChatPress={() => navigation.navigate('BookingChat', { 
+                    bookingId: item.id, 
+                    driverName: item.trip?.driverName || 'Tài xế', 
+                    driverAvatar: item.trip?.driverAvatar,
+                    vehicleInfo: item.trip?.vehicleType || 'Xe máy'
+                  })}
+                />
+              );
+            } else {
+              // YÊU CẦU TÌM XE
+              return (
+                <View style={{ marginBottom: 24, marginHorizontal: 14 }}>
+                  <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 8, color: COLORS.text }}>
+                    Yêu cầu lúc {new Date(item.fromTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'})}
+                  </Text>
+                  
+                  {item.invitations && item.invitations.length > 0 ? (
+                    item.invitations.map(inv => (
+                      <InvitationCard 
+                        key={inv.id} 
+                        invitation={inv} 
+                        onAccept={() => handleAcceptInvitation(inv, item)} 
+                        onReject={() => handleRejectInvitation(inv)} 
+                      />
+                    ))
+                  ) : (
+                    <View style={{ padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ color: COLORS.textMuted, fontStyle: 'italic' }}>Đang chờ tài xế nhận...</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            }
+          }}
           contentContainerStyle={styles.listContainer}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => fetchMyBookings(true)}
+              onRefresh={handleRefresh}
               tintColor={COLORS.primary}
             />
           }
@@ -218,16 +305,10 @@ const MyTripsScreen = ({ navigation }) => {
               <Ionicons name="car-outline" size={60} color={COLORS.border} />
               <Text style={styles.emptyTitle}>Chưa có chuyến nào</Text>
               <Text style={styles.emptySubtitle}>
-                {activeTab ? 'Không có chuyến nào trong trạng thái này.' : 'Hãy đặt chuyến đầu tiên của bạn!'}
+                {mainTab === 'BOOKINGS' 
+                  ? (activeTab ? 'Không có chuyến nào trong trạng thái này.' : 'Hãy đặt chuyến đầu tiên của bạn!')
+                  : 'Bạn chưa phát tín hiệu tìm xe nào.'}
               </Text>
-              {!activeTab && (
-                <TouchableOpacity
-                  style={styles.emptyBtn}
-                  onPress={() => navigation.navigate('Search')}
-                >
-                  <Text style={styles.emptyBtnText}>Tìm chuyến ngay</Text>
-                </TouchableOpacity>
-              )}
             </View>
           }
         />
@@ -242,6 +323,13 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
   headerSub: { color: COLORS.primary, fontSize: SIZES.small, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 },
   headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
+
+  // Master Tabs
+  masterTabContainer: { flexDirection: 'row', backgroundColor: '#F1F5F9', margin: 16, borderRadius: 24, padding: 4 },
+  masterTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 20 },
+  masterTabActive: { backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  masterTabText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 13 },
+  masterTabTextActive: { color: COLORS.primary, fontWeight: 'bold' },
 
   // Filter tabs
   tabsWrapper: { backgroundColor: COLORS.surface, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },

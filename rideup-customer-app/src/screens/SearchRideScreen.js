@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LocationMapPicker from '../components/LocationMapPicker';
+import RadarSuccessModal from '../components/RadarSuccessModal';
 
 const COLORS = {
   background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9',
@@ -200,7 +201,7 @@ const CustomCalendar = ({ visible, selectedDate, onSelect, onClose }) => {
 
 
 // ===== MAIN SCREEN =====
-export default function SearchRideScreen({ navigation }) {
+export default function SearchRideScreen({ navigation, route }) {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -229,10 +230,54 @@ export default function SearchRideScreen({ navigation }) {
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [bookingNote, setBookingNote] = useState('');
   const [bookingIdempotencyKey, setBookingIdempotencyKey] = useState('');
+  const [acceptedInvitationId, setAcceptedInvitationId] = useState(null);
 
   // Success Modal State
   const [successBooking, setSuccessBooking] = useState(null);
   const [isRedirectingPayment, setIsRedirectingPayment] = useState(false);
+
+  // Marketplace States
+  const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
+  const [isRadarVisible, setIsRadarVisible] = useState(false);
+  const [isCreatingRequest, setIsCreatingRequest] = useState(false);
+  const [requestSeatCount, setRequestSeatCount] = useState(1);
+
+  const handleCreateTripRequest = async () => {
+    if (!startProvinceId || !startWardId || !endProvinceId || !endWardId || !selectedDate) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn đầy đủ tuyến đường và ngày đi trước khi phát tín hiệu.');
+      return;
+    }
+    
+    const fromTime = new Date(selectedDate);
+    fromTime.setHours(new Date().getHours());
+    fromTime.setMinutes(new Date().getMinutes());
+    const toTime = new Date(fromTime.getTime() + 48 * 60 * 60 * 1000);
+    
+    setIsCreatingRequest(true);
+    try {
+      const payload = {
+        startProvinceId,
+        startWardId,
+        endProvinceId,
+        endWardId,
+        seatTotal: requestSeatCount,
+        fromTime: fromTime.toISOString(),
+        toTime: toTime.toISOString(),
+        note: "Khách đang tìm xe nhanh",
+      };
+      const res = await apiService.createTripRequest(payload);
+      if (res.data.code === 1000) {
+        setIsRequestModalVisible(false);
+        setIsRadarVisible(true);
+      } else {
+        Alert.alert('Lỗi', res.data.message || 'Không thể tạo yêu cầu.');
+      }
+    } catch (error) {
+      Alert.alert('Lỗi', error?.response?.data?.message || 'Có lỗi xảy ra.');
+    } finally {
+      setIsCreatingRequest(false);
+    }
+  };
 
   const [pickupWardId, setPickupWardId] = useState('');
   const [pickupLocation, setPickupLocation] = useState({ lat: NaN, lng: NaN, addressText: '' });
@@ -244,6 +289,30 @@ export default function SearchRideScreen({ navigation }) {
     fetchTrips(false); // Không thu gọn bộ lọc trong lần tải đầu tiên
     fetchProvinces();
   }, []);
+
+  useEffect(() => {
+    if (route?.params?.prefillInvitation && route?.params?.tripRequest) {
+      const { prefillInvitation, tripRequest } = route.params;
+      const fakeTrip = {
+        id: prefillInvitation.tripId,
+        driverName: prefillInvitation.driverName,
+        stops: [], // Không có sẵn stops từ lời mời, map picker sẽ cho chọn toàn phường
+        seatAvailable: tripRequest.seatTotal,
+        priceVnd: prefillInvitation.price || 0,
+        startAddressText: tripRequest.startProvinceName,
+        endAddressText: tripRequest.endProvinceName,
+      };
+      
+      setSelectedTrip(fakeTrip);
+      setPickupWardId(tripRequest.startWardId || '');
+      setDropoffWardId(tripRequest.endWardId || '');
+      setSeatCount(tripRequest.seatTotal || 1);
+      setPaymentMethod('STRIPE'); // Ưu tiên thanh toán online cho Marketplace
+      setBookingNote('');
+      setBookingIdempotencyKey(generateUuid());
+      setAcceptedInvitationId(prefillInvitation.id);
+    }
+  }, [route?.params]);
 
   useEffect(() => {
     if (startProvinceId) {
@@ -328,6 +397,7 @@ export default function SearchRideScreen({ navigation }) {
     setPaymentMethod('CASH');
     setBookingNote('');
     setBookingIdempotencyKey(generateUuid());
+    setAcceptedInvitationId(null); // Reset when manually booking
   };
 
   const confirmBooking = async () => {
@@ -358,12 +428,17 @@ export default function SearchRideScreen({ navigation }) {
         dropoffAddressText: dropoffLocation.addressText?.trim() || '',
         note: bookingNote.trim() || 'Đặt qua Mobile App',
       };
+      
+      if (acceptedInvitationId) {
+        payload.invitationId = acceptedInvitationId;
+      }
 
       const response = await apiService.createBooking(payload, bookingIdempotencyKey);
       if (response.data.code === 1000) {
         const result = response.data.result;
         setSelectedTrip(null);
         setBookingIdempotencyKey('');
+        setAcceptedInvitationId(null);
         setSuccessBooking({
           id: result.id,
           bookingCode: result.bookingCode || '',
@@ -671,7 +746,22 @@ export default function SearchRideScreen({ navigation }) {
           keyExtractor={(item) => item.id}
           renderItem={renderTrip}
           contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={<Text style={styles.emptyText}>Chưa có chuyến xe nào đang mở.</Text>}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', marginTop: 40, paddingHorizontal: 20 }}>
+              <Ionicons name="car-sport-outline" size={60} color={COLORS.border} style={{ marginBottom: 12 }} />
+              <Text style={styles.emptyText}>Chưa có chuyến xe nào đang mở.</Text>
+              <Text style={{ textAlign: 'center', color: COLORS.textMuted, fontSize: 13, marginTop: 8, marginBottom: 24, lineHeight: 20 }}>
+                Bạn có muốn phát tín hiệu đến các tài xế quanh đây để họ chủ động liên hệ không?
+              </Text>
+              <TouchableOpacity 
+                style={{ backgroundColor: COLORS.primary, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 30, flexDirection: 'row', alignItems: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 }}
+                onPress={() => setIsRequestModalVisible(true)}
+              >
+                <Ionicons name="radio-outline" size={20} color={COLORS.surface} style={{ marginRight: 8 }} />
+                <Text style={{ color: COLORS.surface, fontWeight: 'bold', fontSize: 15 }}>Phát Tín Hiệu Tìm Xe</Text>
+              </TouchableOpacity>
+            </View>
+          }
         />
       )}
 
@@ -868,6 +958,50 @@ export default function SearchRideScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Create Request Modal */}
+      <Modal visible={isRequestModalVisible} transparent animationType="fade">
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <Ionicons name="radio" size={30} color={COLORS.primary} />
+            </View>
+            <Text style={styles.successTitle}>Phát Tín Hiệu</Text>
+            <Text style={styles.successSub}>Hệ thống sẽ gửi yêu cầu của bạn đến tất cả tài xế có lộ trình phù hợp.</Text>
+            
+            <View style={[styles.selectionRow, { width: '100%', marginBottom: 24 }]}>
+              <Text style={styles.selectionLabel}>Số ghế cần đặt:</Text>
+              <View style={styles.counterBox}>
+                <TouchableOpacity onPress={() => setRequestSeatCount(Math.max(1, requestSeatCount - 1))} style={styles.counterBtn}>
+                  <Text style={styles.counterText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.counterValue}>{requestSeatCount}</Text>
+                <TouchableOpacity onPress={() => setRequestSeatCount(Math.min(10, requestSeatCount + 1))} style={styles.counterBtn}>
+                  <Text style={styles.counterText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsRequestModalVisible(false)} disabled={isCreatingRequest}>
+                <Text style={styles.cancelText}>HỦY</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={handleCreateTripRequest} disabled={isCreatingRequest}>
+                {isCreatingRequest ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.confirmText}>PHÁT SÓNG</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <RadarSuccessModal 
+        visible={isRadarVisible} 
+        onClose={() => setIsRadarVisible(false)} 
+        onNavigateRequests={() => {
+          setIsRadarVisible(false);
+          navigation.navigate('MyTrips');
+        }}
+      />
 
     </SafeAreaView>
   );

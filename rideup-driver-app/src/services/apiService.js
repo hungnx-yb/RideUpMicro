@@ -107,6 +107,14 @@ export const apiService = {
     return await apiClient.get('/api/trip/trip/driver', { params });
   },
 
+  // --- MARKETPLACE (CHỢ NHU CẦU) ---
+  getMarketplaceTripRequests: async (params) => {
+    return await apiClient.get('/api/trip/trip-requests/marketplace', { params });
+  },
+  sendTripRequestInvitation: async (payload) => {
+    return await apiClient.post('/api/trip/trip-requests/invitations', payload);
+  },
+
   // Location Service
   getAllProvinces: async () => {
     return await apiClient.get('/api/location/province');

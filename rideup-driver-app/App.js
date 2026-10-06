@@ -13,6 +13,7 @@ import DriverDashboardScreen from './src/screens/DriverDashboardScreen';
 import CreateTripScreen from './src/screens/CreateTripScreen';
 import DriverTripsScreen from './src/screens/DriverTripsScreen';
 import DriverProfileScreen from './src/screens/DriverProfileScreen';
+import MarketplaceScreen from './src/screens/MarketplaceScreen';
 import BookingChatScreen from './src/screens/BookingChatScreen';
 import WalletScreen from './src/screens/WalletScreen';
 
@@ -44,6 +45,8 @@ function MainTabNavigator() {
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Marketplace') {
+            iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'CreateTrip') {
             iconName = focused ? 'add-circle' : 'add-circle-outline';
           } else if (route.name === 'DriverTrips') {
@@ -59,6 +62,7 @@ function MainTabNavigator() {
       })}
     >
       <Tab.Screen name="Dashboard" component={DriverDashboardScreen} options={{ tabBarLabel: 'Tổng quan' }} />
+      <Tab.Screen name="Marketplace" component={MarketplaceScreen} options={{ tabBarLabel: 'Chợ Khách' }} />
       <Tab.Screen name="CreateTrip" component={CreateTripScreen} options={{ tabBarLabel: 'Tạo chuyến' }} />
       <Tab.Screen name="DriverTrips" component={DriverTripsScreen} options={{ tabBarLabel: 'Quản lý' }} />
       <Tab.Screen 
