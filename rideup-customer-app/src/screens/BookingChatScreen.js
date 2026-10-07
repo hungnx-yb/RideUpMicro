@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import { chatSocket } from '../services/chatSocket';
 import * as ImagePicker from 'expo-image-picker';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 const COLORS = { background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', text: '#0F172A', textMuted: '#64748B', border: '#E2E8F0', success: '#10b981' };
 
@@ -13,6 +13,21 @@ const getMediaUrl = (path) => {
   if (!path) return null;
   if (path.startsWith('http') || path.startsWith('file://')) return path; // Dành cho URI local (Optimistic UI) hoặc đã có đầy đủ protocol
   return `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${path}`;
+};
+
+const ChatVideoItem = ({ videoUri }) => {
+  const player = useVideoPlayer(videoUri, (p) => {
+    p.loop = false;
+  });
+
+  return (
+    <VideoView
+      style={styles.mediaVideo}
+      player={player}
+      allowsFullscreen
+      allowsPictureInPicture
+    />
+  );
 };
 
 const BookingChatScreen = ({ route, navigation }) => {
@@ -195,13 +210,7 @@ const BookingChatScreen = ({ route, navigation }) => {
               resizeMode="cover"
             />
           ) : isVideo && item.mediaUrl ? (
-            <Video
-              source={{ uri: getMediaUrl(item.mediaUrl) }}
-              style={styles.mediaVideo}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              isLooping={false}
-            />
+            <ChatVideoItem videoUri={getMediaUrl(item.mediaUrl)} />
           ) : (
             <Text style={[styles.messageText, isMyMessage && { color: COLORS.background }]}>{item.content}</Text>
           )}
