@@ -12,6 +12,17 @@ import com.example.demo.exception.AppException;
 import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.DriverProfileRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.client.ai.*;
+import com.example.demo.dto.request.driver.DriverFaceCompareRequest;
+import com.example.demo.dto.request.driver.DriverFaceEnrollRequest;
+import com.example.demo.dto.request.driver.DriverFaceVerifyRequest;
+import com.example.demo.dto.response.driver.DriverFaceCompareResponse;
+import com.example.demo.dto.response.driver.DriverFaceStatusResponse;
+import com.example.demo.dto.response.driver.DriverFaceVerifyResponse;
+import java.time.temporal.ChronoUnit;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -34,6 +45,8 @@ public class DriverService {
     UserService userService;
     ModelMapper modelMapper;
     FileService fileService;
+    AiServiceClient aiServiceClient;
+    ObjectMapper objectMapper;
 
     @Transactional
     public DriverResponse registerDriver(DriverRegisterRequest request) {
@@ -235,5 +248,170 @@ public class DriverService {
         java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
         driverProfile.setSystemDebt(currentDebt.add(amount));
         driverProfileRepository.save(driverProfile);
+    }
+
+    @Transactional
+    public DriverResponse enrollFace(DriverFaceEnrollRequest request) {
+        User currentUser = userService.getCurrentUser();
+        DriverProfile driverProfile = driverProfileRepository.findByUser(currentUser)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        AiExtractEmbeddingResponse aiResponse;
+        try {
+            aiResponse = aiServiceClient.extractEmbedding(AiExtractEmbeddingRequest.builder()
+                    .imageBase64(request.getImageBase64())
+                    .checkLiveness(true)
+                    .build());
+        } catch (Exception e) {
+            log.error("[AI Service Error] Failed to call extractEmbedding: {}", e.getMessage());
+            throw new AppException(ErrorCode.AI_SERVICE_ERROR);
+        }
+
+        if (aiResponse == null || "error".equalsIgnoreCase(aiResponse.getStatus())) {
+            throw new AppException(ErrorCode.AI_SERVICE_ERROR);
+        }
+
+        if (Boolean.FALSE.equals(aiResponse.getIsReal())) {
+            throw new AppException(ErrorCode.FACE_SPOOF_DETECTED);
+        }
+
+        if (aiResponse.getEmbedding() == null || aiResponse.getEmbedding().isEmpty()) {
+            throw new AppException(ErrorCode.FACE_VERIFICATION_FAILED);
+        }
+
+        try {
+            String embeddingJson = objectMapper.writeValueAsString(aiResponse.getEmbedding());
+            driverProfile.setFaceEmbedding(embeddingJson);
+            driverProfile.setIsFaceEnrolled(true);
+            driverProfile.setLastFaceVerifiedAt(LocalDateTime.now());
+            driverProfile = driverProfileRepository.save(driverProfile);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize face embedding: {}", e.getMessage());
+            throw new AppException(ErrorCode.UNCATEGOEIZED_EXCEPTION);
+        }
+
+        return mapToDriverResponse(driverProfile);
+    }
+
+    @Transactional
+    public DriverFaceVerifyResponse verifyFaceToCheckIn(DriverFaceVerifyRequest request) {
+        User currentUser = userService.getCurrentUser();
+        DriverProfile driverProfile = driverProfileRepository.findByUser(currentUser)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        if (Boolean.FALSE.equals(driverProfile.getIsFaceEnrolled()) || driverProfile.getFaceEmbedding() == null) {
+            throw new AppException(ErrorCode.FACE_NOT_ENROLLED);
+        }
+
+        List<Double> targetEmbedding;
+        try {
+            targetEmbedding = objectMapper.readValue(driverProfile.getFaceEmbedding(), new TypeReference<List<Double>>() {});
+        } catch (JsonProcessingException e) {
+            log.error("Failed to parse stored face embedding: {}", e.getMessage());
+            throw new AppException(ErrorCode.UNCATEGOEIZED_EXCEPTION);
+        }
+
+        AiVerifyDriverResponse aiResponse;
+        try {
+            aiResponse = aiServiceClient.verifyDriver(AiVerifyDriverRequest.builder()
+                    .imageBase64(request.getImageBase64())
+                    .targetEmbedding(targetEmbedding)
+                    .threshold(0.65)
+                    .build());
+        } catch (Exception e) {
+            log.error("[AI Service Error] Failed to call verifyDriver: {}", e.getMessage());
+            throw new AppException(ErrorCode.AI_SERVICE_ERROR);
+        }
+
+        if (aiResponse == null) {
+            throw new AppException(ErrorCode.AI_SERVICE_ERROR);
+        }
+
+        if (Boolean.FALSE.equals(aiResponse.getIsReal())) {
+            throw new AppException(ErrorCode.FACE_SPOOF_DETECTED);
+        }
+
+        if (!Boolean.TRUE.equals(aiResponse.getIsVerified())) {
+            throw new AppException(ErrorCode.FACE_VERIFICATION_FAILED);
+        }
+
+        driverProfile.setLastFaceVerifiedAt(LocalDateTime.now());
+        driverProfileRepository.save(driverProfile);
+
+        return DriverFaceVerifyResponse.builder()
+                .isVerified(true)
+                .isReal(true)
+                .similarity(aiResponse.getSimilarity())
+                .livenessScore(aiResponse.getLivenessScore())
+                .message("Xác minh khuôn mặt tài xế thành công")
+                .verifiedAt(driverProfile.getLastFaceVerifiedAt())
+                .build();
+    }
+
+    public DriverFaceStatusResponse getFaceVerificationStatus() {
+        User currentUser = userService.getCurrentUser();
+        DriverProfile driverProfile = driverProfileRepository.findByUser(currentUser)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        boolean isEnrolled = Boolean.TRUE.equals(driverProfile.getIsFaceEnrolled());
+        LocalDateTime lastVerified = driverProfile.getLastFaceVerifiedAt();
+
+        if (!isEnrolled) {
+            return DriverFaceStatusResponse.builder()
+                    .isFaceEnrolled(false)
+                    .lastFaceVerifiedAt(lastVerified)
+                    .isValidToday(false)
+                    .status("NOT_ENROLLED")
+                    .message("Tài xế chưa hoàn thành đăng ký khuôn mặt (eKYC)")
+                    .build();
+        }
+
+        if (lastVerified == null) {
+            return DriverFaceStatusResponse.builder()
+                    .isFaceEnrolled(true)
+                    .lastFaceVerifiedAt(null)
+                    .isValidToday(false)
+                    .status("NEEDS_VERIFY")
+                    .message("Tài xế cần quét khuôn mặt điểm danh trước khi hoạt động")
+                    .build();
+        }
+
+        long hoursSinceVerification = ChronoUnit.HOURS.between(lastVerified, LocalDateTime.now());
+        boolean isValidToday = hoursSinceVerification < 24;
+
+        return DriverFaceStatusResponse.builder()
+                .isFaceEnrolled(true)
+                .lastFaceVerifiedAt(lastVerified)
+                .isValidToday(isValidToday)
+                .status(isValidToday ? "VALID" : "EXPIRED")
+                .message(isValidToday ? "Trạng thái sinh trắc học hợp lệ" : "Đã quá 24h kể từ lần điểm danh cuối, vui lòng quét lại khuôn mặt")
+                .build();
+    }
+
+    public DriverFaceCompareResponse compareFaces(DriverFaceCompareRequest request) {
+        AiCompareFacesResponse aiResponse;
+        try {
+            aiResponse = aiServiceClient.compareFaces(AiCompareFacesRequest.builder()
+                    .image1Base64(request.getImage1Base64())
+                    .image2Base64(request.getImage2Base64())
+                    .threshold(request.getThreshold() != null ? request.getThreshold() : 0.65)
+                    .checkLiveness(true)
+                    .build());
+        } catch (Exception e) {
+            log.error("[AI Service Error] Failed to call compareFaces: {}", e.getMessage());
+            throw new AppException(ErrorCode.AI_SERVICE_ERROR);
+        }
+
+        if (aiResponse == null) {
+            throw new AppException(ErrorCode.AI_SERVICE_ERROR);
+        }
+
+        return DriverFaceCompareResponse.builder()
+                .isMatched(aiResponse.getIsMatched())
+                .isReal(aiResponse.getIsReal())
+                .similarity(aiResponse.getSimilarity())
+                .threshold(aiResponse.getThreshold())
+                .message(aiResponse.getMessage())
+                .build();
     }
 }

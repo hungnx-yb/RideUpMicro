@@ -367,9 +367,20 @@ function AdminDriverApprovalPage() {
                       </span>
                       <div>
                         <p className="text-xl font-bold text-slate-900">{name}</p>
-                        <p className="mt-1 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                          <FaUserCircle className="text-[11px]" /> Mới đăng ký
-                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <p className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-orange-700">
+                            <FaUserCircle className="text-[11px]" /> Mới đăng ký
+                          </p>
+                          {driver?.isFaceEnrolled ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                              <FaCheckCircle className="text-[10px]" /> eKYC AI: Đã quét mặt
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                              <FaExclamationTriangle className="text-[10px]" /> eKYC AI: Chưa đăng ký
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -491,6 +502,28 @@ function AdminDriverApprovalPage() {
                     <p className="flex items-center gap-2 text-slate-700">
                       <FaUserShield className="text-orange-500" />
                       Trạng thái: {selectedDriver?.status || "PENDING"}
+                    </p>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                  <h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-500">Sinh trắc học & eKYC (AI)</h4>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaUserShield className="text-orange-500" />
+                      eKYC khuôn mặt:{" "}
+                      {selectedDriver?.isFaceEnrolled ? (
+                        <span className="font-bold text-emerald-600">✓ Đã đăng ký</span>
+                      ) : (
+                        <span className="font-bold text-amber-600">Chưa đăng ký</span>
+                      )}
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaClock className="text-orange-500" />
+                      Điểm danh gần nhất:{" "}
+                      {selectedDriver?.lastFaceVerifiedAt
+                        ? new Date(selectedDriver.lastFaceVerifiedAt).toLocaleString("vi-VN")
+                        : "Chưa có dữ liệu"}
                     </p>
                   </div>
                 </section>

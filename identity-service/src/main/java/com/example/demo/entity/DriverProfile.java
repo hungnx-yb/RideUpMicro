@@ -49,6 +49,18 @@ public class DriverProfile {
     @Column(name = "updated_at")
     LocalDateTime updatedAt;
 
+    // Sinh trắc học khuôn mặt AI
+    @Lob
+    @Column(name = "face_embedding", columnDefinition = "TEXT")
+    String faceEmbedding;
+
+    @Column(name = "is_face_enrolled")
+    @Builder.Default
+    Boolean isFaceEnrolled = false;
+
+    @Column(name = "last_face_verified_at")
+    LocalDateTime lastFaceVerifiedAt;
+
     // User liên kết (1-1)
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, unique = true)

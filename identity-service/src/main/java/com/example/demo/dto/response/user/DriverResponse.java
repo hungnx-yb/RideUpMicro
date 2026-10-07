@@ -29,6 +29,8 @@ public class DriverResponse {
     String rejectionReason;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+    Boolean isFaceEnrolled;
+    LocalDateTime lastFaceVerifiedAt;
     
     // User info
     String userId;

@@ -1,5 +1,11 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.request.driver.DriverFaceCompareRequest;
+import com.example.demo.dto.request.driver.DriverFaceEnrollRequest;
+import com.example.demo.dto.request.driver.DriverFaceVerifyRequest;
+import com.example.demo.dto.response.driver.DriverFaceCompareResponse;
+import com.example.demo.dto.response.driver.DriverFaceStatusResponse;
+import com.example.demo.dto.response.driver.DriverFaceVerifyResponse;
 import com.example.demo.dto.request.user.DriverRegisterRequest;
 import com.example.demo.dto.request.user.DriverUpdateRequest;
 import com.example.demo.dto.response.ApiResponse;
@@ -29,6 +35,38 @@ public class DriverController {
         return ApiResponse.<DriverResponse>builder()
                 .result(driverService.registerDriver(request))
                 .message("Driver registration submitted successfully. Please wait for approval.")
+                .build();
+    }
+
+    @PostMapping("/face/enroll")
+    public ApiResponse<DriverResponse> enrollFace(@Valid @RequestBody DriverFaceEnrollRequest request) {
+        return ApiResponse.<DriverResponse>builder()
+                .result(driverService.enrollFace(request))
+                .message("Đăng ký khuôn mặt eKYC thành công")
+                .build();
+    }
+
+    @PostMapping("/face/verify")
+    public ApiResponse<DriverFaceVerifyResponse> verifyFaceToCheckIn(@Valid @RequestBody DriverFaceVerifyRequest request) {
+        return ApiResponse.<DriverFaceVerifyResponse>builder()
+                .result(driverService.verifyFaceToCheckIn(request))
+                .message("Xác minh khuôn mặt điểm danh thành công")
+                .build();
+    }
+
+    @GetMapping("/face/status")
+    public ApiResponse<DriverFaceStatusResponse> getFaceStatus() {
+        return ApiResponse.<DriverFaceStatusResponse>builder()
+                .result(driverService.getFaceVerificationStatus())
+                .message("Lấy trạng thái sinh trắc học khuôn mặt thành công")
+                .build();
+    }
+
+    @PostMapping("/face/compare")
+    public ApiResponse<DriverFaceCompareResponse> compareFaces(@Valid @RequestBody DriverFaceCompareRequest request) {
+        return ApiResponse.<DriverFaceCompareResponse>builder()
+                .result(driverService.compareFaces(request))
+                .message("So khớp hai khuôn mặt thành công")
                 .build();
     }
 

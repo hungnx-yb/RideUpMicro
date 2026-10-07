@@ -28,6 +28,11 @@ public enum ErrorCode {
     GPLX_EXPIRED(2005, "Your GPLX has expired", HttpStatus.BAD_REQUEST),
     CANNOT_UPDATE_APPROVED_DRIVER(2006, "Cannot update approved driver profile. Please contact support.", HttpStatus.BAD_REQUEST),
     DRIVER_NOT_APPROVED(2007, "Your driver profile must be approved before registering a vehicle", HttpStatus.BAD_REQUEST),
+    FACE_ALREADY_ENROLLED(2008, "Driver face is already registered", HttpStatus.BAD_REQUEST),
+    FACE_NOT_ENROLLED(2009, "Driver face is not enrolled yet. Please complete face registration.", HttpStatus.BAD_REQUEST),
+    FACE_VERIFICATION_FAILED(2010, "Face verification failed. Face does not match registered driver profile.", HttpStatus.BAD_REQUEST),
+    FACE_SPOOF_DETECTED(2011, "Spoofed or fake face detected. Please use live camera.", HttpStatus.BAD_REQUEST),
+    AI_SERVICE_ERROR(2012, "AI face verification service is unavailable or encountered an error.", HttpStatus.SERVICE_UNAVAILABLE),
     
     // Vehicle related errors
     VEHICLE_ALREADY_REGISTERED(3001, "You already have a vehicle registered", HttpStatus.BAD_REQUEST),

@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { apiService } from '../services/apiService';
 import { BASE_URL } from '../config/api';
+import FaceVerificationModal from '../components/FaceVerificationModal';
 
 const COLORS = { 
   background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', 
@@ -54,6 +55,8 @@ export default function DriverProfileScreen({ navigation }) {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isVehicleModalVisible, setIsVehicleModalVisible] = useState(false);
   const [isDriverModalVisible, setIsDriverModalVisible] = useState(false);
+  const [isFaceModalVisible, setIsFaceModalVisible] = useState(false);
+  const [faceModalMode, setFaceModalMode] = useState('enroll');
   
   const [user, setUser] = useState({
     username: '', email: '', fullName: '',
@@ -237,6 +240,21 @@ export default function DriverProfileScreen({ navigation }) {
                 } catch (e) {
                   Alert.alert('Thông báo', 'Không thể lấy thông tin hồ sơ lúc này.');
                 }
+              }} 
+            />
+            <View style={styles.divider} />
+            <MenuItem 
+              icon="scan-circle" 
+              title="Xác minh khuôn mặt (AI eKYC)" 
+              subtitle={
+                driver?.isFaceEnrolled 
+                  ? "Đã kích hoạt eKYC • Nhấn để quét điểm danh" 
+                  : "Chưa đăng ký • Cần quét khuôn mặt ngay"
+              }
+              color={driver?.isFaceEnrolled ? COLORS.success : COLORS.warning}
+              onPress={() => {
+                setFaceModalMode(driver?.isFaceEnrolled ? 'verify' : 'enroll');
+                setIsFaceModalVisible(true);
               }} 
             />
             <View style={styles.divider} />
@@ -490,6 +508,16 @@ export default function DriverProfileScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Modal Quét và Xác thực khuôn mặt AI */}
+      <FaceVerificationModal
+        visible={isFaceModalVisible}
+        mode={faceModalMode}
+        onClose={() => setIsFaceModalVisible(false)}
+        onSuccess={() => {
+          fetchProfileData();
+        }}
+      />
     </SafeAreaView>
   );
 }

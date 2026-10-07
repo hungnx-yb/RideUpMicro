@@ -8,6 +8,7 @@ import { apiService } from '../services/apiService';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { chatSocket } from '../services/chatSocket';
 import { notificationSocket } from '../services/notificationSocket';
+import FaceVerificationModal from '../components/FaceVerificationModal';
 
 
 const { width } = Dimensions.get('window');
@@ -37,6 +38,8 @@ export default function DriverDashboardScreen() {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [driverInfo, setDriverInfo] = useState(null);
+  const [driverProfile, setDriverProfile] = useState(null);
+  const [faceModalVisible, setFaceModalVisible] = useState(false);
   const [resultModal, setResultModal] = useState(null); // { type: 'success'|'reject'|'error'|'debt', bookingId }
 
   useFocusEffect(
@@ -129,10 +132,16 @@ export default function DriverDashboardScreen() {
     else setLoading(true);
 
     try {
-      // Lấy thông tin tài xế
-      const userRes = await apiService.getMyUserInfo().catch(() => null);
-      if (userRes && userRes.data && userRes.data.result) {
+      // Lấy thông tin người dùng và hồ sơ tài xế (sinh trắc học)
+      const [userRes, driverRes] = await Promise.all([
+        apiService.getMyUserInfo().catch(() => null),
+        apiService.getMyDriverProfile().catch(() => null),
+      ]);
+      if (userRes?.data?.result) {
         setDriverInfo(userRes.data.result);
+      }
+      if (driverRes?.data?.result) {
+        setDriverProfile(driverRes.data.result);
       }
 
       // TODO: Tích hợp API thống kê thực tế nếu có
@@ -207,6 +216,33 @@ export default function DriverDashboardScreen() {
   }
 
   const handleApprove = async (bookingId) => {
+    if (!driverProfile?.isFaceEnrolled) {
+      Alert.alert(
+        'Yêu cầu đăng ký sinh trắc học',
+        'Bạn cần hoàn thành đăng ký khuôn mặt (eKYC) trước khi duyệt nhận khách.',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { text: 'Đăng ký ngay', onPress: () => setFaceModalVisible(true) }
+        ]
+      );
+      return;
+    }
+
+    const isVerifiedToday = driverProfile?.lastFaceVerifiedAt &&
+      (Date.now() - new Date(driverProfile.lastFaceVerifiedAt).getTime()) < 24 * 60 * 60 * 1000;
+
+    if (!isVerifiedToday) {
+      Alert.alert(
+        'Điểm danh khuôn mặt bắt buộc',
+        'Đã quá 24h kể từ lần điểm danh khuôn mặt gần nhất. Vui lòng quét khuôn mặt để tiếp tục duyệt chuyến.',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Điểm danh ngay', onPress: () => setFaceModalVisible(true) }
+        ]
+      );
+      return;
+    }
+
     setActionLoading(true);
     try {
       await apiService.approveBooking(bookingId);
@@ -274,6 +310,52 @@ export default function DriverDashboardScreen() {
             <View style={styles.statusPulse} />
           </View>
           <Text style={styles.statusText}>Bạn đang trực tuyến và sẵn sàng nhận chuyến</Text>
+        </View>
+
+        {/* THẺ ĐIỂM DANH SINH TRẮC HỌC KHUÔN MẶT AI */}
+        <View style={styles.faceCard}>
+          <View style={styles.faceCardLeft}>
+            <View style={[styles.faceCardIcon, driverProfile?.lastFaceVerifiedAt ? { backgroundColor: '#ECFDF5' } : { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons
+                name={driverProfile?.lastFaceVerifiedAt ? "shield-checkmark" : "scan"}
+                size={22}
+                color={driverProfile?.lastFaceVerifiedAt ? COLORS.success : COLORS.primary}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.faceCardTitle}>
+                  {driverProfile?.lastFaceVerifiedAt ? "Đã điểm danh khuôn mặt" : "Điểm danh sinh trắc học"}
+                </Text>
+                <View style={[styles.faceBadge, driverProfile?.lastFaceVerifiedAt ? styles.faceBadgeSuccess : styles.faceBadgeWarning]}>
+                  <Text style={[styles.faceBadgeText, driverProfile?.lastFaceVerifiedAt ? { color: COLORS.success } : { color: COLORS.warning }]}>
+                    {driverProfile?.lastFaceVerifiedAt ? "HỢP LỆ" : "CẦN QUÉT"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.faceCardSub}>
+                {driverProfile?.lastFaceVerifiedAt
+                  ? `Xác thực lúc: ${new Date(driverProfile.lastFaceVerifiedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+                  : "Quét khuôn mặt để xác thực chính chủ tài xế"}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.faceActionBtn, driverProfile?.lastFaceVerifiedAt ? styles.faceActionBtnOutline : styles.faceActionBtnPrimary]}
+            onPress={() => setFaceModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="camera"
+              size={14}
+              color={driverProfile?.lastFaceVerifiedAt ? COLORS.primary : "#FFF"}
+              style={{ marginRight: 4 }}
+            />
+            <Text style={[styles.faceActionBtnText, driverProfile?.lastFaceVerifiedAt ? { color: COLORS.primary } : { color: "#FFF" }]}>
+              {driverProfile?.lastFaceVerifiedAt ? "Quét lại" : "Điểm danh"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
 
@@ -582,12 +664,99 @@ export default function DriverDashboardScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL QUÉT MẶT ĐIỂM DANH SINH TRẮC HỌC AI */}
+      <FaceVerificationModal
+        visible={faceModalVisible}
+        mode={driverProfile?.isFaceEnrolled ? 'verify' : 'enroll'}
+        onClose={() => setFaceModalVisible(false)}
+        onSuccess={() => {
+          fetchDashboardData(true);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  // Biometric Face Card
+  faceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  faceCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    marginRight: 10,
+  },
+  faceCardIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  faceCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  faceCardSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  faceBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  faceBadgeSuccess: {
+    backgroundColor: '#ECFDF5',
+  },
+  faceBadgeWarning: {
+    backgroundColor: '#FFFBEB',
+  },
+  faceBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  faceActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  faceActionBtnPrimary: {
+    backgroundColor: COLORS.primary,
+  },
+  faceActionBtnOutline: {
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  faceActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16 },
   headerTextContainer: { flex: 1 },
   greetingText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },

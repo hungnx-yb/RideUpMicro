@@ -61,6 +61,15 @@ export const apiService = {
   getMyWallet: async () => {
     return await apiClient.get('/api/identity/drivers/me/wallet');
   },
+  enrollDriverFace: async (imageBase64) => {
+    return await apiClient.post('/api/identity/drivers/face/enroll', { imageBase64 });
+  },
+  verifyDriverFace: async (imageBase64) => {
+    return await apiClient.post('/api/identity/drivers/face/verify', { imageBase64 });
+  },
+  getDriverFaceStatus: async () => {
+    return await apiClient.get('/api/identity/drivers/face/status');
+  },
 
   // Booking Service
   createBooking: async (payload) => {
