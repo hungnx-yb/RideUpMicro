@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -30,16 +30,55 @@ const COLORS = {
 };
 const SIZES = { small: 12, font: 14, medium: 16, large: 20, extraLarge: 24, title: 32 };
 
+// Helper xóa dấu tiếng Việt để tìm kiếm không dấu / có dấu đều ra
+const removeDiacritics = (str) => {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+};
+
 // ===== COMPONENT: Custom Dropdown =====
 const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled }) => {
   const [open, setOpen] = useState(false);
+  const [keyword, setKeyword] = useState('');
   const selectedLabel = options.find(o => o.id === value)?.name || '';
+
+  const filteredOptions = useMemo(() => {
+    if (!keyword.trim()) return options;
+    const q = removeDiacritics(keyword);
+    const rawQ = keyword.trim().toLowerCase();
+    return options.filter(o => o.name && (
+      removeDiacritics(o.name).includes(q) ||
+      o.name.toLowerCase().includes(rawQ)
+    ));
+  }, [options, keyword]);
+
+  const handleOpen = () => {
+    if (!disabled) {
+      setKeyword('');
+      setOpen(true);
+    }
+  };
+
+  const handleClose = () => {
+    setKeyword('');
+    setOpen(false);
+  };
+
+  const handleSelect = (id) => {
+    onSelect(id);
+    handleClose();
+  };
 
   return (
     <>
       <TouchableOpacity
         style={[styles.dropdownBtn, disabled && styles.dropdownBtnDisabled]}
-        onPress={() => { if (!disabled) setOpen(true); }}
+        onPress={handleOpen}
         activeOpacity={0.8}
       >
         <Text style={selectedLabel ? styles.dropdownValue : styles.dropdownPlaceholder} numberOfLines={1}>
@@ -48,46 +87,76 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
         <Ionicons name="chevron-down" size={14} color={disabled ? COLORS.border : COLORS.textMuted} />
       </TouchableOpacity>
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <TouchableOpacity style={styles.ddOverlay} activeOpacity={1} onPress={() => setOpen(false)} />
-        <View style={styles.ddSheet}>
-          <View style={styles.ddHeader}>
-            <Text style={styles.ddTitle}>{label}</Text>
-            <TouchableOpacity onPress={() => setOpen(false)}>
-              <Ionicons name="close" size={22} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={handleClose}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.ddModalContainer}
+        >
+          <TouchableOpacity style={styles.ddOverlay} activeOpacity={1} onPress={handleClose} />
+          <View style={styles.ddSheet}>
+            <View style={styles.ddHeader}>
+              <Text style={styles.ddTitle}>{label}</Text>
+              <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
 
-          {/* Option: Tất cả */}
-          <TouchableOpacity
-            style={styles.ddItem}
-            onPress={() => { onSelect(''); setOpen(false); }}
-          >
-            <Text style={[styles.ddItemText, !value && { color: COLORS.primary, fontWeight: 'bold' }]}>
-              -- Tất cả --
-            </Text>
-            {!value && <Ionicons name="checkmark" size={16} color={COLORS.primary} />}
-          </TouchableOpacity>
+            {/* Ô tìm kiếm trên đầu droplist - gõ chữ là lọc ngay */}
+            <View style={styles.ddSearchBox}>
+              <Ionicons name="search" size={18} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.ddSearchInput}
+                placeholder="Nhập tên để lọc nhanh..."
+                placeholderTextColor={COLORS.textMuted}
+                value={keyword}
+                onChangeText={setKeyword}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {keyword ? (
+                <TouchableOpacity onPress={() => setKeyword('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
 
-          <FlatList
-            data={options}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
+            {/* Option: Tất cả */}
+            {!keyword && (
               <TouchableOpacity
                 style={styles.ddItem}
-                onPress={() => { onSelect(item.id); setOpen(false); }}
+                onPress={() => handleSelect('')}
               >
-                <Text style={[styles.ddItemText, item.id === value && { color: COLORS.primary, fontWeight: 'bold' }]}
-                  numberOfLines={1}
-                >
-                  {item.name}
+                <Text style={[styles.ddItemText, !value && { color: COLORS.primary, fontWeight: 'bold' }]}>
+                  -- Tất cả --
                 </Text>
-                {item.id === value && <Ionicons name="checkmark" size={16} color={COLORS.primary} />}
+                {!value && <Ionicons name="checkmark" size={16} color={COLORS.primary} />}
               </TouchableOpacity>
             )}
-            style={{ maxHeight: 360 }}
-          />
-        </View>
+
+            <FlatList
+              data={filteredOptions}
+              keyExtractor={item => String(item.id)}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <Text style={styles.ddEmpty}>Không tìm thấy kết quả phù hợp</Text>
+              }
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.ddItem}
+                  onPress={() => handleSelect(item.id)}
+                >
+                  <Text style={[styles.ddItemText, item.id === value && { color: COLORS.primary, fontWeight: 'bold' }]}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                  {item.id === value && <Ionicons name="checkmark" size={16} color={COLORS.primary} />}
+                </TouchableOpacity>
+              )}
+              style={{ maxHeight: 340 }}
+            />
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -461,6 +530,15 @@ export default function SearchRideScreen({ navigation }) {
     if (!isoString) return '--:--';
     return new Date(isoString).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
+  const formatDate = (isoString) => {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
   const formatMoney = (val) => `${Number(val || 0).toLocaleString('vi-VN')}đ`;
 
   const formatDuration = (dep, arr) => {
@@ -470,9 +548,9 @@ export default function SearchRideScreen({ navigation }) {
     return `${Math.floor(mins / 60)}g${mins % 60 > 0 ? (mins % 60) + 'p' : ''}`;
   };
 
-  const renderStars = (rating) => {
-    const stars = Math.round(rating || 5);
-    return '★'.repeat(stars) + '☆'.repeat(5 - stars);
+  const formatRating = (rating) => {
+    const val = rating != null && !isNaN(rating) && Number(rating) > 0 ? Number(rating).toFixed(1) : '5.0';
+    return `${val}/5 sao`;
   };
 
   const renderTrip = ({ item }) => {
@@ -492,7 +570,7 @@ export default function SearchRideScreen({ navigation }) {
             <View style={styles.driverInfo}>
               <Text style={styles.driverName} numberOfLines={1}>{item.driverName || 'Tài xế RideUp'}</Text>
               <Text style={styles.vehicleInfo} numberOfLines={1}>
-                {renderStars(item.driverRating)} • 🚗 {item.vehicleBrand} {item.vehicleModel}
+                ⭐ {formatRating(item.driverRating)} • 🚗 {item.vehicleBrand} {item.vehicleModel}
               </Text>
             </View>
           </View>
@@ -503,6 +581,16 @@ export default function SearchRideScreen({ navigation }) {
 
         {/* === BODY: LỘ TRÌNH === */}
         <View style={styles.cardBody}>
+          {/* Ngày khởi hành */}
+          {item.departureTime ? (
+            <View style={styles.departureDateBanner}>
+              <Ionicons name="calendar-outline" size={13} color={COLORS.primary} style={{ marginRight: 5 }} />
+              <Text style={styles.departureDateBannerText}>
+                Ngày khởi hành: <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>{formatDate(item.departureTime)}</Text>
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.routeRow}>
             <View style={styles.timeBox}>
               <Text style={styles.timeText}>{formatTime(item.departureTime)}</Text>
@@ -513,8 +601,8 @@ export default function SearchRideScreen({ navigation }) {
             </View>
             <View style={styles.addressBox}>
               <Text style={styles.addressText} numberOfLines={1}>{item.startAddressText || 'Điểm đón'}</Text>
-              {item.stops?.filter(s => s.stopType === 'PICKUP').slice(0, 1).map((s, i) => (
-                <Text key={i} style={styles.subAddressText} numberOfLines={1}>↳ {s.addressText}</Text>
+              {item.stops?.filter(s => s.stopType === 'PICKUP').map((s, i) => (
+                <Text key={`pickup-${i}`} style={styles.subAddressText} numberOfLines={1}>↳ {s.addressText}</Text>
               ))}
             </View>
           </View>
@@ -529,8 +617,8 @@ export default function SearchRideScreen({ navigation }) {
             </View>
             <View style={styles.addressBox}>
               <Text style={styles.addressText} numberOfLines={1}>{item.endAddressText || 'Điểm đến'}</Text>
-              {item.stops?.filter(s => s.stopType === 'DROPOFF').slice(0, 1).map((s, i) => (
-                <Text key={i} style={styles.subAddressText} numberOfLines={1}>↳ {s.addressText}</Text>
+              {item.stops?.filter(s => s.stopType === 'DROPOFF').map((s, i) => (
+                <Text key={`dropoff-${i}`} style={styles.subAddressText} numberOfLines={1}>↳ {s.addressText}</Text>
               ))}
             </View>
           </View>
@@ -906,8 +994,9 @@ const styles = StyleSheet.create({
   dropdownPlaceholder: { color: COLORS.textMuted, fontSize: 12, flex: 1, marginRight: 4 },
 
   // Dropdown Modal
-  ddOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
-  ddSheet: { backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, maxHeight: '70%' },
+  ddModalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  ddOverlay: { ...StyleSheet.absoluteFillObject },
+  ddSheet: { backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, maxHeight: '80%' },
   ddHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   ddTitle: { color: COLORS.text, fontSize: SIZES.medium, fontWeight: 'bold' },
   ddSearchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
@@ -952,6 +1041,20 @@ const styles = StyleSheet.create({
 
   // Body
   cardBody: { padding: 14, position: 'relative' },
+  departureDateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
+  },
+  departureDateBannerText: {
+    color: COLORS.text,
+    fontSize: 12,
+  },
   routeRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
   timeBox: { width: 44, paddingTop: 2 },
   timeText: { color: COLORS.text, fontSize: 13, fontWeight: '800' },

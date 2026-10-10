@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
-import { FaArrowRight, FaCalendarAlt, FaChevronDown, FaMapMarkerAlt, FaSearch, FaSpinner } from "react-icons/fa";
+import { useEffect, useMemo, useState } from "react";
+import { FaArrowRight, FaCalendarAlt, FaChevronDown, FaMapMarkerAlt, FaSearch, FaSpinner, FaTimesCircle } from "react-icons/fa";
+
+const removeDiacritics = (str) => {
+  return (str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim();
+};
 
 function LocationDropdown({
   value,
@@ -11,11 +21,13 @@ function LocationDropdown({
   onChange,
 }) {
   const [open, setOpen] = useState(false);
+  const [keyword, setKeyword] = useState("");
 
   useEffect(() => {
     const handler = (event) => {
       if (!event.target.closest("[data-location-dropdown]")) {
         setOpen(false);
+        setKeyword("");
       }
     };
 
@@ -25,6 +37,16 @@ function LocationDropdown({
 
   const selectedLabel = options.find((item) => item.id === value)?.name;
 
+  const filteredOptions = useMemo(() => {
+    if (!keyword.trim()) return options;
+    const q = removeDiacritics(keyword);
+    const rawQ = keyword.trim().toLowerCase();
+    return options.filter((item) => item.name && (
+      removeDiacritics(item.name).includes(q) ||
+      item.name.toLowerCase().includes(rawQ)
+    ));
+  }, [options, keyword]);
+
   return (
     <div className="relative" data-location-dropdown>
       <button
@@ -33,36 +55,56 @@ function LocationDropdown({
         onClick={() => {
           if (typeof onOpen === "function") onOpen();
           setOpen((previous) => !previous);
+          setKeyword("");
         }}
         className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-8 pr-3 text-sm text-slate-900 outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-100"
       >
         <span className={selectedLabel ? "text-slate-900" : "text-slate-500"}>
-          {isLoading ? "Dang tai..." : selectedLabel || placeholder}
+          {isLoading ? "Đang tải..." : selectedLabel || placeholder}
         </span>
         <FaChevronDown className={`text-xs text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && !disabled ? (
         <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-          <div className="max-h-40 overflow-y-auto py-1">
-            {options.length ? (
-              options.map((item) => (
+          <div className="border-b border-slate-100 p-2">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs">
+              <FaSearch className="text-slate-400" />
+              <input
+                type="text"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="Tìm nhanh..."
+                className="w-full bg-transparent text-slate-800 placeholder-slate-400 outline-none"
+                autoFocus
+              />
+              {keyword ? (
+                <button type="button" onClick={() => setKeyword("")} className="text-slate-400 hover:text-slate-600">
+                  <FaTimesCircle />
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div className="max-h-48 overflow-y-auto py-1">
+            {filteredOptions.length ? (
+              filteredOptions.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => {
                     onChange(item.id);
                     setOpen(false);
+                    setKeyword("");
                   }}
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-orange-50 ${
-                    item.id === value ? "bg-orange-50 text-orange-700" : "text-slate-800"
+                  className={`w-full px-3 py-2 text-left text-sm hover:bg-emerald-50 ${
+                    item.id === value ? "bg-emerald-50 font-semibold text-emerald-700" : "text-slate-800"
                   }`}
                 >
                   {item.name}
                 </button>
               ))
             ) : (
-              <p className="px-3 py-2 text-sm text-slate-500">Khong co du lieu</p>
+              <p className="px-3 py-2 text-center text-xs text-slate-500">Không tìm thấy</p>
             )}
           </div>
         </div>

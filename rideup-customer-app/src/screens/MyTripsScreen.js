@@ -223,7 +223,7 @@ const MyTripsScreen = ({ navigation }) => {
               {!activeTab && (
                 <TouchableOpacity
                   style={styles.emptyBtn}
-                  onPress={() => navigation.navigate('Search')}
+                  onPress={() => navigation.navigate('SearchRide')}
                 >
                   <Text style={styles.emptyBtnText}>Tìm chuyến ngay</Text>
                 </TouchableOpacity>
