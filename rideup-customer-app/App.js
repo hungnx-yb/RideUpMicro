@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import LoginScreen from './src/screens/LoginScreen';
 import CustomerDashboardScreen from './src/screens/CustomerDashboardScreen';
 import SearchRideScreen from './src/screens/SearchRideScreen';
-import MapScreen from './src/screens/MapScreen';
+import BookingDetailScreen from './src/screens/BookingDetailScreen';
 import BookingChatScreen from './src/screens/BookingChatScreen';
 import MyTripsScreen from './src/screens/MyTripsScreen';
 import RatingScreen from './src/screens/RatingScreen';
@@ -88,7 +88,7 @@ export default function App() {
             <Stack.Screen name="Main" component={MainTabNavigator} options={{ headerShown: false }} />
             <Stack.Screen name="SearchRide" component={SearchRideScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Search" component={SearchRideScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="Map" component={MapScreen} options={{ title: 'Bản đồ chuyến đi', headerBackTitle: 'Trở lại' }} />
+            <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: false }} />
             <Stack.Screen name="BookingChat" component={BookingChatScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Rating" component={RatingScreen} options={{ title: 'Đánh giá chuyến đi', headerBackTitle: 'Trở lại' }} />
           </Stack.Navigator>

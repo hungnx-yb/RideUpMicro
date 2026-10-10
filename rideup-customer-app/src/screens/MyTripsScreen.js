@@ -196,7 +196,7 @@ const MyTripsScreen = ({ navigation }) => {
           renderItem={({ item }) => (
             <BookingCard
               item={item}
-              onPress={() => navigation.navigate('Map', { booking: item })}
+              onPress={() => navigation.navigate('BookingDetail', { booking: item })}
               onChatPress={() => navigation.navigate('BookingChat', { 
                 bookingId: item.id, 
                 driverName: item.trip?.driverName || 'Tài xế', 
