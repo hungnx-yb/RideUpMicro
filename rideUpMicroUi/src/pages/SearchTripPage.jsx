@@ -260,7 +260,14 @@ function SearchTripPage() {
     setErrorMessage("");
   };
 
-  const fetchTrips = async ({ startWardId = "", endWardId = "", date, showError = true }) => {
+  const fetchTrips = async ({
+    startProvinceId = "",
+    startWardId = "",
+    endProvinceId = "",
+    endWardId = "",
+    date,
+    showError = true,
+  } = {}) => {
     try {
       setIsSearching(true);
       if (showError) {
@@ -268,8 +275,10 @@ function SearchTripPage() {
       }
 
       const response = await getAllTripsApi({
-        startWardId,
-        endWardId,
+        startProvinceId: startProvinceId || undefined,
+        startWardId: startWardId || undefined,
+        endProvinceId: endProvinceId || undefined,
+        endWardId: endWardId || undefined,
         date: date || undefined,
         page: 0,
         size: 20,
@@ -297,15 +306,20 @@ function SearchTripPage() {
   const handleSearch = async (event) => {
     event.preventDefault();
 
-    if (!searchForm.startWardId || !searchForm.endWardId) {
-      setErrorMessage("Vui lòng chọn đầy đủ phường/xã điểm đi và điểm đến");
+    if (
+      (!searchForm.startProvinceId && !searchForm.startWardId) ||
+      (!searchForm.endProvinceId && !searchForm.endWardId)
+    ) {
+      setErrorMessage("Vui lòng chọn đầy đủ điểm đi và điểm đến");
       return;
     }
 
     await fetchTrips({
-        startWardId: searchForm.startWardId,
-        endWardId: searchForm.endWardId,
-        date: searchForm.date || undefined,
+      startProvinceId: searchForm.startProvinceId,
+      startWardId: searchForm.startWardId,
+      endProvinceId: searchForm.endProvinceId,
+      endWardId: searchForm.endWardId,
+      date: searchForm.date || undefined,
       showError: true,
     });
   };
@@ -371,7 +385,9 @@ function SearchTripPage() {
       setSelectedTrip(null);
       bookingIdempotencyRef.current = { fingerprint: "", key: "" };
       await fetchTrips({
+        startProvinceId: searchForm.startProvinceId,
         startWardId: searchForm.startWardId,
+        endProvinceId: searchForm.endProvinceId,
         endWardId: searchForm.endWardId,
         date: searchForm.date || undefined,
         showError: false,

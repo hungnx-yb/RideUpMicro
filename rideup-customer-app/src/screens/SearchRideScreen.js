@@ -290,7 +290,15 @@ export default function SearchRideScreen({ navigation }) {
     }
     try {
       const dateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : undefined;
-      const response = await apiService.getAllTrips({ startWardId, endWardId, date: dateStr, page: 0, size: 20 });
+      const response = await apiService.getAllTrips({
+        startProvinceId: startProvinceId || undefined,
+        startWardId: startWardId || undefined,
+        endProvinceId: endProvinceId || undefined,
+        endWardId: endWardId || undefined,
+        date: dateStr,
+        page: 0,
+        size: 20
+      });
       // API trả về result là array trực tiếp (không phải { items: [...] })
       if (Array.isArray(response?.data?.result)) {
         setTrips(response.data.result);

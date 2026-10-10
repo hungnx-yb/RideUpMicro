@@ -25,13 +25,20 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
 
 
     @Override
-    public Page<Trip> getAllTrips(String startWardId, String endWardId, LocalDate date, Pageable pageable) {
+    public Page<Trip> getAllTrips(String startProvinceId, String startWardId, String endProvinceId, String endWardId, LocalDate date, Pageable pageable) {
         StringBuilder baseQuery = new StringBuilder("""
             FROM trip t
             WHERE 1=1
         """);
 
         Map<String, Object> params = new HashMap<>();
+
+        if (startProvinceId != null && !startProvinceId.isBlank()) {
+            baseQuery.append("""
+                AND t.start_province_id = :startProvinceId
+            """);
+            params.put("startProvinceId", startProvinceId);
+        }
 
         if (startWardId != null && !startWardId.isBlank()) {
             baseQuery.append("""
@@ -43,6 +50,13 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
                 )
             """);
             params.put("startWardId", startWardId);
+        }
+
+        if (endProvinceId != null && !endProvinceId.isBlank()) {
+            baseQuery.append("""
+                AND t.end_province_id = :endProvinceId
+            """);
+            params.put("endProvinceId", endProvinceId);
         }
 
         if (endWardId != null && !endWardId.isBlank()) {

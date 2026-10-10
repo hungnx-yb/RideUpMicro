@@ -9,6 +9,6 @@ import org.springframework.data.domain.Pageable;
 import java.time.LocalDate;
 
 public interface TripRepositoryCustom {
-    public Page<Trip> getAllTrips(String startWardId, String endWardId, LocalDate date, Pageable pageable);
+    public Page<Trip> getAllTrips(String startProvinceId, String startWardId, String endProvinceId, String endWardId, LocalDate date, Pageable pageable);
     public Page<Trip> searchDriveTrip( SearchTripDriveRequest  request);
 }

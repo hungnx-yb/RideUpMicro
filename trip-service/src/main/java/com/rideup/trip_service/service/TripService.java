@@ -148,12 +148,14 @@ public class TripService {
         return modelMapper.map(saved, SeatResponse.class);
     }
 
-    public PageResponse<TripResponse> getAllTrips(String startWardId,
+    public PageResponse<TripResponse> getAllTrips(String startProvinceId,
+                                                  String startWardId,
+                                                  String endProvinceId,
                                                   String endWardId,
                                                   LocalDate date,
                                                   Pageable pageable) {
 
-        Page<Trip> tripPage = tripRepository.getAllTrips(startWardId, endWardId, date, pageable);
+        Page<Trip> tripPage = tripRepository.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date, pageable);
         List<Trip> trips = tripPage.getContent();
 
         List<String> ids = trips.stream()
