@@ -78,6 +78,12 @@ export const apiService = {
   getAllTrips: async (params) => {
     return await apiClient.get('/api/trip/trip', { params });
   },
+  getTripDetail: async (tripId) => {
+    return await apiClient.get(`/api/trip/trip/${tripId}`);
+  },
+  getBookingDetail: async (bookingId) => {
+    return await apiClient.get(`/api/booking/bookings/${bookingId}`);
+  },
 
   // Location Service
   getAllProvinces: async () => {

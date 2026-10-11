@@ -71,9 +71,11 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
             params.put("endWardId", endWardId);
         }
 
+        LocalDateTime now = LocalDateTime.now();
         if (date != null) {
-            LocalDateTime startOfDay = date.atStartOfDay();
-            LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();
+            LocalDate queryDate = date.isBefore(LocalDate.now()) ? LocalDate.now() : date;
+            LocalDateTime startOfDay = queryDate.equals(LocalDate.now()) ? now : queryDate.atStartOfDay();
+            LocalDateTime endOfDay = queryDate.plusDays(1).atStartOfDay();
 
             baseQuery.append("""
                 AND t.departure_time >= :startOfDay
@@ -82,7 +84,16 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
 
             params.put("startOfDay", startOfDay);
             params.put("endOfDay", endOfDay);
+        } else {
+            baseQuery.append("""
+                AND t.departure_time >= :todayStart
+            """);
+            params.put("todayStart", now);
         }
+
+        baseQuery.append("""
+            AND t.status IN ('OPEN', 'FULL')
+        """);
 
         String countSql = "SELECT COUNT(*) " + baseQuery;
         Query countQuery = entityManager.createNativeQuery(countSql);
@@ -90,7 +101,7 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
 
         Number total = (Number) countQuery.getSingleResult();
 
-        String dataSql = "SELECT * " + baseQuery + " ORDER BY t.departure_time ASC";
+        String dataSql = "SELECT * " + baseQuery + " ORDER BY t.created_at DESC";
         Query dataQuery = entityManager.createNativeQuery(dataSql, Trip.class);
         params.forEach(dataQuery::setParameter);
 
@@ -126,13 +137,31 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
             """);
         }
 
-
         if (filter.getEndProvinceId() != null && !filter.getEndProvinceId().isBlank()) {
             params.put("endProvinceId", filter.getEndProvinceId());
             baseQuery.append("""
                 AND t.end_province_id = :endProvinceId
             """);
         }
+
+        if (filter.getPickupAddress() != null && !filter.getPickupAddress().isBlank()) {
+            params.put("pickupAddress", "%" + filter.getPickupAddress().trim() + "%");
+            baseQuery.append("""
+                AND (t.start_address_text LIKE :pickupAddress OR EXISTS (
+                    SELECT 1 FROM trip_stop ts WHERE ts.trip_id = t.id AND ts.stop_type = 'PICKUP' AND ts.address_text LIKE :pickupAddress
+                ))
+            """);
+        }
+
+        if (filter.getDropoffAddress() != null && !filter.getDropoffAddress().isBlank()) {
+            params.put("dropoffAddress", "%" + filter.getDropoffAddress().trim() + "%");
+            baseQuery.append("""
+                AND (t.end_address_text LIKE :dropoffAddress OR EXISTS (
+                    SELECT 1 FROM trip_stop ts WHERE ts.trip_id = t.id AND ts.stop_type = 'DROPOFF' AND ts.address_text LIKE :dropoffAddress
+                ))
+            """);
+        }
+
         LocalDate startDate = filter.getStartDate();
         LocalDate endDate = filter.getEndDate();
 
@@ -163,7 +192,7 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
 
         Number total = (Number) countQuery.getSingleResult();
 
-        String dataSql = "SELECT * " + baseQuery + " ORDER BY t.departure_time DESC";
+        String dataSql = "SELECT * " + baseQuery + " ORDER BY t.created_at DESC";
         Query dataQuery = entityManager.createNativeQuery(dataSql, Trip.class);
         params.forEach(dataQuery::setParameter);
 

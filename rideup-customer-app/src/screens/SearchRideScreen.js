@@ -309,8 +309,11 @@ export default function SearchRideScreen({ navigation }) {
   const [dropoffWardId, setDropoffWardId] = useState('');
   const [dropoffLocation, setDropoffLocation] = useState({ lat: NaN, lng: NaN, addressText: '' });
 
+  const [page, setPage] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
   useEffect(() => {
-    fetchTrips(false); // Không thu gọn bộ lọc trong lần tải đầu tiên
+    fetchTrips(0, false); // Không thu gọn bộ lọc trong lần tải đầu tiên
     fetchProvinces();
   }, []);
 
@@ -351,7 +354,7 @@ export default function SearchRideScreen({ navigation }) {
     }
   };
 
-  const fetchTrips = async (autoCollapse = true) => {
+  const fetchTrips = async (targetPage = 0, autoCollapse = true) => {
     setLoading(true);
     if (autoCollapse) {
       // Chỉ thu gọn khi bấm nút Tìm kiếm
@@ -365,21 +368,37 @@ export default function SearchRideScreen({ navigation }) {
         endProvinceId: endProvinceId || undefined,
         endWardId: endWardId || undefined,
         date: dateStr,
-        page: 0,
-        size: 20
+        page: targetPage,
+        size: 10
       });
-      // API trả về result là array trực tiếp (không phải { items: [...] })
+      const count = response?.data?.count ?? 0;
+      setTotalElements(count);
+      setPage(targetPage);
+
+      let list = [];
       if (Array.isArray(response?.data?.result)) {
-        setTrips(response.data.result);
+        list = response.data.result;
       } else if (response?.data?.result?.items) {
-        // Fallback nếu API đổi sang dạng paginated
-        setTrips(response.data.result.items);
-      } else {
-        setTrips([]);
+        list = response.data.result.items;
       }
+
+      // Đảm bảo chỉ hiển thị chuyến xe khởi hành >= hôm nay
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      list = list.filter(t => !t.departureTime || new Date(t.departureTime) >= now);
+
+      // Sắp xếp theo thời gian tạo chuyến giảm dần (createdAt DESC)
+      list.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      setTrips(list);
     } catch (error) {
       console.log('Fetch trips error:', error);
       setTrips([]);
+      setTotalElements(0);
     } finally {
       setLoading(false);
     }
@@ -421,6 +440,26 @@ export default function SearchRideScreen({ navigation }) {
     }
     setIsBooking(true);
     try {
+      const pickupWardName = selectedTrip?.stops?.find(s => String(s.wardId) === String(pickupWardId))?.addressText || '';
+      const dropoffWardName = selectedTrip?.stops?.find(s => String(s.wardId) === String(dropoffWardId))?.addressText || '';
+      const startProvName = selectedTrip?.startAddressText || '';
+      const endProvName = selectedTrip?.endAddressText || '';
+
+      const buildFullAddress = (detail, ward, province) => {
+        let parts = [];
+        if (detail) parts.push(detail);
+        if (ward && (!detail || !removeDiacritics(detail).includes(removeDiacritics(ward)))) {
+          parts.push(ward);
+        }
+        if (province && (!detail || !removeDiacritics(detail).includes(removeDiacritics(province)))) {
+          parts.push(province);
+        }
+        return parts.join(', ');
+      };
+
+      const fullPickupAddress = buildFullAddress(pickupAddr, pickupWardName, startProvName);
+      const fullDropoffAddress = buildFullAddress(dropoffAddr, dropoffWardName, endProvName);
+
       const payload = {
         tripId: selectedTrip.id,
         seatCount: seatCount,
@@ -428,11 +467,11 @@ export default function SearchRideScreen({ navigation }) {
         pickupLat: pickupLocation.lat || 0,
         pickupLng: pickupLocation.lng || 0,
         pickupWardId: pickupWardId,
-        pickupAddressText: pickupLocation.addressText?.trim() || '',
+        pickupAddressText: fullPickupAddress,
         dropoffLat: dropoffLocation.lat || 0,
         dropoffLng: dropoffLocation.lng || 0,
         dropoffWardId: dropoffWardId,
-        dropoffAddressText: dropoffLocation.addressText?.trim() || '',
+        dropoffAddressText: fullDropoffAddress,
         note: bookingNote.trim() || 'Đặt qua Mobile App',
       };
 
@@ -748,7 +787,7 @@ export default function SearchRideScreen({ navigation }) {
                 />
               </View>
               <View style={[styles.filterCol, { justifyContent: 'flex-end' }]}>
-                <TouchableOpacity style={styles.searchBtn} onPress={fetchTrips}>
+                <TouchableOpacity style={styles.searchBtn} onPress={() => fetchTrips(0, true)}>
                   <Ionicons name="search" size={15} color={COLORS.text} style={{ marginRight: 5 }} />
                   <Text style={styles.searchBtnText}>Tìm chuyến</Text>
                 </TouchableOpacity>
@@ -768,6 +807,33 @@ export default function SearchRideScreen({ navigation }) {
           renderItem={renderTrip}
           contentContainerStyle={styles.listContainer}
           ListEmptyComponent={<Text style={styles.emptyText}>Chưa có chuyến xe nào đang mở.</Text>}
+          ListFooterComponent={
+            totalElements > 10 ? (
+              <View style={styles.paginationRow}>
+                <TouchableOpacity
+                  style={[styles.pageBtn, page === 0 && styles.pageBtnDisabled]}
+                  disabled={page === 0 || loading}
+                  onPress={() => fetchTrips(page - 1, false)}
+                >
+                  <Ionicons name="chevron-back" size={16} color={page === 0 ? COLORS.border : COLORS.primary} />
+                  <Text style={[styles.pageBtnText, page === 0 && styles.pageBtnTextDisabled]}>Trước</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.pageInfoText}>
+                  Trang <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>{page + 1}</Text> / {Math.max(1, Math.ceil(totalElements / 10))}
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.pageBtn, (page >= Math.ceil(totalElements / 10) - 1) && styles.pageBtnDisabled]}
+                  disabled={page >= Math.ceil(totalElements / 10) - 1 || loading}
+                  onPress={() => fetchTrips(page + 1, false)}
+                >
+                  <Text style={[styles.pageBtnText, (page >= Math.ceil(totalElements / 10) - 1) && styles.pageBtnTextDisabled]}>Sau</Text>
+                  <Ionicons name="chevron-forward" size={16} color={(page >= Math.ceil(totalElements / 10) - 1) ? COLORS.border : COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
         />
       )}
 
@@ -1155,5 +1221,52 @@ const styles = StyleSheet.create({
   stripeDesc: { color: COLORS.text, fontSize: 13, textAlign: 'center', marginBottom: 16, lineHeight: 20, fontWeight: '500' },
   stripeBtn: { backgroundColor: COLORS.primary, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 14, width: '100%', alignItems: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   stripeBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+
+  // Pagination
+  paginationRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    gap: 16,
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  pageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    gap: 4,
+  },
+  pageBtnDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.6,
+    elevation: 0,
+  },
+  pageBtnText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  pageBtnTextDisabled: {
+    color: COLORS.textMuted,
+  },
+  pageInfoText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 

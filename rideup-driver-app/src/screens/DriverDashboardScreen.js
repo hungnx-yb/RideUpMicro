@@ -438,19 +438,43 @@ export default function DriverDashboardScreen() {
                   </View>
 
                   <View style={styles.pendingRoute}>
-                    <View style={styles.routeRow}>
-                      <View style={[styles.routeDotLine, { backgroundColor: COLORS.primary }]} />
-                      <Text style={styles.pendingRouteText} numberOfLines={2}>
-                        <Text style={{ fontWeight: 'bold' }}>Đón:</Text> {req.pickupAddressText || req.tripDetails?.startAddressText}
-                      </Text>
-                    </View>
-                    <View style={styles.routeDivider} />
-                    <View style={styles.routeRow}>
-                      <View style={[styles.routeDotLine, { backgroundColor: COLORS.error }]} />
-                      <Text style={styles.pendingRouteText} numberOfLines={2}>
-                        <Text style={{ fontWeight: 'bold' }}>Trả:</Text> {req.dropoffAddressText || req.tripDetails?.endAddressText}
-                      </Text>
-                    </View>
+                    {(() => {
+                      const pWard = req.tripDetails?.stops?.find(s => String(s.wardId) === String(req.pickupWardId))?.addressText || '';
+                      const dWard = req.tripDetails?.stops?.find(s => String(s.wardId) === String(req.dropoffWardId))?.addressText || '';
+                      const startProv = req.tripDetails?.startAddressText || '';
+                      const endProv = req.tripDetails?.endAddressText || '';
+                      return (
+                        <>
+                          <View style={styles.routeRow}>
+                            <View style={[styles.routeDotLine, { backgroundColor: COLORS.primary }]} />
+                            <View style={{ flex: 1 }}>
+                              {(startProv || pWard) && (
+                                <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: 'bold', marginBottom: 2 }}>
+                                  {pWard ? `${pWard}, ` : ''}{startProv}
+                                </Text>
+                              )}
+                              <Text style={styles.pendingRouteText} numberOfLines={2}>
+                                <Text style={{ fontWeight: 'bold' }}>Đón: </Text>{req.pickupAddressText || req.tripDetails?.startAddressText || 'Chưa cập nhật'}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.routeDivider} />
+                          <View style={styles.routeRow}>
+                            <View style={[styles.routeDotLine, { backgroundColor: COLORS.error }]} />
+                            <View style={{ flex: 1 }}>
+                              {(endProv || dWard) && (
+                                <Text style={{ fontSize: 11, color: COLORS.error, fontWeight: 'bold', marginBottom: 2 }}>
+                                  {dWard ? `${dWard}, ` : ''}{endProv}
+                                </Text>
+                              )}
+                              <Text style={styles.pendingRouteText} numberOfLines={2}>
+                                <Text style={{ fontWeight: 'bold' }}>Trả: </Text>{req.dropoffAddressText || req.tripDetails?.endAddressText || 'Chưa cập nhật'}
+                              </Text>
+                            </View>
+                          </View>
+                        </>
+                      );
+                    })()}
                   </View>
 
                   {req.note ? (

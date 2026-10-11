@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
-  TouchableOpacity, ScrollView, Dimensions,
+  TouchableOpacity, ScrollView, Dimensions, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { apiService } from '../services/apiService';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -46,8 +47,26 @@ const fTime = (iso) => {
 
 // ──────────────────────────────── COMPONENT ────────────────────────────────
 const BookingDetailScreen = ({ route, navigation }) => {
-  const { booking } = route.params || {};
-  if (!booking) {
+  const { booking: initialBooking } = route.params || {};
+  const [booking, setBooking] = useState(initialBooking || {});
+  const [trip, setTrip] = useState(initialBooking?.trip || null);
+  const [loadingTrip, setLoadingTrip] = useState(false);
+
+  useEffect(() => {
+    if (booking?.tripId) {
+      setLoadingTrip(true);
+      apiService.getTripDetail(booking.tripId)
+        .then(res => {
+          if (res?.data?.result) {
+            setTrip(res.data.result);
+          }
+        })
+        .catch(err => console.log('Fetch trip error in BookingDetail:', err))
+        .finally(() => setLoadingTrip(false));
+    }
+  }, [booking?.tripId]);
+
+  if (!booking || !booking.id) {
     return (
       <SafeAreaView style={s.safe}>
         <Text style={{ textAlign: 'center', marginTop: 80, color: COLORS.textMuted }}>Không tìm thấy thông tin chuyến đi.</Text>
@@ -57,6 +76,12 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
   const status = getStatus(booking.status);
   const shortCode = (booking.bookingCode || booking.id || '').toUpperCase();
+
+  // Location breakdown
+  const pickupWardName = trip?.stops?.find(s => String(s.wardId) === String(booking.pickupWardId))?.addressText || '';
+  const dropoffWardName = trip?.stops?.find(s => String(s.wardId) === String(booking.dropoffWardId))?.addressText || '';
+  const startProvinceName = trip?.startAddressText || '';
+  const endProvinceName = trip?.endAddressText || '';
 
   // ── Context‑aware actions ──
   const showChat     = ['CONFIRMED', 'RESERVED', 'PENDING_PAYMENT', 'WAITING_DRIVER_APPROVAL'].includes(booking.status);
@@ -87,7 +112,7 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
         {/* ═══ ROUTE CARD ═══ */}
         <View style={s.card}>
-          <Text style={s.sectionTitle}>Lộ trình</Text>
+          <Text style={s.sectionTitle}>Lộ trình đón trả</Text>
 
           <View style={s.routeWrap}>
             {/* Vertical line */}
@@ -101,13 +126,63 @@ const BookingDetailScreen = ({ route, navigation }) => {
               {/* Pickup */}
               <View style={s.routeBlock}>
                 <Text style={s.routeTag}>ĐIỂM ĐÓN</Text>
-                <Text style={s.routeAddr} numberOfLines={2}>{booking.pickupAddressText || booking.pickupLocation || 'Không rõ'}</Text>
+                {startProvinceName ? (
+                  <View style={s.addrBreakdown}>
+                    <View style={s.addrItemRow}>
+                      <Ionicons name="map-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
+                      <Text style={s.addrAreaText}>
+                        <Text style={{ fontWeight: '700', color: COLORS.primary }}>Tỉnh/Thành: </Text>{startProvinceName}
+                      </Text>
+                    </View>
+                    {!!pickupWardName && (
+                      <View style={s.addrItemRow}>
+                        <Ionicons name="business-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
+                        <Text style={s.addrAreaText}>
+                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{pickupWardName}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={s.addrItemRow}>
+                      <Ionicons name="navigate-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
+                      <Text style={s.addrDetailText}>
+                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{booking.pickupAddressText || 'Không rõ'}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={s.routeAddr} numberOfLines={3}>{booking.pickupAddressText || booking.pickupLocation || 'Không rõ'}</Text>
+                )}
               </View>
 
               {/* Dropoff */}
               <View style={[s.routeBlock, { marginTop: 20 }]}>
-                <Text style={s.routeTag}>ĐIỂM ĐẾN</Text>
-                <Text style={s.routeAddr} numberOfLines={2}>{booking.dropoffAddressText || booking.dropoffLocation || 'Không rõ'}</Text>
+                <Text style={[s.routeTag, { color: COLORS.orange }]}>ĐIỂM ĐẾN</Text>
+                {endProvinceName ? (
+                  <View style={s.addrBreakdown}>
+                    <View style={s.addrItemRow}>
+                      <Ionicons name="map-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
+                      <Text style={s.addrAreaText}>
+                        <Text style={{ fontWeight: '700', color: COLORS.orange }}>Tỉnh/Thành: </Text>{endProvinceName}
+                      </Text>
+                    </View>
+                    {!!dropoffWardName && (
+                      <View style={s.addrItemRow}>
+                        <Ionicons name="business-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
+                        <Text style={s.addrAreaText}>
+                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{dropoffWardName}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={s.addrItemRow}>
+                      <Ionicons name="navigate-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
+                      <Text style={s.addrDetailText}>
+                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{booking.dropoffAddressText || booking.dropoffLocation || 'Không rõ'}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={s.routeAddr} numberOfLines={3}>{booking.dropoffAddressText || booking.dropoffLocation || 'Không rõ'}</Text>
+                )}
               </View>
             </View>
           </View>
@@ -119,12 +194,12 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
           <InfoRow icon="calendar-outline" label="Ngày đặt" value={fDate(booking.createdAt)} />
           <InfoRow icon="time-outline" label="Giờ đặt" value={fTime(booking.createdAt)} />
-          {booking.trip?.departureDate && (
-            <InfoRow icon="airplane-outline" label="Ngày khởi hành" value={fDate(booking.trip.departureDate)} />
+          {(trip?.departureTime || booking.trip?.departureDate) && (
+            <InfoRow icon="airplane-outline" label="Khởi hành" value={`${fTime(trip?.departureTime || booking.trip?.departureDate)} • ${fDate(trip?.departureTime || booking.trip?.departureDate)}`} />
           )}
           <InfoRow icon="people-outline" label="Số ghế" value={`${booking.seatsBooked || booking.seatCount || 1} ghế`} />
-          {booking.trip?.vehicleType && (
-            <InfoRow icon="car-outline" label="Phương tiện" value={booking.trip.vehicleType} />
+          {(trip?.vehicleBrand || trip?.vehicleModel || booking.trip?.vehicleType) && (
+            <InfoRow icon="car-outline" label="Phương tiện" value={`${trip?.vehicleBrand || ''} ${trip?.vehicleModel || ''}`.trim() || booking.trip?.vehicleType} />
           )}
         </View>
 
@@ -281,6 +356,10 @@ const s = StyleSheet.create({
   routeBlock: {},
   routeTag: { fontSize: 10, fontWeight: '800', color: COLORS.textMuted, letterSpacing: 0.5, marginBottom: 3 },
   routeAddr: { fontSize: 15, fontWeight: '700', color: COLORS.text, lineHeight: 22 },
+  addrBreakdown: { marginTop: 4, gap: 4 },
+  addrItemRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  addrAreaText: { flex: 1, fontSize: 13, color: COLORS.text, lineHeight: 19 },
+  addrDetailText: { flex: 1, fontSize: 13, color: COLORS.textSec, lineHeight: 19 },
 
   // Info rows
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.divider },

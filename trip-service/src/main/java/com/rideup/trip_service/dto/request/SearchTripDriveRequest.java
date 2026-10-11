@@ -18,6 +18,7 @@ public class SearchTripDriveRequest {
     LocalDate endDate;
     String startProvinceId;
     String endProvinceId;
+    String pickupAddress;
+    String dropoffAddress;
     Pageable pageable;
-
 }
