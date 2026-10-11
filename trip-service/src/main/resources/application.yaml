@@ -118,6 +118,7 @@ app:
     topics:
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
+      trip-cancelled: ${KAFKA_TOPIC_TRIP_CANCELLED:trip.cancelled}
 
 clients:
   location:

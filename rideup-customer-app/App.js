@@ -90,6 +90,7 @@ export default function App() {
             <Stack.Screen name="Search" component={SearchRideScreen} options={{ headerShown: false }} />
             <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: false }} />
             <Stack.Screen name="BookingChat" component={BookingChatScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="MyTrips" component={MyTripsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Rating" component={RatingScreen} options={{ title: 'Đánh giá chuyến đi', headerBackTitle: 'Trở lại' }} />
           </Stack.Navigator>
         </NavigationContainer>

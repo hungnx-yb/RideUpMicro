@@ -5,6 +5,7 @@ import com.rideUp.booking_service.dto.event.BookingCancelledEvent;
 import com.rideUp.booking_service.dto.event.BookingConfirmedEvent;
 import com.rideUp.booking_service.dto.event.PaymentRequestedEvent;
 import com.rideUp.booking_service.dto.response.BookingResponse;
+import com.rideUp.booking_service.dto.response.TripResponse;
 import com.rideUp.booking_service.dto.response.ApiResponse;
 import com.rideUp.booking_service.dto.response.UserResponse;
 import com.rideUp.booking_service.entity.Booking;
@@ -57,7 +58,7 @@ public class BookingService {
 
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request) {
-        BigDecimal tripPricePerSeat = reserveTripSeats(request.getTripId(), request.getSeatCount());
+        BigDecimal tripPricePerSeat = getTripPriceAndValidateSeats(request.getTripId(), request.getSeatCount());
         LocalDateTime now = LocalDateTime.now();
         String correlationId = UUID.randomUUID().toString();
         Booking booking = modelMapper.map(request, Booking.class);
@@ -140,6 +141,7 @@ public class BookingService {
             return modelMapper.map(booking, BookingResponse.class);
         }
 
+        BookingStatus oldStatus = booking.getStatus();
         booking.setStatus(BookingStatus.CANCELLED_PAYMENT_FAILED);
         booking.setPaymentId(request.getPaymentId());
         booking.setPaymentStatus(PaymentStatus.FAILED);
@@ -152,7 +154,9 @@ public class BookingService {
         booking.setExpiresAt(null);
 
         Booking saved = bookingRepository.save(booking);
-        publishBookingCancelled(saved, request.getCorrelationId(), saved.getCancelReason());
+        if (oldStatus == BookingStatus.CONFIRMED) {
+            publishBookingCancelled(saved, request.getCorrelationId(), saved.getCancelReason());
+        }
         return modelMapper.map(saved, BookingResponse.class);
     }
 
@@ -179,6 +183,24 @@ public class BookingService {
         if (booking.getStatus() != BookingStatus.WAITING_DRIVER_APPROVAL) {
             throw new AppException(ErrorCode.BOOKING_NOT_FOUND); 
         }
+
+        // Kiểm tra trạng thái chuyến đi: không thể duyệt khi xe đã khởi hành hoặc đã huỷ/hoàn thành
+        try {
+            var tripResponse = tripServiceClient.getTripById(booking.getTripId());
+            if (tripResponse != null && tripResponse.getResult() != null) {
+                var tripStatus = tripResponse.getResult().getStatus();
+                if (tripStatus != null && !"OPEN".equalsIgnoreCase(tripStatus) && !"FULL".equalsIgnoreCase(tripStatus)) {
+                    throw new AppException(ErrorCode.TRIP_ALREADY_STARTED);
+                }
+            }
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Failed to check trip status during approveBooking: {}", e.getMessage());
+        }
+
+        // Chính thức trừ ghế tại đây khi tài xế duyệt đơn
+        reserveTripSeats(booking.getTripId(), booking.getSeatCount());
 
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setExpiresAt(null);
@@ -213,7 +235,7 @@ public class BookingService {
         Booking saved = bookingRepository.save(booking);
 
         String correlationId = UUID.randomUUID().toString();
-        publishBookingCancelled(saved, correlationId, saved.getCancelReason());
+        // Không publishBookingCancelled vì đơn này chưa từng được duyệt (chưa từng trừ ghế)
 
         com.rideUp.booking_service.dto.event.BookingRejectedEvent event = com.rideUp.booking_service.dto.event.BookingRejectedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
@@ -299,23 +321,26 @@ public class BookingService {
 
         ensureCancelableStatus(booking);
 
+        BookingStatus oldStatus = booking.getStatus();
         booking.setStatus(BookingStatus.CANCELLED_USER);
         if (booking.getPaymentStatus() != PaymentStatus.PAID) {
             booking.setPaymentStatus(PaymentStatus.FAILED);
         }
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelReason(request == null ? null : request.getReason());
-        booking.setStatus(BookingStatus.CANCELLED_USER);
         Booking saved = bookingRepository.save(booking);
         String correlationId = UUID.randomUUID().toString();
         String cancelReason = saved.getCancelReason() == null || saved.getCancelReason().isBlank()
                 ? "Cancelled by user"
                 : saved.getCancelReason();
-        publishBookingCancelled(saved, correlationId, cancelReason);
 
-        if (saved.getPaymentStatus() == PaymentStatus.PAID) {
-            publishBookingCancellRequested(saved, correlationId, cancelReason);
+        // Chỉ release ghế trên trip-service nếu đơn đã từng được duyệt (CONFIRMED)
+        if (oldStatus == BookingStatus.CONFIRMED) {
+            publishBookingCancelled(saved, correlationId, cancelReason);
         }
+
+        // Luôn gửi yêu cầu hoàn tiền / huỷ giữ cọc qua payment-service
+        publishBookingCancellRequested(saved, correlationId, cancelReason);
         return modelMapper.map(saved, BookingResponse.class);
     }
 
@@ -371,16 +396,17 @@ public class BookingService {
         int expiredCount = 0;
         for (Booking booking : pendingExpiredBookings) {
             try {
+                BookingStatus oldStatus = booking.getStatus();
                 booking.setPaymentStatus(PaymentStatus.FAILED);
                 booking.setCancelledAt(now);
-                booking.setCancelReason(booking.getStatus() == BookingStatus.PENDING_PAYMENT ? "Payment timeout" : "Driver approval timeout");
+                booking.setCancelReason(oldStatus == BookingStatus.PENDING_PAYMENT ? "Payment timeout" : "Driver approval timeout");
                 booking.setStatus(BookingStatus.EXPIRED);
                 booking.setExpiresAt(null);
                 
-                publishBookingCancelled(booking, UUID.randomUUID().toString(), booking.getCancelReason());
-                
+                // Đơn hết hạn chưa từng được duyệt nên không trừ ghế -> Không cần release ghế
+
                 // Bắn event rejected nếu là đơn chờ duyệt timeout để hoàn tiền hold
-                if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL) {
+                if (oldStatus == BookingStatus.WAITING_DRIVER_APPROVAL) {
                     com.rideUp.booking_service.dto.event.BookingRejectedEvent event = com.rideUp.booking_service.dto.event.BookingRejectedEvent.builder()
                             .eventId(UUID.randomUUID().toString())
                             .correlationId(UUID.randomUUID().toString())
@@ -397,6 +423,33 @@ public class BookingService {
         bookingRepository.saveAll(pendingExpiredBookings);
         return expiredCount;
     }
+
+    private BigDecimal getTripPriceAndValidateSeats(String tripId, Integer seatCount) {
+        try {
+            ApiResponse<TripResponse> response = tripServiceClient.getTripById(tripId);
+            if (response == null || response.getResult() == null) {
+                throw new AppException(ErrorCode.TRIP_NOT_FOUND);
+            }
+            TripResponse trip = response.getResult();
+            if (trip.getStatus() != null && !"OPEN".equalsIgnoreCase(trip.getStatus())) {
+                throw new AppException(ErrorCode.SEAT_NOT_AVAILABLE);
+            }
+            if (trip.getSeatAvailable() == null || trip.getSeatAvailable() < seatCount) {
+                throw new AppException(ErrorCode.SEAT_NOT_AVAILABLE);
+            }
+            BigDecimal priceVnd = trip.getPriceVnd();
+            if (priceVnd == null || priceVnd.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
+            }
+            return priceVnd;
+        } catch (FeignException ex) {
+            if (ex.status() == 404) {
+                throw new AppException(ErrorCode.TRIP_NOT_FOUND);
+            }
+            throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
+        }
+    }
+
     private BigDecimal reserveTripSeats(String tripId, Integer seatCount) {
         try {
             ApiResponse<SeatResponse> response = tripServiceClient.reserveSeats(
@@ -416,8 +469,56 @@ public class BookingService {
 
             return priceVnd;
         } catch (FeignException ex) {
+            if (ex.status() == 400) {
+                throw new AppException(ErrorCode.SEAT_NOT_AVAILABLE);
+            }
             throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
         }
+    }
+
+    @Transactional
+    public void handleTripCancelled(String tripId, String cancelReason) {
+        log.info("Handling trip cancelled event for tripId={}, reason={}", tripId, cancelReason);
+        List<BookingStatus> activeStatuses = List.of(
+                BookingStatus.PENDING_PAYMENT,
+                BookingStatus.WAITING_DRIVER_APPROVAL,
+                BookingStatus.CONFIRMED
+        );
+
+        List<Booking> bookingsToCancel = bookingRepository.findByTripIdAndStatusIn(tripId, activeStatuses);
+        if (bookingsToCancel.isEmpty()) {
+            log.info("No active bookings found to cancel for tripId={}", tripId);
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        String reason = cancelReason != null && !cancelReason.isBlank() ? cancelReason : "Tài xế huỷ chuyến";
+
+        for (Booking booking : bookingsToCancel) {
+            String correlationId = UUID.randomUUID().toString();
+            PaymentStatus oldPaymentStatus = booking.getPaymentStatus();
+            BookingStatus oldStatus = booking.getStatus();
+
+            booking.setStatus(BookingStatus.CANCELLED_DRIVER);
+            booking.setCancelledAt(now);
+            booking.setCancelReason(reason);
+            booking.setExpiresAt(null);
+
+            // Xử lý hoàn tiền / giải phóng cọc tự động qua payment-service
+            publishBookingCancellRequested(booking, correlationId, reason);
+            com.rideUp.booking_service.dto.event.BookingRejectedEvent rejectedEvent = com.rideUp.booking_service.dto.event.BookingRejectedEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .correlationId(correlationId)
+                    .bookingId(booking.getId())
+                    .build();
+            bookingServicePublisher.publishBookingRejected(rejectedEvent);
+
+            // Bắn event báo huỷ vé để notification-service gửi thông báo push/SMS đến khách hàng
+            publishBookingCancelled(booking, correlationId, reason);
+        }
+
+        bookingRepository.saveAll(bookingsToCancel);
+        log.info("Successfully cancelled {} bookings and triggered refunds for tripId={}", bookingsToCancel.size(), tripId);
     }
 
     private void ensureCancelableStatus(Booking booking) {

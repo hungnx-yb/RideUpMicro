@@ -59,6 +59,8 @@ public class Trip {
     LocalDateTime updatedAt;
 
     String note;
+    String cancelReason;
+    LocalDateTime cancelledAt;
 
     @OneToMany(mappedBy = "trip", cascade = CascadeType.ALL, orphanRemoval = true)
     List<TripStop> stops;

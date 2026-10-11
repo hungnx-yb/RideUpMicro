@@ -120,11 +120,24 @@ public class PaymentServiceConsumer {
     )
     public void onBookingApproved(String payload, Acknowledgment ack) throws Exception {
         com.rideUp.payment_service.dto.event.BookingApprovedEvent event = objectMapper.readValue(payload, com.rideUp.payment_service.dto.event.BookingApprovedEvent.class);
-        log.info("[BookingApprovedEvent] eventId={}, bookingId={}", event.getEventId(), event.getBookingId());
+        log.info("[BookingApprovedEvent] eventId={}, bookingId={}. Payment remains in HOLDING state until trip is completed.", event.getEventId(), event.getBookingId());
+        // Không capture tiền lúc duyệt - tiền vẫn giữ an toàn trên thẻ của khách
+        ack.acknowledge();
+    }
+
+    @RetryableTopic(exclude = {JsonProcessingException.class})
+    @KafkaListener(
+            topics = "${app.kafka.topics.booking-completed}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onBookingCompleted(String payload, Acknowledgment ack) throws Exception {
+        com.rideUp.payment_service.dto.event.BookingCompletedEvent event = objectMapper.readValue(payload, com.rideUp.payment_service.dto.event.BookingCompletedEvent.class);
+        log.info("[BookingCompletedEvent] eventId={}, bookingId={}. Trip completed, capturing payment into wallet now.", event.getEventId(), event.getBookingId());
         try {
+            // Chỉ khi tài xế hoàn thành chuyến/trả khách thì tiền mới chính thức vào ví/tài khoản
             paymentService.capturePayment(event.getBookingId());
         } catch (Exception ex) {
-            log.error("Failed to capture payment for bookingId={}", event.getBookingId(), ex);
+            log.error("Failed to capture payment on booking completion for bookingId={}", event.getBookingId(), ex);
             throw ex;
         }
         ack.acknowledge();

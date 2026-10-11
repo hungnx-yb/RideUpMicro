@@ -7,6 +7,7 @@ public enum BookingStatus {
     CONFIRMED,               // tài xế đã duyệt
     COMPLETED,               // chuyến hoàn thành
     CANCELLED_USER,          // khách hủy
+    CANCELLED_DRIVER,        // tài xế hủy chuyến
     CANCELLED_PAYMENT_FAILED,// hủy do thanh toán thất bại/timeout
     EXPIRED                  // timeout hủy tự động (tài xế không duyệt)
 }

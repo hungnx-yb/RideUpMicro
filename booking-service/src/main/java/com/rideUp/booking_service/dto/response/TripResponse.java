@@ -13,4 +13,7 @@ public class TripResponse {
     String driverId;
     String vehicleId;
     String status;
+    Integer seatTotal;
+    Integer seatAvailable;
+    java.math.BigDecimal priceVnd;
 }

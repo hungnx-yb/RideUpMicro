@@ -24,55 +24,100 @@ const formatMoney = (val) => {
 };
 
 // ---- Dropdown Component ----
-const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled }) => {
+const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled, loading = false, onRetry }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const selectedItem = options?.find(o => String(o.id) === String(value));
 
-  const filteredOptions = options?.filter(o =>
-    o.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const safeOptions = Array.isArray(options) ? options : [];
+  const selectedItem = safeOptions.find(o => String(o?.id) === String(value));
+
+  const query = (searchQuery || '').trim().toLowerCase();
+  const filteredOptions = safeOptions.filter(o => {
+    if (!o) return false;
+    const itemName = (o.name || o.wardName || o.provinceName || '').toString().toLowerCase();
+    return itemName.includes(query);
+  });
+
+  const handleOpen = () => {
+    if (disabled) {
+      Alert.alert('Chưa chọn Tỉnh/Thành', 'Vui lòng chọn Tỉnh/Thành phố trước khi chọn Phường/Xã.');
+      return;
+    }
+    setSearchQuery('');
+    setModalVisible(true);
+  };
+
+  const handleClose = () => {
+    setModalVisible(false);
+    setSearchQuery('');
+  };
 
   return (
     <View style={{ flex: 1 }}>
       <TouchableOpacity
-        style={[styles.inputBox, disabled && { opacity: 0.45 }]}
-        onPress={() => !disabled && setModalVisible(true)}
+        style={[styles.inputBox, disabled && { opacity: 0.45, backgroundColor: '#F1F5F9' }]}
+        onPress={handleOpen}
         activeOpacity={0.7}
       >
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, marginRight: 8 }}>
           {label && <Text style={styles.inputLabel}>{label}</Text>}
-          <Text style={{ color: selectedItem ? COLORS.text : COLORS.textMuted, fontSize: 15, fontWeight: selectedItem ? '700' : 'normal' }} numberOfLines={1}>
+          <Text
+            style={{
+              color: selectedItem ? COLORS.text : COLORS.textMuted,
+              fontSize: 15,
+              fontWeight: selectedItem ? '700' : 'normal'
+            }}
+            numberOfLines={1}
+          >
             {selectedItem ? selectedItem.name : placeholder}
           </Text>
         </View>
-        <Ionicons name="chevron-down" size={18} color={COLORS.textMuted} />
+        {loading ? (
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        ) : (
+          <Ionicons name="chevron-down" size={18} color={COLORS.textMuted} />
+        )}
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleClose}
+        statusBarTranslucent
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleClose}
+        >
+          <TouchableOpacity
+            style={styles.modalContent}
+            activeOpacity={1}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+            }}
+          >
             {/* Thanh kéo mờ (Drag Indicator) */}
             <View style={styles.modalDragIndicator} />
 
             <View style={styles.modalHeader}>
               <View style={{ flex: 1, paddingRight: 12 }}>
                 <Text style={styles.modalTitle}>
-                  {label ? `Tìm ${label}` : placeholder}
+                  {label ? `Chọn ${label}` : placeholder}
                 </Text>
               </View>
 
               <TouchableOpacity
                 style={styles.modalCloseBtn}
-                onPress={() => { setModalVisible(false); setSearchQuery(''); }}
+                onPress={handleClose}
                 activeOpacity={0.6}
               >
                 <Ionicons name="close" size={22} color={COLORS.text} />
               </TouchableOpacity>
             </View>
 
-            {/* Ô TÌM KIẾM (SEARCH BOX) CAO CẤP */}
+            {/* Ô TÌM KIẾM (SEARCH BOX) */}
             <View style={styles.modalSearchBox}>
               <Ionicons name="search" size={20} color={COLORS.textMuted} />
               <TextInput
@@ -89,56 +134,84 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
                 </TouchableOpacity>
               )}
             </View>
-            <FlatList
-              data={filteredOptions}
-              keyExtractor={(item) => String(item.id)}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
-              ListEmptyComponent={() => (
-                <View style={{ padding: 40, alignItems: 'center' }}>
-                  <Ionicons name="search-outline" size={48} color="#E2E8F0" style={{ marginBottom: 12 }} />
-                  <Text style={{ color: COLORS.textMuted, fontSize: 15, textAlign: 'center' }}>
-                    Không tìm thấy kết quả nào phù hợp
-                  </Text>
-                </View>
-              )}
-              renderItem={({ item }) => {
-                const isSelected = String(item.id) === String(value);
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.modalItem,
-                      isSelected && {
-                        backgroundColor: `${COLORS.primary}10`,
-                        borderColor: COLORS.primary,
-                        borderWidth: 1,
-                        borderRadius: 12,
-                        paddingHorizontal: 16,
-                        borderBottomWidth: 1 // Ghi đè border của style cũ
-                      }
-                    ]}
-                    onPress={() => { onSelect(item.id); setModalVisible(false); }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <View style={[styles.modalItemIconWrap, isSelected && { backgroundColor: `${COLORS.primary}20` }]}>
-                        <Ionicons
-                          name={isSelected ? "location" : "location-outline"}
-                          size={18}
-                          color={isSelected ? COLORS.primary : COLORS.textMuted}
-                        />
+
+            {loading ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={{ marginTop: 12, color: COLORS.textMuted, fontSize: 14 }}>
+                  Đang tải danh sách...
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                style={{ flex: 1 }}
+                data={filteredOptions}
+                keyExtractor={(item, index) => String(item?.id ?? index)}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 24 }}
+                ListEmptyComponent={() => (
+                  <View style={{ padding: 40, alignItems: 'center' }}>
+                    <Ionicons name="search-outline" size={48} color="#CBD5E1" style={{ marginBottom: 12 }} />
+                    <Text style={{ color: COLORS.textMuted, fontSize: 15, textAlign: 'center', marginBottom: 12 }}>
+                      {safeOptions.length === 0 ? 'Chưa có dữ liệu danh sách' : 'Không tìm thấy kết quả phù hợp'}
+                    </Text>
+                    {safeOptions.length === 0 && onRetry && (
+                      <TouchableOpacity
+                        style={styles.retryBtn}
+                        onPress={onRetry}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="refresh" size={16} color={COLORS.primary} />
+                        <Text style={styles.retryBtnText}>Tải lại danh sách</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+                renderItem={({ item }) => {
+                  const isSelected = String(item?.id) === String(value);
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.modalItem,
+                        isSelected && {
+                          backgroundColor: `${COLORS.primary}10`,
+                          borderColor: COLORS.primary,
+                          borderWidth: 1,
+                          borderRadius: 12,
+                          paddingHorizontal: 16,
+                          borderBottomWidth: 1
+                        }
+                      ]}
+                      onPress={() => {
+                        onSelect(item.id);
+                        handleClose();
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                        <View style={[styles.modalItemIconWrap, isSelected && { backgroundColor: `${COLORS.primary}20` }]}>
+                          <Ionicons
+                            name={isSelected ? "location" : "location-outline"}
+                            size={18}
+                            color={isSelected ? COLORS.primary : COLORS.textMuted}
+                          />
+                        </View>
+                        <Text
+                          style={[styles.modalItemText, isSelected && { color: COLORS.primary, fontWeight: '700' }]}
+                          numberOfLines={2}
+                        >
+                          {item?.name || '---'}
+                        </Text>
                       </View>
-                      <Text style={[styles.modalItemText, isSelected && { color: COLORS.primary, fontWeight: '600' }]}>
-                        {item.name}
-                      </Text>
-                    </View>
-                    {isSelected && <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        </View>
+                      {isSelected && <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -147,8 +220,11 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
 export default function CreateTripScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [provinces, setProvinces] = useState([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
   const [startWards, setStartWards] = useState([]);
+  const [loadingStartWards, setLoadingStartWards] = useState(false);
   const [endWards, setEndWards] = useState([]);
+  const [loadingEndWards, setLoadingEndWards] = useState(false);
 
   const [form, setForm] = useState({
     startProvinceId: '', endProvinceId: '',
@@ -164,50 +240,87 @@ export default function CreateTripScreen({ navigation }) {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      setForm({
-        startProvinceId: '', endProvinceId: '',
-        pickups: [{ id: Date.now().toString(), wardId: '' }],
-        dropoffs: [{ id: (Date.now() + 1).toString(), wardId: '' }],
-        departureTime: new Date(Date.now() + 86400000),
-        seatTotal: '4', priceVnd: '150000'
-      });
-      setStartWards([]);
-      setEndWards([]);
-    }, [])
-  );
-
-  useEffect(() => { fetchProvinces(); }, []);
+  const resetForm = () => {
+    setForm({
+      startProvinceId: '', endProvinceId: '',
+      pickups: [{ id: Date.now().toString(), wardId: '' }],
+      dropoffs: [{ id: (Date.now() + 1).toString(), wardId: '' }],
+      departureTime: new Date(Date.now() + 86400000),
+      seatTotal: '4', priceVnd: '150000'
+    });
+    setStartWards([]);
+    setEndWards([]);
+  };
 
   const fetchProvinces = async () => {
-    setLoading(true);
+    setLoadingProvinces(true);
     try {
       const res = await apiService.getAllProvinces();
-      setProvinces(res?.data?.result || []);
-    } catch (e) { console.log(e); }
-    finally { setLoading(false); }
+      if (Array.isArray(res?.data?.result)) {
+        setProvinces(res.data.result);
+      }
+    } catch (e) {
+      console.log('Error fetching provinces:', e);
+    } finally {
+      setLoadingProvinces(false);
+    }
   };
 
   const fetchWards = async (provinceId, isStart) => {
-    if (!provinceId) return;
+    if (!provinceId) {
+      if (isStart) setStartWards([]);
+      else setEndWards([]);
+      return;
+    }
     try {
+      if (isStart) setLoadingStartWards(true);
+      else setLoadingEndWards(true);
+
       const res = await apiService.getAllWards(provinceId);
-      if (isStart) setStartWards(res?.data?.result || []);
-      else setEndWards(res?.data?.result || []);
-    } catch (e) { console.log(e); }
+      const list = Array.isArray(res?.data?.result) ? res.data.result : [];
+      if (isStart) setStartWards(list);
+      else setEndWards(list);
+    } catch (e) {
+      console.log('Error fetching wards:', e);
+      if (isStart) setStartWards([]);
+      else setEndWards([]);
+    } finally {
+      if (isStart) setLoadingStartWards(false);
+      else setLoadingEndWards(false);
+    }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      // Đảm bảo luôn có danh sách tỉnh thành khi vào màn hình
+      if (provinces.length === 0) {
+        fetchProvinces();
+      }
+    }, [provinces.length])
+  );
+
+  useEffect(() => {
+    fetchProvinces();
+  }, []);
 
   const updateForm = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
 
   useEffect(() => {
-    if (form.startProvinceId) { fetchWards(form.startProvinceId, true); updateForm('pickups', [{ id: Date.now().toString(), wardId: '' }]); }
-    else setStartWards([]);
+    if (form.startProvinceId) {
+      fetchWards(form.startProvinceId, true);
+      updateForm('pickups', [{ id: Date.now().toString(), wardId: '' }]);
+    } else {
+      setStartWards([]);
+    }
   }, [form.startProvinceId]);
 
   useEffect(() => {
-    if (form.endProvinceId) { fetchWards(form.endProvinceId, false); updateForm('dropoffs', [{ id: Date.now().toString(), wardId: '' }]); }
-    else setEndWards([]);
+    if (form.endProvinceId) {
+      fetchWards(form.endProvinceId, false);
+      updateForm('dropoffs', [{ id: Date.now().toString(), wardId: '' }]);
+    } else {
+      setEndWards([]);
+    }
   }, [form.endProvinceId]);
 
   const addStop = (type) => updateForm(type, [...form[type], { id: Date.now().toString(), wardId: '' }]);
@@ -218,6 +331,13 @@ export default function CreateTripScreen({ navigation }) {
     const current = Number(form.seatTotal) || 0;
     const next = Math.min(16, Math.max(1, current + delta));
     updateForm('seatTotal', String(next));
+  };
+
+  const handleSeatBlur = () => {
+    let num = Number(form.seatTotal);
+    if (isNaN(num) || num < 1) num = 1;
+    if (num > 16) num = 16;
+    updateForm('seatTotal', String(num));
   };
 
   const handleSubmit = async () => {
@@ -311,6 +431,8 @@ export default function CreateTripScreen({ navigation }) {
               <DropdownSelect
                 label="Tỉnh đi" placeholder="Chọn tỉnh xuất phát"
                 value={form.startProvinceId} options={provinces} onSelect={(val) => updateForm('startProvinceId', val)}
+                loading={loadingProvinces}
+                onRetry={fetchProvinces}
               />
               <View style={{ marginTop: 10 }}>
                 {form.pickups.map((p, index) => (
@@ -319,6 +441,8 @@ export default function CreateTripScreen({ navigation }) {
                       label={`Điểm đón ${index + 1}`} placeholder="Chọn phường/xã"
                       value={p.wardId} options={startWards} onSelect={(val) => updateStop('pickups', index, val)}
                       disabled={!form.startProvinceId}
+                      loading={loadingStartWards}
+                      onRetry={() => fetchWards(form.startProvinceId, true)}
                     />
                     {index > 0 && (
                       <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('pickups', index)}>
@@ -341,6 +465,8 @@ export default function CreateTripScreen({ navigation }) {
               <DropdownSelect
                 label="Tỉnh đến" placeholder="Chọn tỉnh kết thúc"
                 value={form.endProvinceId} options={provinces} onSelect={(val) => updateForm('endProvinceId', val)}
+                loading={loadingProvinces}
+                onRetry={fetchProvinces}
               />
               <View style={{ marginTop: 10 }}>
                 {form.dropoffs.map((d, index) => (
@@ -349,6 +475,8 @@ export default function CreateTripScreen({ navigation }) {
                       label={`Điểm trả ${index + 1}`} placeholder="Chọn phường/xã"
                       value={d.wardId} options={endWards} onSelect={(val) => updateStop('dropoffs', index, val)}
                       disabled={!form.endProvinceId}
+                      loading={loadingEndWards}
+                      onRetry={() => fetchWards(form.endProvinceId, false)}
                     />
                     {index > 0 && (
                       <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('dropoffs', index)}>
@@ -450,8 +578,9 @@ export default function CreateTripScreen({ navigation }) {
                 <TextInput
                   style={styles.seatInput}
                   keyboardType="numeric"
-                  value={form.seatTotal}
+                  value={String(form.seatTotal || '')}
                   onChangeText={(t) => updateForm('seatTotal', t.replace(/[^0-9]/g, ''))}
+                  onBlur={handleSeatBlur}
                   textAlign="center"
                   maxLength={2}
                   color={COLORS.primary}
@@ -466,8 +595,8 @@ export default function CreateTripScreen({ navigation }) {
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 32, paddingBottom: 10 }}>
               {SEAT_OPTIONS.map(seat => (
-                <TouchableOpacity key={seat} style={[styles.chip, form.seatTotal === seat && styles.chipActive]} onPress={() => updateForm('seatTotal', seat)} activeOpacity={0.8}>
-                  <Text style={[styles.chipText, form.seatTotal === seat && styles.chipTextActive]}>{seat} ghế</Text>
+                <TouchableOpacity key={seat} style={[styles.chip, String(form.seatTotal) === String(seat) && styles.chipActive]} onPress={() => updateForm('seatTotal', seat)} activeOpacity={0.8}>
+                  <Text style={[styles.chipText, String(form.seatTotal) === String(seat) && styles.chipTextActive]}>{seat} ghế</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -548,6 +677,7 @@ export default function CreateTripScreen({ navigation }) {
               style={styles.successBtn}
               onPress={() => {
                 setSuccessModalVisible(false);
+                resetForm();
                 navigation.navigate('DriverTrips');
               }}
               activeOpacity={0.8}
@@ -594,11 +724,14 @@ const styles = StyleSheet.create({
   pickerDoneText: { color: COLORS.background, fontWeight: '600', fontSize: 13 },
 
   // Stepper
-  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12, marginTop: 4 },
-  stepperBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
-  seatValueBox: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', width: 50 },
-  seatInput: { fontSize: 20, fontWeight: '600', color: COLORS.primary, padding: 0, margin: 0 },
-  seatUnit: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', marginLeft: 2 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 12, marginTop: 4 },
+  stepperBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  seatValueBox: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', minWidth: 90, paddingHorizontal: 6 },
+  seatInput: { minWidth: 38, fontSize: 22, fontWeight: '700', color: COLORS.primary, padding: 0, margin: 0, textAlign: 'center' },
+  seatUnit: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600', marginLeft: 4 },
+
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(14, 165, 233, 0.1)', borderWidth: 1, borderColor: COLORS.primary },
+  retryBtnText: { color: COLORS.primary, fontSize: 13, fontWeight: '600' },
 
   chip: { paddingHorizontal: 12, height: 28, borderRadius: 14, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
   chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary, shadowColor: COLORS.primary, shadowOpacity: 0.2, shadowRadius: 3, elevation: 2 },

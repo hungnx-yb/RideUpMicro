@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
-  TouchableOpacity, ActivityIndicator, Modal, RefreshControl, ScrollView, Platform
+  TouchableOpacity, ActivityIndicator, Modal, RefreshControl, ScrollView, Platform, Alert, Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -33,10 +33,24 @@ const getStatusColor = (status) => {
   const s = status.toUpperCase();
   if (s === 'STARTED') return { bg: 'rgba(14, 165, 233, 0.15)', text: COLORS.primary, label: 'ĐANG CHẠY' };
   if (s === 'COMPLETED') return { bg: 'rgba(16, 185, 129, 0.15)', text: COLORS.success, label: 'HOÀN THÀNH' };
-  if (s === 'CANCELLED') return { bg: 'rgba(239, 68, 68, 0.15)', text: COLORS.error, label: 'ĐÃ HỦY' };
+  if (s === 'CANCELLED' || s === 'CANCELED') return { bg: 'rgba(239, 68, 68, 0.15)', text: COLORS.error, label: 'ĐÃ HỦY' };
   if (s === 'FULL') return { bg: 'rgba(245, 158, 11, 0.15)', text: COLORS.warning, label: 'ĐÃ ĐẦY' };
   return { bg: 'rgba(255, 255, 255, 0.1)', text: COLORS.text, label: 'MỞ BÁN' }; // OPEN
 };
+
+// Booking status config (Vietnamese labels)
+const BOOKING_STATUS_CONFIG = {
+  PENDING_PAYMENT:           { label: 'Chờ thanh toán',    color: COLORS.warning,  bg: 'rgba(245,158,11,0.12)' },
+  WAITING_DRIVER_APPROVAL:   { label: 'Chờ duyệt',        color: '#f97316',       bg: 'rgba(249,115,22,0.12)' },
+  CONFIRMED:                 { label: 'Đã xác nhận',      color: COLORS.success,  bg: 'rgba(16,185,129,0.12)' },
+  COMPLETED:                 { label: 'Hoàn thành',       color: COLORS.success,  bg: 'rgba(16,185,129,0.12)' },
+  REJECTED_BY_DRIVER:        { label: 'Đã từ chối',       color: COLORS.error,    bg: 'rgba(239,68,68,0.12)' },
+  CANCELLED_USER:            { label: 'Khách huỷ',        color: COLORS.error,    bg: 'rgba(239,68,68,0.12)' },
+  CANCELLED_DRIVER:          { label: 'Tài xế huỷ',        color: COLORS.error,    bg: 'rgba(239,68,68,0.12)' },
+  CANCELLED_PAYMENT_FAILED:  { label: 'Lỗi thanh toán',   color: COLORS.error,    bg: 'rgba(239,68,68,0.12)' },
+  EXPIRED:                   { label: 'Hết hạn',          color: COLORS.error,    bg: 'rgba(239,68,68,0.12)' },
+};
+const getBookingStatus = (status) => BOOKING_STATUS_CONFIG[status] || { label: status || 'Không rõ', color: COLORS.textMuted, bg: 'rgba(148,163,184,0.1)' };
 
 // Component Dropdown
 const DropdownSelect = ({ label, placeholder, value, options, onSelect }) => {
@@ -101,6 +115,8 @@ export default function DriverTripsScreen({ navigation }) {
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null); // track which action is loading
+  const [bookingFilterTab, setBookingFilterTab] = useState('ACTIVE'); // 'ACTIVE' or 'CANCELLED'
 
   useEffect(() => {
     fetchProvinces();
@@ -148,15 +164,254 @@ export default function DriverTripsScreen({ navigation }) {
 
   const handleTripPress = async (trip) => {
     setSelectedTrip(trip);
+    setBookingFilterTab('ACTIVE');
     setLoadingBookings(true);
     try {
-      const res = await apiService.getBookingsByTripId(trip.id);
+      const [res, tRes] = await Promise.all([
+        apiService.getBookingsByTripId(trip.id),
+        apiService.getTripDetail(trip.id).catch(() => null)
+      ]);
       setBookings(res?.data?.result || []);
+      if (tRes?.data?.result) {
+        setSelectedTrip(tRes.data.result);
+      }
     } catch (e) {
       console.log(e);
     } finally {
       setLoadingBookings(false);
     }
+  };
+
+  // Refresh bookings for current trip
+  const refreshBookings = async () => {
+    if (!selectedTrip) return;
+    try {
+      const [res, tRes] = await Promise.all([
+        apiService.getBookingsByTripId(selectedTrip.id),
+        apiService.getTripDetail(selectedTrip.id).catch(() => null)
+      ]);
+      setBookings(res?.data?.result || []);
+      if (tRes?.data?.result) {
+        setSelectedTrip(tRes.data.result);
+      }
+      fetchTrips();
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  // Approve a booking
+  const handleApproveBooking = (bookingId, userName) => {
+    Alert.alert('Xác nhận duyệt', `Bạn muốn duyệt khách "${userName || 'Khách hàng'}"?`, [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Duyệt', style: 'default', onPress: async () => {
+          setActionLoading(bookingId);
+          try {
+            await apiService.approveBooking(bookingId);
+            Alert.alert('Thành công', 'Đã duyệt khách thành công!');
+            await refreshBookings();
+          } catch (e) {
+            Alert.alert('Lỗi', e?.response?.data?.message || 'Không thể duyệt.');
+          } finally {
+            setActionLoading(null);
+          }
+        }
+      }
+    ]);
+  };
+
+  // Reject a booking
+  const handleRejectBooking = (bookingId, userName) => {
+    Alert.alert('Xác nhận từ chối', `Bạn muốn từ chối khách "${userName || 'Khách hàng'}"?`, [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Từ chối', style: 'destructive', onPress: async () => {
+          setActionLoading(bookingId);
+          try {
+            await apiService.rejectBooking(bookingId);
+            Alert.alert('Đã từ chối', 'Đã từ chối khách.');
+            await refreshBookings();
+          } catch (e) {
+            Alert.alert('Lỗi', e?.response?.data?.message || 'Không thể từ chối.');
+          } finally {
+            setActionLoading(null);
+          }
+        }
+      }
+    ]);
+  };
+
+  // Complete a booking
+  const handleCompleteBooking = (bookingId, userName) => {
+    Alert.alert('Hoàn thành chuyến', `Xác nhận đã trả khách và hoàn thành chuyến cho "${userName || 'Khách hàng'}"?`, [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Hoàn thành', style: 'default', onPress: async () => {
+          setActionLoading(bookingId);
+          try {
+            await apiService.completeBooking(bookingId);
+            Alert.alert('Thành công', 'Đã đánh dấu hoàn thành chuyến cho khách!');
+            await refreshBookings();
+          } catch (e) {
+            Alert.alert('Lỗi', e?.response?.data?.message || 'Không thể cập nhật trạng thái.');
+          } finally {
+            setActionLoading(null);
+          }
+        }
+      }
+    ]);
+  };
+
+  // Bắt đầu chuyến - Cảnh báo chặn nếu còn đơn chờ duyệt
+  const handleStartTrip = () => {
+    const waitingList = (bookings || []).filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
+    if (waitingList.length > 0) {
+      Alert.alert(
+        'Chưa duyệt hết khách!',
+        `Chuyến đi vẫn còn ${waitingList.length} yêu cầu đặt chỗ đang chờ duyệt.\n\nKhi xe bắt đầu chạy, bạn sẽ không thể duyệt thêm khách nữa. Bạn có muốn tự động TỪ CHỐI các yêu cầu này để bắt đầu chuyến không?`,
+        [
+          { text: 'Quay lại duyệt', style: 'cancel' },
+          {
+            text: 'Từ chối & Bắt đầu',
+            style: 'destructive',
+            onPress: async () => {
+              setActionLoading('trip-status');
+              try {
+                // Tự động từ chối các đơn chờ duyệt để hoàn cọc cho khách
+                await Promise.allSettled(waitingList.map(b => apiService.rejectBooking(b.id)));
+                await apiService.changeTripStatus(selectedTrip.id, 'STARTED');
+                Alert.alert('Thành công', 'Đã bắt đầu chuyến đi!');
+                try {
+                  const res = await apiService.getTripDetail(selectedTrip.id);
+                  setSelectedTrip(res?.data?.result || { ...selectedTrip, status: 'STARTED' });
+                } catch (_) {
+                  setSelectedTrip({ ...selectedTrip, status: 'STARTED' });
+                }
+                await refreshBookings();
+                fetchTrips();
+              } catch (e) {
+                Alert.alert('Lỗi', e?.response?.data?.message || 'Không thể bắt đầu chuyến.');
+              } finally {
+                setActionLoading(null);
+              }
+            }
+          }
+        ]
+      );
+    } else {
+      handleChangeTripStatus('STARTED', 'Bắt đầu chuyến đi? Trạng thái sẽ chuyển sang "Đang chạy" và xe không thể nhận thêm khách mới.');
+    }
+  };
+
+  // Hoàn thành chuyến - Chặn nếu chưa bấm hoàn thành từng khách
+  const handleCompleteTrip = () => {
+    const uncompletedBookings = (bookings || []).filter(b => b.status === 'CONFIRMED');
+    if (uncompletedBookings.length > 0) {
+      Alert.alert(
+        'Chưa hoàn thành trả khách!',
+        `Vẫn còn ${uncompletedBookings.length} khách chưa được bấm "Hoàn thành".\n\nVui lòng bấm nút "Hoàn thành" cho từng khách (khi đã trả khách xong) trước khi kết thúc toàn bộ chuyến xe!`,
+        [{ text: 'Đã hiểu', style: 'default' }]
+      );
+      return;
+    }
+
+    const waitingBookings = (bookings || []).filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
+    if (waitingBookings.length > 0) {
+      Alert.alert(
+        'Còn khách chưa xử lý!',
+        `Vẫn còn ${waitingBookings.length} yêu cầu đang chờ duyệt. Vui lòng từ chối các yêu cầu này trước khi kết thúc chuyến!`,
+        [{ text: 'Đã hiểu', style: 'default' }]
+      );
+      return;
+    }
+
+    handleChangeTripStatus('COMPLETED', 'Xác nhận hoàn thành chuyến đi? Toàn bộ khách hàng trên xe đã được trả xong.');
+  };
+
+  // Huỷ chuyến - Hỏi lý do huỷ và cảnh báo huỷ vé/hoàn tiền
+  const handleCancelTrip = () => {
+    const bookedCount = (bookings || []).filter(b => b.status === 'CONFIRMED' || b.status === 'WAITING_DRIVER_APPROVAL').length;
+    const warningText = bookedCount > 0
+      ? `Chuyến đi đang có ${bookedCount} khách đã đặt vé. Khi huỷ chuyến, hệ thống sẽ tự động huỷ vé, hoàn tiền/cọc và gửi thông báo đến hành khách.\n\nVui lòng chọn lý do huỷ chuyến:`
+      : 'Bạn có chắc chắn muốn huỷ chuyến đi này không? Vui lòng chọn lý do huỷ:';
+
+    Alert.alert(
+      'Xác nhận huỷ chuyến đi',
+      warningText,
+      [
+        { text: 'Đóng', style: 'cancel' },
+        {
+          text: 'Sự cố xe / Hỏng xe',
+          style: 'destructive',
+          onPress: () => executeCancelTrip('Sự cố xe cộ / Hỏng xe')
+        },
+        {
+          text: 'Lý do sức khỏe đột xuất',
+          style: 'destructive',
+          onPress: () => executeCancelTrip('Lý do sức khỏe đột xuất')
+        },
+        {
+          text: 'Thời tiết xấu / Ngập đường',
+          style: 'destructive',
+          onPress: () => executeCancelTrip('Thời tiết xấu / Đường ngập')
+        },
+        {
+          text: 'Lý do cá nhân khác',
+          style: 'destructive',
+          onPress: () => executeCancelTrip('Lý do cá nhân khác')
+        }
+      ]
+    );
+  };
+
+  const executeCancelTrip = async (cancelReason) => {
+    setActionLoading('trip-status');
+    try {
+      await apiService.changeTripStatus(selectedTrip.id, 'CANCELED', cancelReason);
+      Alert.alert('Đã huỷ chuyến', 'Chuyến đi đã được huỷ thành công. Hệ thống đang tự động hoàn tiền/cọc và gửi thông báo đến hành khách.');
+      try {
+        const res = await apiService.getTripDetail(selectedTrip.id);
+        setSelectedTrip(res?.data?.result || { ...selectedTrip, status: 'CANCELED' });
+      } catch (_) {
+        setSelectedTrip({ ...selectedTrip, status: 'CANCELED' });
+      }
+      await refreshBookings();
+      fetchTrips();
+    } catch (e) {
+      Alert.alert('Lỗi', e?.response?.data?.message || 'Không thể huỷ chuyến.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Change trip status
+  const handleChangeTripStatus = (newStatus, confirmMsg) => {
+    Alert.alert('Xác nhận', confirmMsg, [
+      { text: 'Huỷ', style: 'cancel' },
+      {
+        text: 'Đồng ý', onPress: async () => {
+          setActionLoading('trip-status');
+          try {
+            await apiService.changeTripStatus(selectedTrip.id, newStatus);
+            Alert.alert('Thành công', 'Đã cập nhật trạng thái chuyến!');
+            // Refresh trip detail and bookings
+            try {
+              const res = await apiService.getTripDetail(selectedTrip.id);
+              setSelectedTrip(res?.data?.result || { ...selectedTrip, status: newStatus });
+            } catch (_) {
+              setSelectedTrip({ ...selectedTrip, status: newStatus });
+            }
+            await refreshBookings();
+            fetchTrips(); // refresh list behind modal
+          } catch (e) {
+            Alert.alert('Lỗi', e?.response?.data?.message || 'Không thể cập nhật trạng thái.');
+          } finally {
+            setActionLoading(null);
+          }
+        }
+      }
+    ]);
   };
 
   // Lọc chuyến theo tab
@@ -220,7 +475,7 @@ export default function DriverTripsScreen({ navigation }) {
         <View style={styles.tripStatsRow}>
           <View style={styles.statPill}>
             <Ionicons name="people" size={16} color={COLORS.primary} />
-            <Text style={styles.statPillText}>{seatsBooked}/{item.seatTotal} khách</Text>
+            <Text style={styles.statPillText}>{seatsBooked}/{item.seatTotal} ghế</Text>
           </View>
 
           <View style={styles.revenueWrap}>
@@ -233,7 +488,13 @@ export default function DriverTripsScreen({ navigation }) {
   };
 
   const renderBookingItem = ({ item }) => {
-    const sColor = getStatusColor(item.status);
+    const bStatus = getBookingStatus(item.status);
+    const isWaiting = item.status === 'WAITING_DRIVER_APPROVAL';
+    const isConfirmed = item.status === 'CONFIRMED';
+    const isCompleted = item.status === 'COMPLETED';
+    const isLoading = actionLoading === item.id;
+    const canApprove = selectedTrip?.status === 'OPEN' || selectedTrip?.status === 'FULL';
+
     return (
       <View style={styles.bookingCard}>
         {/* Header Khách hàng */}
@@ -243,16 +504,23 @@ export default function DriverTripsScreen({ navigation }) {
               <Text style={styles.avatarInitials}>{(item.userName || 'K').charAt(0).toUpperCase()}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.bookingName} numberOfLines={1}>{item.userName || 'Khách hàng'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={styles.bookingName} numberOfLines={1}>{item.userName || 'Khách hàng'}</Text>
+                {!!item.bookingCode && (
+                  <View style={styles.bookingCodeBadge}>
+                    <Text style={styles.bookingCodeText}>#{item.bookingCode}</Text>
+                  </View>
+                )}
+              </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <Ionicons name="ticket" size={12} color={COLORS.primary} />
                 <Text style={styles.bookingSub}>{item.seatCount} ghế • {formatMoney(item.totalAmount)}</Text>
               </View>
             </View>
           </View>
-          <View style={[styles.bookingStatusBadge, { backgroundColor: item.paymentStatus === 'PAID' ? 'rgba(16, 185, 129, 0.15)' : sColor.bg }]}>
-            <Text style={[styles.bookingStatusText, { color: item.paymentStatus === 'PAID' ? COLORS.success : sColor.text }]}>
-              {item.paymentStatus === 'PAID' ? 'ĐÃ TT' : item.status}
+          <View style={[styles.bookingStatusBadge, { backgroundColor: bStatus.bg }]}>
+            <Text style={[styles.bookingStatusText, { color: bStatus.color }]}>
+              {item.paymentStatus === 'PAID' ? `${bStatus.label} • Đã TT` : bStatus.label}
             </Text>
           </View>
         </View>
@@ -273,26 +541,113 @@ export default function DriverTripsScreen({ navigation }) {
               <Text style={{ flex: 1, fontSize: 12, color: COLORS.textMuted, fontStyle: 'italic' }}>{item.note}</Text>
             </View>
           )}
+          {!!item.cancelReason && (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' }}>
+              <Ionicons name="alert-circle-outline" size={14} color={COLORS.error} style={{ marginTop: 2, marginRight: 6 }} />
+              <Text style={{ flex: 1, fontSize: 12, color: COLORS.error, fontStyle: 'italic' }}>Lý do huỷ: {item.cancelReason}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Nút Nhắn tin */}
-        {item.status === 'CONFIRMED' && (
-          <TouchableOpacity
-            style={[styles.chatBtn, { marginTop: 12, alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 16 }]}
-            onPress={() => {
-              setSelectedTrip(null);
-              navigation.navigate('Chat', {
-                bookingId: item.id,
-                passengerName: item.userName || 'Khách hàng',
-                passengerPhone: item.userPhone || '0987654321',
-                passengerAvatar: item.userAvatarUrl || null
-              });
-            }}
-          >
-            <Ionicons name="chatbubbles" size={16} color={COLORS.background} />
-            <Text style={styles.chatBtnText}>Nhắn tin</Text>
-          </TouchableOpacity>
-        )}
+        {/* ── Action Buttons ── */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          {/* Nút Gọi nếu có số điện thoại */}
+          {!!item.userPhone && (
+            <TouchableOpacity
+              style={styles.callBtn}
+              onPress={() => Linking.openURL(`tel:${item.userPhone}`)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="call" size={14} color={COLORS.primary} />
+              <Text style={styles.callBtnText}>Gọi</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Duyệt / Từ chối khi WAITING_DRIVER_APPROVAL */}
+          {isWaiting && (
+            <>
+              {!canApprove && (
+                <View style={styles.cannotApproveNotice}>
+                  <Ionicons name="alert-circle-outline" size={13} color={COLORS.error} />
+                  <Text style={styles.cannotApproveNoticeText}>Xe đang chạy (Không thể duyệt)</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={[styles.actionBtnReject]}
+                onPress={() => handleRejectBooking(item.id, item.userName)}
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                {isLoading ? <ActivityIndicator size="small" color={COLORS.error} /> : (
+                  <>
+                    <Ionicons name="close-circle" size={16} color={COLORS.error} />
+                    <Text style={styles.actionBtnRejectText}>Từ chối</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {canApprove && (
+                <TouchableOpacity
+                  style={[styles.actionBtnApprove]}
+                  onPress={() => handleApproveBooking(item.id, item.userName)}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                >
+                  {isLoading ? <ActivityIndicator size="small" color="#fff" /> : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                      <Text style={styles.actionBtnApproveText}>Duyệt</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+
+          {/* Hoàn thành khi CONFIRMED và chuyến đã STARTED */}
+          {isConfirmed && selectedTrip?.status === 'STARTED' && (
+            <TouchableOpacity
+              style={styles.actionBtnComplete}
+              onPress={() => handleCompleteBooking(item.id, item.userName)}
+              disabled={isLoading}
+              activeOpacity={0.7}
+            >
+              {isLoading ? <ActivityIndicator size="small" color="#fff" /> : (
+                <>
+                  <Ionicons name="checkmark-done" size={15} color="#fff" />
+                  <Text style={styles.actionBtnCompleteText}>Hoàn thành</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {/* Nhắn tin cho khách đã được duyệt hoặc đang chờ duyệt */}
+          {(isConfirmed || isWaiting) && (
+            <TouchableOpacity
+              style={[styles.chatBtn, { paddingVertical: 8, paddingHorizontal: 14 }]}
+              onPress={() => {
+                setSelectedTrip(null);
+                navigation.navigate('Chat', {
+                  bookingId: item.id,
+                  passengerName: item.userName || 'Khách hàng',
+                  passengerPhone: item.userPhone || '0987654321',
+                  passengerAvatar: item.userAvatarUrl || null
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chatbubbles" size={15} color={COLORS.background} />
+              <Text style={styles.chatBtnText}>Nhắn tin</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Huy hiệu đã hoàn thành */}
+          {isCompleted && (
+            <View style={styles.completedPill}>
+              <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
+              <Text style={styles.completedPillText}>Đã hoàn thành</Text>
+            </View>
+          )}
+        </View>
       </View>
     );
   };
@@ -373,14 +728,21 @@ export default function DriverTripsScreen({ navigation }) {
             <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
           ) : (
             <FlatList
-              data={bookings}
+              data={bookings.filter(b => {
+                const cancelledStatuses = ['REJECTED_BY_DRIVER', 'CANCELLED_USER', 'CANCELLED_DRIVER', 'CANCELLED_PAYMENT_FAILED', 'EXPIRED'];
+                return !cancelledStatuses.includes(b.status);
+              })}
               keyExtractor={(item) => String(item.id)}
               contentContainerStyle={{ paddingVertical: 16 }}
               ListHeaderComponent={() => {
                 if (!selectedTrip) return null;
                 const sColor = getStatusColor(selectedTrip.status);
                 const { time, date } = formatDate(selectedTrip.departureTime);
-                const seatsBooked = Math.max((selectedTrip.seatTotal || 0) - (selectedTrip.seatAvailable || 0), 0);
+                const cancelledStatuses = ['REJECTED_BY_DRIVER', 'CANCELLED_USER', 'CANCELLED_DRIVER', 'CANCELLED_PAYMENT_FAILED', 'EXPIRED'];
+                const approvedBookings = (bookings || []).filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+                const seatsBooked = approvedBookings.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+                const waitingBookings = (bookings || []).filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
+                const seatsWaiting = waitingBookings.reduce((sum, b) => sum + (b.seatCount || 1), 0);
 
                 // Lấy danh sách điểm đón/trả từ mảng stops
                 const pickups = selectedTrip.stops?.filter(s => s.stopType === 'PICKUP').map(s => s.addressText).join(', ') || 'Không có điểm cụ thể';
@@ -427,8 +789,10 @@ export default function DriverTripsScreen({ navigation }) {
                     {/* Stats */}
                     <View style={{ flexDirection: 'row', backgroundColor: COLORS.background, borderRadius: 12, padding: 12, marginBottom: 20 }}>
                       <View style={{ flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: COLORS.border }}>
-                        <Text style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4, textTransform: 'uppercase', fontWeight: 'bold' }}>Ghế đã đặt</Text>
-                        <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.primary }}>{seatsBooked}/{selectedTrip.seatTotal}</Text>
+                        <Text style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4, textTransform: 'uppercase', fontWeight: 'bold' }}>Ghế đã duyệt{seatsWaiting > 0 ? ` (chờ: ${seatsWaiting})` : ''}</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: COLORS.primary }}>
+                          {seatsBooked}/{selectedTrip.seatTotal} ghế <Text style={{ fontSize: 12, fontWeight: 'normal', color: COLORS.textMuted }}>({approvedBookings.length} khách)</Text>
+                        </Text>
                       </View>
                       <View style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 4, textTransform: 'uppercase', fontWeight: 'bold' }}>Doanh thu (Ước tính)</Text>
@@ -436,7 +800,66 @@ export default function DriverTripsScreen({ navigation }) {
                       </View>
                     </View>
 
-                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 12 }}>Danh sách khách ({bookings.length})</Text>
+                    {/* ── Trip Action Buttons ── */}
+                    {(selectedTrip.status === 'OPEN' || selectedTrip.status === 'FULL') && (
+                      <TouchableOpacity
+                        style={[styles.tripActionBtn, { backgroundColor: COLORS.primary }]}
+                        disabled={actionLoading === 'trip-status'}
+                        onPress={handleStartTrip}
+                        activeOpacity={0.8}
+                      >
+                        {actionLoading === 'trip-status' ? <ActivityIndicator color="#fff" size="small" /> : (
+                          <>
+                            <Ionicons name="play-circle" size={18} color="#fff" />
+                            <Text style={styles.tripActionBtnText}>Bắt đầu chuyến</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {selectedTrip.status === 'STARTED' && (() => {
+                      const uncompletedCount = (bookings || []).filter(b => b.status === 'CONFIRMED').length;
+                      return (
+                        <TouchableOpacity
+                          style={[
+                            styles.tripActionBtn,
+                            { backgroundColor: uncompletedCount > 0 ? '#64748B' : COLORS.success }
+                          ]}
+                          disabled={actionLoading === 'trip-status'}
+                          onPress={handleCompleteTrip}
+                          activeOpacity={0.8}
+                        >
+                          {actionLoading === 'trip-status' ? <ActivityIndicator color="#fff" size="small" /> : (
+                            <>
+                              <Ionicons name="checkmark-done-circle" size={18} color="#fff" />
+                              <Text style={styles.tripActionBtnText}>
+                                {uncompletedCount > 0
+                                  ? `Hoàn thành chuyến (Còn ${uncompletedCount} khách)`
+                                  : 'Hoàn thành chuyến'}
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })()}
+
+                    {(selectedTrip.status === 'OPEN' || selectedTrip.status === 'STARTED') && (
+                      <TouchableOpacity
+                        style={[styles.tripActionBtn, { backgroundColor: COLORS.error, marginTop: 8 }]}
+                        disabled={actionLoading === 'trip-status'}
+                        onPress={handleCancelTrip}
+                        activeOpacity={0.8}
+                      >
+                        {actionLoading === 'trip-status' ? <ActivityIndicator color="#fff" size="small" /> : (
+                          <>
+                            <Ionicons name="close-circle" size={18} color="#fff" />
+                            <Text style={styles.tripActionBtnText}>Huỷ chuyến</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 12, marginTop: 20 }}>Danh sách khách ({bookings.filter(b => !['REJECTED_BY_DRIVER', 'CANCELLED_USER', 'CANCELLED_DRIVER', 'CANCELLED_PAYMENT_FAILED', 'EXPIRED'].includes(b.status)).length})</Text>
                   </View>
                 );
               }}
@@ -626,6 +1049,34 @@ const styles = StyleSheet.create({
   bookingStatusText: { fontSize: 10, fontWeight: 'bold' },
   chatBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 5, elevation: 3 },
   chatBtnText: { color: COLORS.background, fontSize: 13, fontWeight: 'bold' },
+
+  // Approve / Reject Buttons
+  actionBtnApprove: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.success, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, shadowColor: COLORS.success, shadowOpacity: 0.3, shadowRadius: 5, elevation: 3 },
+  actionBtnApproveText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
+  actionBtnReject: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' },
+  actionBtnRejectText: { color: COLORS.error, fontSize: 13, fontWeight: 'bold' },
+  cannotApproveNotice: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(239, 68, 68, 0.08)', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.2)' },
+  cannotApproveNoticeText: { fontSize: 12, color: COLORS.error, fontWeight: '600' },
+
+  // Booking Code Badge
+  bookingCodeBadge: { backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  bookingCodeText: { fontSize: 11, color: COLORS.primary, fontWeight: '700' },
+
+  // Call Button
+  callBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(14, 165, 233, 0.25)' },
+  callBtnText: { color: COLORS.primary, fontSize: 12, fontWeight: 'bold' },
+
+  // Action Complete Button
+  actionBtnComplete: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, shadowColor: COLORS.success, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 },
+  actionBtnCompleteText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
+
+  // Completed Pill
+  completedPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  completedPillText: { color: COLORS.success, fontSize: 12, fontWeight: 'bold' },
+
+  // Trip Action Buttons
+  tripActionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
+  tripActionBtnText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
 
   emptyBookingBox: { alignItems: 'center', padding: 40 },
   emptyBookingText: { color: COLORS.textMuted, fontSize: 14, marginTop: 16 },

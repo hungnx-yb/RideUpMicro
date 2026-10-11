@@ -24,9 +24,10 @@ const STATUS_MAP = {
   WAITING_DRIVER_APPROVAL:    { label: 'Đang chờ tài xế duyệt',      color: COLORS.yellow,  bg: COLORS.yellowBg, icon: 'hourglass-outline' },
   CONFIRMED:                  { label: 'Đã xác nhận',                 color: COLORS.green,   bg: COLORS.greenBg,  icon: 'shield-checkmark-outline' },
   COMPLETED:                  { label: 'Hoàn thành',                  color: COLORS.green,   bg: COLORS.greenBg,  icon: 'checkmark-done-outline' },
-  REJECTED_BY_DRIVER:         { label: 'Bị từ chối (Đã hoàn tiền)',   color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
+  REJECTED_BY_DRIVER:         { label: 'Bị từ chối',                 color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
   EXPIRED:                    { label: 'Hết hạn',                     color: COLORS.red,     bg: COLORS.redBg,    icon: 'time-outline' },
   CANCELLED_USER:             { label: 'Đã huỷ',                      color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
+  CANCELLED_DRIVER:           { label: 'Tài xế huỷ chuyến',           color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
   CANCELLED_PAYMENT_FAILED:   { label: 'Lỗi thanh toán',              color: COLORS.red,     bg: COLORS.redBg,    icon: 'alert-circle-outline' },
 };
 const getStatus = (s) => STATUS_MAP[s] || { label: s || 'Không rõ', color: COLORS.textMuted, bg: '#f1f5f9', icon: 'ellipse-outline' };
@@ -60,7 +61,7 @@ const BookingDetailScreen = ({ route, navigation }) => {
   // ── Context‑aware actions ──
   const showChat     = ['CONFIRMED', 'RESERVED', 'PENDING_PAYMENT', 'WAITING_DRIVER_APPROVAL'].includes(booking.status);
   const showRate     = booking.status === 'COMPLETED';
-  const showRebook   = ['COMPLETED', 'CANCELLED_USER', 'REJECTED_BY_DRIVER', 'EXPIRED', 'CANCELLED_PAYMENT_FAILED'].includes(booking.status);
+  const showRebook   = ['COMPLETED', 'CANCELLED_USER', 'CANCELLED_DRIVER', 'REJECTED_BY_DRIVER', 'EXPIRED', 'CANCELLED_PAYMENT_FAILED'].includes(booking.status);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -133,7 +134,7 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
           <View style={s.priceRow}>
             <Text style={s.priceLabel}>Giá vé</Text>
-            <Text style={s.priceVal}>{money(booking.totalPrice || booking.price)}</Text>
+            <Text style={s.priceVal}>{money(booking.totalAmount || booking.totalPrice || booking.price)}</Text>
           </View>
           {booking.discountAmount > 0 && (
             <View style={s.priceRow}>
@@ -145,7 +146,7 @@ const BookingDetailScreen = ({ route, navigation }) => {
           <View style={s.priceRow}>
             <Text style={[s.priceLabel, { fontWeight: '800', color: COLORS.text }]}>Tổng thanh toán</Text>
             <Text style={[s.priceVal, { fontWeight: '800', color: COLORS.primary, fontSize: 20 }]}>
-              {money(booking.finalPrice || booking.totalPrice || booking.price)}
+              {money(booking.totalAmount || booking.finalPrice || booking.totalPrice || booking.price)}
             </Text>
           </View>
         </View>

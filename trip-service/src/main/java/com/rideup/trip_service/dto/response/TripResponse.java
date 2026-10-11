@@ -37,6 +37,7 @@ public class TripResponse {
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     String note;
+    String cancelReason;
 
     List<TripStopResponse> stops;
 

@@ -20,4 +20,6 @@ public class TripStatusChangeRequest {
 
     @NotNull(message = "Status is required")
     TripStatus status;
+
+    String cancelReason;
 }

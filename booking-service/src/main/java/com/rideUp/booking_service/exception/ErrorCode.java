@@ -29,6 +29,7 @@ public enum ErrorCode {
     SEAT_NOT_AVAILABLE(5003, "Not enough available seats", HttpStatus.BAD_REQUEST),
     VERSION_CONFLICT(5004, "Trip was updated, please retry", HttpStatus.CONFLICT),
     TRIP_SERVICE_UNAVAILABLE(5005, "Trip service is currently unavailable", HttpStatus.SERVICE_UNAVAILABLE),
+    TRIP_ALREADY_STARTED(5006, "Trip has already started. Cannot approve new bookings.", HttpStatus.BAD_REQUEST),
 
     // Payment related errors
     PAYMENT_SERVICE_ERROR(7001, "Payment service error occurred", HttpStatus.SERVICE_UNAVAILABLE),

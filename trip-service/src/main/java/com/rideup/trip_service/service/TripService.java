@@ -28,6 +28,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
+import com.rideup.trip_service.dto.event.TripCancelledEvent;
+import com.rideup.trip_service.kafka.producer.TripServicePublisher;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -37,6 +42,7 @@ public class TripService {
     TripRepository tripRepository;
     ModelMapper modelMapper;
     IdentityServiceClient  identityServiceClient;
+    TripServicePublisher tripServicePublisher;
 
     @Transactional
     public TripResponse createTrip(CreateTripRequest request) {
@@ -68,7 +74,7 @@ public class TripService {
         trip.setStops(null);
         trip.setDriverId(userResponse.getId());
         trip.setVehicleId(driverMap.get(userResponse.getId()).getVehicleId());
-        trip.setStatus(TripStatus.STARTED);
+        trip.setStatus(TripStatus.OPEN);
         trip.setSeatAvailable(request.getSeatTotal());
 
 
@@ -86,8 +92,30 @@ public class TripService {
     @Transactional
     public TripResponse changeStatus(String id, TripStatusChangeRequest request) {
         Trip trip = tripRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
+
+        if (request.getStatus() == TripStatus.CANCELED) {
+            trip.setStatus(TripStatus.CANCELED);
+            trip.setCancelReason(request.getCancelReason() != null && !request.getCancelReason().isBlank()
+                    ? request.getCancelReason() : "Tài xế huỷ chuyến");
+            trip.setCancelledAt(LocalDateTime.now());
+            Trip saved = tripRepository.save(trip);
+
+            // Bắn Kafka Event sang booking-service để huỷ vé và hoàn tiền tự động cho khách
+            TripCancelledEvent event = TripCancelledEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .correlationId(UUID.randomUUID().toString())
+                    .tripId(saved.getId())
+                    .driverId(saved.getDriverId())
+                    .cancelReason(saved.getCancelReason())
+                    .cancelledAt(saved.getCancelledAt())
+                    .build();
+            tripServicePublisher.publishTripCancelled(event);
+
+            return modelMapper.map(saved, TripResponse.class);
+        }
+
         trip.setStatus(request.getStatus());
-         return modelMapper.map(tripRepository.save(trip), TripResponse.class);
+        return modelMapper.map(tripRepository.save(trip), TripResponse.class);
     }
 
     public TripResponse getDetail(String id) {
@@ -111,6 +139,9 @@ public class TripService {
                 }
 
                 trip.setSeatAvailable(trip.getSeatAvailable() - request.getSeatCount());
+                if (trip.getSeatAvailable() == 0 && trip.getStatus() == com.rideup.trip_service.enums.TripStatus.OPEN) {
+                    trip.setStatus(com.rideup.trip_service.enums.TripStatus.FULL);
+                }
 
                 Trip saved = tripRepository.save(trip);
 
@@ -142,6 +173,10 @@ public class TripService {
 
         int newAvailable = trip.getSeatAvailable() + request.getSeatCount();
         trip.setSeatAvailable(Math.min(newAvailable, trip.getSeatTotal()));
+
+        if (trip.getStatus() == com.rideup.trip_service.enums.TripStatus.FULL && trip.getSeatAvailable() > 0) {
+            trip.setStatus(com.rideup.trip_service.enums.TripStatus.OPEN);
+        }
 
         Trip saved = tripRepository.save(trip);
 

@@ -918,7 +918,11 @@ export default function SearchRideScreen({ navigation }) {
                   style={{ backgroundColor: '#10b981', width: '100%', paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }}
                   onPress={() => {
                     setSuccessBooking(null);
-                    navigation.navigate('MyTrips');
+                    try {
+                      navigation.navigate('Main', { screen: 'MyTrips' });
+                    } catch (_) {
+                      navigation.navigate('MyTrips');
+                    }
                   }}
                 >
                   <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>XONG</Text>
@@ -956,7 +960,11 @@ export default function SearchRideScreen({ navigation }) {
               activeOpacity={0.8}
               onPress={() => {
                 setStripeSuccessBooking(null);
-                navigation.navigate('MyTrips');
+                try {
+                  navigation.navigate('Main', { screen: 'MyTrips' });
+                } catch (_) {
+                  navigation.navigate('MyTrips');
+                }
               }}
             >
               <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5 }}>HOÀN TẤT & THEO DÕI</Text>

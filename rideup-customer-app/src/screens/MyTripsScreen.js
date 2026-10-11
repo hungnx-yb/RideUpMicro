@@ -19,9 +19,10 @@ const STATUS_CONFIG = {
   WAITING_DRIVER_APPROVAL: { label: 'Đang chờ tài xế duyệt...', color: '#f59e0b', icon: 'hourglass-outline', bg: 'rgba(245,158,11,0.12)' },
   CONFIRMED:       { label: 'Đã xác nhận',    color: COLORS.green,  icon: 'shield-checkmark-outline', bg: 'rgba(74,222,128,0.12)' },
   COMPLETED:       { label: 'Hoàn thành',     color: COLORS.green,  icon: 'checkmark-done-outline',   bg: 'rgba(74,222,128,0.12)' },
-  REJECTED_BY_DRIVER: { label: 'Bị từ chối (Đã hoàn tiền)', color: COLORS.error, icon: 'close-circle-outline', bg: 'rgba(255,76,76,0.12)' },
+  REJECTED_BY_DRIVER: { label: 'Bị từ chối', color: COLORS.error, icon: 'close-circle-outline', bg: 'rgba(255,76,76,0.12)' },
   EXPIRED:         { label: 'Hết hạn', color: COLORS.error, icon: 'time-outline', bg: 'rgba(255,76,76,0.12)' },
   CANCELLED_USER:  { label: 'Đã huỷ', color: COLORS.error, icon: 'close-circle-outline', bg: 'rgba(255,76,76,0.12)' },
+  CANCELLED_DRIVER:{ label: 'Tài xế huỷ chuyến', color: COLORS.error, icon: 'close-circle-outline', bg: 'rgba(255,76,76,0.12)' },
   CANCELLED_PAYMENT_FAILED: { label: 'Lỗi thanh toán', color: COLORS.error, icon: 'close-circle-outline', bg: 'rgba(255,76,76,0.12)' }
 };
 
@@ -101,7 +102,7 @@ const BookingCard = ({ item, onPress, onChatPress }) => {
       </View>
 
       {/* ── FOOTER: Chat Action ── */}
-      {(item.status === 'CONFIRMED' || item.status === 'RESERVED' || item.status === 'PENDING_PAYMENT') && (
+      {(item.status === 'CONFIRMED' || item.status === 'RESERVED' || item.status === 'PENDING_PAYMENT' || item.status === 'WAITING_DRIVER_APPROVAL') && (
         <View style={styles.cardFooter}>
           <TouchableOpacity 
             style={styles.chatBtn} 

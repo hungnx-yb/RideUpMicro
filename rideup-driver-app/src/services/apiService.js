@@ -84,6 +84,9 @@ export const apiService = {
   rejectBooking: async (bookingId) => {
     return await apiClient.post(`/api/booking/bookings/${bookingId}/reject`);
   },
+  completeBooking: async (bookingId) => {
+    return await apiClient.post(`/api/booking/bookings/${bookingId}/complete`);
+  },
 
   // Payment Service
   getPaymentUrl: async (bookingId) => {
@@ -105,6 +108,14 @@ export const apiService = {
   },
   getDriverTrips: async (params) => {
     return await apiClient.get('/api/trip/trip/driver', { params });
+  },
+  changeTripStatus: async (tripId, status, cancelReason) => {
+    const payload = { status };
+    if (cancelReason) payload.cancelReason = cancelReason;
+    return await apiClient.patch(`/api/trip/trip/${tripId}/status`, payload);
+  },
+  getTripDetail: async (tripId) => {
+    return await apiClient.get(`/api/trip/trip/${tripId}`);
   },
 
   // Location Service
