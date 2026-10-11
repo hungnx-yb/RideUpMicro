@@ -94,6 +94,12 @@ public class TripService {
         Trip trip = tripRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
 
         if (request.getStatus() == TripStatus.CANCELED) {
+            if (trip.getStatus() == TripStatus.STARTED) {
+                throw new AppException(ErrorCode.CANNOT_CANCEL_STARTED_TRIP);
+            }
+            if (trip.getStatus() == TripStatus.COMPLETED) {
+                throw new AppException(ErrorCode.CANNOT_CANCEL_STARTED_TRIP);
+            }
             trip.setStatus(TripStatus.CANCELED);
             trip.setCancelReason(request.getCancelReason() != null && !request.getCancelReason().isBlank()
                     ? request.getCancelReason() : "Tài xế huỷ chuyến");

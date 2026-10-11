@@ -56,7 +56,8 @@ public enum ErrorCode {
     VERSION_CONFLICT(5004, "Trip was updated, please retry", HttpStatus.CONFLICT),
     
     // Wallet / Debt errors
-    ACCOUNT_BLOCKED_DUE_TO_DEBT(6001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN);
+    ACCOUNT_BLOCKED_DUE_TO_DEBT(6001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN),
+    CANNOT_CANCEL_STARTED_TRIP(5007, "Chuyến xe đã bắt đầu di chuyển, không thể huỷ chuyến.", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

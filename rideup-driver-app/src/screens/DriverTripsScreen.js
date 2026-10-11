@@ -331,6 +331,11 @@ export default function DriverTripsScreen({ navigation }) {
 
   // Huỷ chuyến - Hỏi lý do huỷ và cảnh báo huỷ vé/hoàn tiền
   const handleCancelTrip = () => {
+    if (selectedTrip?.status === 'STARTED') {
+      Alert.alert('Không thể huỷ chuyến', 'Chuyến xe đã bắt đầu di chuyển. Bạn không thể huỷ chuyến đi này!');
+      return;
+    }
+
     const bookedCount = (bookings || []).filter(b => b.status === 'CONFIRMED' || b.status === 'WAITING_DRIVER_APPROVAL').length;
     const warningText = bookedCount > 0
       ? `Chuyến đi đang có ${bookedCount} khách đã đặt vé. Khi huỷ chuyến, hệ thống sẽ tự động huỷ vé, hoàn tiền/cọc và gửi thông báo đến hành khách.\n\nVui lòng chọn lý do huỷ chuyến:`
@@ -843,7 +848,7 @@ export default function DriverTripsScreen({ navigation }) {
                       );
                     })()}
 
-                    {(selectedTrip.status === 'OPEN' || selectedTrip.status === 'STARTED') && (
+                    {(selectedTrip.status === 'OPEN' || selectedTrip.status === 'FULL') && (
                       <TouchableOpacity
                         style={[styles.tripActionBtn, { backgroundColor: COLORS.error, marginTop: 8 }]}
                         disabled={actionLoading === 'trip-status'}
