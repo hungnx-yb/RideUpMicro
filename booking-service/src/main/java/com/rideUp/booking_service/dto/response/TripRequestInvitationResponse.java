@@ -17,6 +17,8 @@ public class TripRequestInvitationResponse {
     String tripId;
     String message;
     String status;
+    String passengerId;
+    Integer seatCount;
     LocalDateTime respondedAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

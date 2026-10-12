@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class TripRequestCreateDTO {
+public class TripRequestCreate {
     @NotBlank(message = "Start province ID is required")
     String startProvinceId;
 

@@ -130,11 +130,17 @@ app:
       base-url: http://localhost:8084/api/booking
     trip:
       base-url: http://localhost:8083/api/trip
+    identity:
+      base-url: http://localhost:8080/api/identity
   kafka:
     topics:
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
       booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}
       booking-waiting-approval: ${KAFKA_TOPIC_BOOKING_WAITING_APPROVAL:booking.waiting.approval}
+      trip-request-created: ${KAFKA_TOPIC_TRIP_REQUEST_CREATED:trip-request-created}
+      trip-request-invited: ${KAFKA_TOPIC_TRIP_REQUEST_INVITED:trip-request-invited}
+      trip-request-invitation-rejected: ${KAFKA_TOPIC_TRIP_REQUEST_REJECTED:trip-request-invitation-rejected}
+      marketplace-invitation-accepted: ${KAFKA_TOPIC_MARKETPLACE_ACCEPTED:marketplace-invitation-accepted}
 
 

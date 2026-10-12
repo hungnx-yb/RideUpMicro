@@ -55,6 +55,4 @@ public class CreateBookingRequest {
     String dropoffAddressText;
 
     String note;
-
-    String invitationId;
 }

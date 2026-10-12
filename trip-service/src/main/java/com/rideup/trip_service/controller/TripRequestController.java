@@ -1,6 +1,7 @@
 package com.rideup.trip_service.controller;
 
-import com.rideup.trip_service.dto.request.TripRequestCreateDTO;
+import com.rideup.trip_service.dto.request.MarketplaceTripRequestFilter;
+import com.rideup.trip_service.dto.request.TripRequestCreate;
 import com.rideup.trip_service.dto.request.TripRequestInvitationCreateDTO;
 import com.rideup.trip_service.dto.response.ApiResponse;
 import com.rideup.trip_service.dto.response.TripRequestInvitationResponse;
@@ -12,8 +13,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -24,10 +27,9 @@ public class TripRequestController {
 
     TripRequestService tripRequestService;
 
-    // ----- PASSENGER APIs -----
 
     @PostMapping
-    public ApiResponse<TripRequestResponse> createTripRequest(@Valid @RequestBody TripRequestCreateDTO request) {
+    public ApiResponse<TripRequestResponse> createTripRequest(@Valid @RequestBody TripRequestCreate request) {
         return ApiResponse.<TripRequestResponse>builder()
                 .result(tripRequestService.createTripRequest(request))
                 .message("Trip request created successfully")
@@ -66,11 +68,21 @@ public class TripRequestController {
                 .build();
     }
 
+    @PostMapping("/invitations/{invitationId}/validate-and-reserve")
+    public ApiResponse<com.rideup.trip_service.dto.response.ProcessMarketplaceBookingResponse> validateAndReserve(
+            @PathVariable String invitationId, 
+            @RequestParam String passengerId) {
+        return ApiResponse.<com.rideup.trip_service.dto.response.ProcessMarketplaceBookingResponse>builder()
+                .message("Invitation validated and seats reserved successfully.")
+                .result(tripRequestService.validateAndReserveSeats(invitationId, passengerId))
+                .build();
+    }
+
     @PostMapping("/invitations/{invitationId}/internal-accept")
     public ApiResponse<Void> internalAcceptInvitation(@PathVariable String invitationId) {
-        tripRequestService.acceptInvitation(invitationId);
+        tripRequestService.markInvitationAccepted(invitationId);
         return ApiResponse.<Void>builder()
-                .message("Invitation accepted successfully. Booking is being processed.")
+                .message("Invitation accepted. Booking created by booking-service.")
                 .build();
     }
 
@@ -78,16 +90,10 @@ public class TripRequestController {
 
     @GetMapping("/marketplace")
     public ApiResponse<Page<TripRequestResponse>> getMarketplace(
-            @RequestParam String startProvinceId,
-            @RequestParam String endProvinceId,
-            @RequestParam(required = false) String startWardId,
-            @RequestParam(required = false) String endWardId,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime fromTime,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime toTime,
-            @RequestParam(required = false) Integer minSeat,
+            @Valid @ModelAttribute MarketplaceTripRequestFilter filter,
             Pageable pageable) {
         return ApiResponse.<Page<TripRequestResponse>>builder()
-                .result(tripRequestService.getOpenRequestsInMarketplace(startProvinceId, endProvinceId, startWardId, endWardId, fromTime, toTime, minSeat, pageable))
+                .result(tripRequestService.getOpenRequestsInMarketplace(filter, pageable))
                 .message("Marketplace requests retrieved successfully")
                 .build();
     }

@@ -100,8 +100,6 @@ public class DriverController {
                 .build();
     }
 
-
-
     @PostMapping("/detail")
     public ApiResponse<List<DriverResponse>> getDriverDetailList(@RequestBody List<String> driverIds) {
         return ApiResponse.<List<DriverResponse>>builder()

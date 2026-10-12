@@ -64,6 +64,24 @@ public class TripServiceConsumer {
         ack.acknowledge();
     }
 
+    @RetryableTopic(exclude = {JsonProcessingException.class})
+    @Transactional
+    @KafkaListener(
+            topics = "${app.kafka.topics.booking-marketplace-created:booking-marketplace-created}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onMarketplaceBookingCreated(String payload, Acknowledgment ack) throws Exception {
+        com.rideup.trip_service.dto.event.MarketplaceBookingCreatedEvent event = objectMapper.readValue(payload, com.rideup.trip_service.dto.event.MarketplaceBookingCreatedEvent.class);
+        log.info("[MarketplaceBookingCreatedEvent] bookingId={}, invitationId={}, customerId={}",
+                event.getBookingId(), event.getInvitationId(), event.getCustomerId());
+        
+        if (event.getInvitationId() != null) {
+            tripRequestService.markInvitationAccepted(event.getInvitationId());
+        }
+        
+        ack.acknowledge();
+    }
+
     @DltHandler
     public void handleDlt(ConsumerRecord<String, String> record, Exception ex) {
         log.error("[DLT][trip-service] Message permanently failed after all retries. " +

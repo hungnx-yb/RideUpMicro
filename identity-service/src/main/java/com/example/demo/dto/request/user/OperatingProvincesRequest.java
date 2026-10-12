@@ -12,6 +12,6 @@ import java.util.List;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class OperatingProvincesRequest {
-    @Size(max = 5, message = "DRIVER_OPERATING_PROVINCES_EXCEED_LIMIT")
+    @Size(max = 8, message = "DRIVER_OPERATING_PROVINCES_EXCEED_LIMIT")
     List<String> operatingProvinceIds;
 }

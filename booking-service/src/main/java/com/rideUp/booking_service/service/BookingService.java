@@ -57,16 +57,6 @@ public class BookingService {
 
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request) {
-        if (request.getInvitationId() != null && !request.getInvitationId().isEmpty()) {
-            ApiResponse<com.rideUp.booking_service.dto.response.TripRequestInvitationResponse> invResponse = tripServiceClient.getInvitation(request.getInvitationId());
-            if (invResponse == null || invResponse.getResult() == null) {
-                throw new AppException(ErrorCode.BOOKING_NOT_FOUND); // Reusing error
-            }
-            if (!"PENDING".equals(invResponse.getResult().getStatus())) {
-                throw new AppException(ErrorCode.BOOKING_ALREADY_CONFIRMED); // Better map to an invitation error, using what's available
-            }
-        }
-
         BigDecimal tripPricePerSeat = reserveTripSeats(request.getTripId(), request.getSeatCount());
         
         LocalDateTime now = LocalDateTime.now();
@@ -80,10 +70,6 @@ public class BookingService {
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
         booking.setExpiresAt(now.plusSeconds(expirySeconds)); // Áp dụng cho cả Cash và Stripe
         Booking saved = bookingRepository.save(booking);
-        
-        if (request.getInvitationId() != null && !request.getInvitationId().isEmpty()) {
-            tripServiceClient.acceptInvitation(request.getInvitationId());
-        }
         
         publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId);
 
@@ -102,6 +88,56 @@ public class BookingService {
                     .build();
             bookingServicePublisher.publishBookingWaitingApproval(waitEvent);
         }
+        return modelMapper.map(saved, BookingResponse.class);
+    }
+
+    @Transactional
+    public BookingResponse createBookingFromInvitation(AcceptInvitationRequest request) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+
+        com.rideUp.booking_service.dto.response.ProcessMarketplaceBookingResponse processResp;
+        try {
+            var apiResponse = tripServiceClient.validateAndReserve(request.getInvitationId(), currentUserId);
+            if (apiResponse == null || apiResponse.getResult() == null) {
+                throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
+            }
+            processResp = apiResponse.getResult();
+        } catch (feign.FeignException e) {
+            log.error("Failed to process invitation in trip-service: {}", e.getMessage());
+            throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
+        }
+        String correlationId = UUID.randomUUID().toString();
+        LocalDateTime now = LocalDateTime.now();
+        Booking booking = new Booking();
+        booking.setBookingCode(generateBookingCode());
+        booking.setTripId(processResp.getTripId());
+        booking.setCustomerId(currentUserId);
+        booking.setSeatCount(processResp.getSeatCount());
+        booking.setTotalAmount(processResp.getPriceVnd().multiply(BigDecimal.valueOf(processResp.getSeatCount())));
+        booking.setPaymentStatus(PaymentStatus.PENDING);
+        booking.setReservedAt(now);
+        if (request.getPaymentMethod() == PaymentMethod.CASH) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+            booking.setExpiresAt(null);
+        } else {
+            booking.setStatus(BookingStatus.PENDING_PAYMENT);
+            booking.setExpiresAt(now.plusSeconds(expirySeconds));
+        }
+
+        Booking saved = bookingRepository.save(booking);
+        publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId);
+        if (request.getPaymentMethod() == PaymentMethod.CASH) {
+                publishBookingConfirmed(saved, correlationId); 
+        }
+
+        bookingServicePublisher.publishMarketplaceBookingCreated(
+            com.rideUp.booking_service.dto.event.MarketplaceBookingCreatedEvent.builder()
+                .bookingId(saved.getId())
+                .invitationId(request.getInvitationId())
+                .customerId(saved.getCustomerId())
+                .build()
+        );
+
         return modelMapper.map(saved, BookingResponse.class);
     }
 

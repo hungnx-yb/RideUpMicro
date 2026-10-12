@@ -19,6 +19,8 @@ public class TripRequestInvitationResponse {
     DriverResponse driver; // Aggregated from identity-service via Feign
     String message;
     InvitationStatus status;
+    String passengerId;
+    Integer seatCount;
     LocalDateTime respondedAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

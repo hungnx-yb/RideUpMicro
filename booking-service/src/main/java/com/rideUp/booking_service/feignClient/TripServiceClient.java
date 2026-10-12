@@ -31,4 +31,9 @@ public interface TripServiceClient {
 
     @GetMapping("/trip-requests/invitations/{invitationId}")
     ApiResponse<com.rideUp.booking_service.dto.response.TripRequestInvitationResponse> getInvitation(@org.springframework.web.bind.annotation.PathVariable("invitationId") String invitationId);
+
+    @PostMapping("/trip-requests/invitations/{invitationId}/validate-and-reserve")
+    ApiResponse<com.rideUp.booking_service.dto.response.ProcessMarketplaceBookingResponse> validateAndReserve(
+            @org.springframework.web.bind.annotation.PathVariable("invitationId") String invitationId,
+            @org.springframework.web.bind.annotation.RequestParam("passengerId") String passengerId);
 }

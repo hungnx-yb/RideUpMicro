@@ -144,4 +144,19 @@ public class BookingServicePublisher {
             throw new IllegalStateException("Failed to serialize BookingRejectedEvent", ex);
         }
     }
+
+    @NonFinal
+    @Value("${app.kafka.topics.booking-marketplace-created:booking-marketplace-created}")
+    String bookingMarketplaceCreatedTopic;
+
+    public void publishMarketplaceBookingCreated(com.rideUp.booking_service.dto.event.MarketplaceBookingCreatedEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(bookingMarketplaceCreatedTopic, event.getBookingId(), payload);
+            log.info("Published MarketplaceBookingCreatedEvent bookingId={}, invitationId={}",
+                    event.getBookingId(), event.getInvitationId());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize MarketplaceBookingCreatedEvent", ex);
+        }
+    }
 }
