@@ -122,6 +122,7 @@ app:
       booking-approved: ${KAFKA_TOPIC_BOOKING_APPROVED:booking.approved}
       booking-rejected: ${KAFKA_TOPIC_BOOKING_REJECTED:booking.rejected}
       booking-waiting-approval: ${KAFKA_TOPIC_BOOKING_WAITING_APPROVAL:booking.waiting.approval}
+      trip-cancelled: ${KAFKA_TOPIC_TRIP_CANCELLED:trip.cancelled}
 
 booking:
   expire:
