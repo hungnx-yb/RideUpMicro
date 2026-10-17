@@ -263,8 +263,20 @@ const STATUS_CONFIG = {
 const getStatus = (status) =>
   STATUS_CONFIG[status] || { label: status || 'Không rõ', color: COLORS.textMuted, icon: 'ellipse-outline', bg: 'rgba(160,160,160,0.1)' };
 
+// Helper phân tách địa chỉ đầy đủ ("chi tiết, phường/xã, tỉnh/thành") thành các phần riêng biệt
+const parseFullAddress = (fullText) => {
+  if (!fullText) return { detail: '', ward: '', province: '' };
+  const parts = fullText.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    return { detail: parts.slice(0, -2).join(', '), ward: parts[parts.length - 2], province: parts[parts.length - 1] };
+  } else if (parts.length === 2) {
+    return { detail: parts[0], ward: '', province: parts[1] };
+  }
+  return { detail: fullText, ward: '', province: '' };
+};
+
 // ===== TRIP CARD =====
-const BookingCard = ({ item, onPress, onChatPress }) => {
+const BookingCard = ({ item, trip, onPress, onChatPress }) => {
   const status = getStatus(item.status);
 
   const formatDate = (iso) => {
@@ -276,6 +288,31 @@ const BookingCard = ({ item, onPress, onChatPress }) => {
     if (!iso) return '--';
     return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
+
+  // 1. Phường/Xã từ trip.stops dựa trên pickupWardId/dropoffWardId
+  const tripPickupWard = trip?.stops?.find(s => String(s.wardId) === String(item.pickupWardId))?.addressText || '';
+  const tripDropoffWard = trip?.stops?.find(s => String(s.wardId) === String(item.dropoffWardId))?.addressText || '';
+
+  // 2. Tỉnh/Thành từ trip (startAddressText / endAddressText)
+  const tripStartProvince = trip?.startAddressText || '';
+  const tripEndProvince = trip?.endAddressText || '';
+
+  // 3. Fallback phân tách nếu item.pickupAddressText có định dạng ghép chuỗi
+  const fallbackPickup = parseFullAddress(item.pickupAddressText);
+  const fallbackDropoff = parseFullAddress(item.dropoffAddressText);
+
+  // Xác định tỉnh thành, phường xã và chi tiết
+  const displayPickupProvince = tripStartProvince || fallbackPickup.province;
+  const displayPickupWard = tripPickupWard || fallbackPickup.ward;
+  const displayPickupDetail = (tripStartProvince || tripPickupWard) 
+    ? (item.pickupAddressText || '') 
+    : (fallbackPickup.detail || item.pickupAddressText || '');
+
+  const displayDropoffProvince = tripEndProvince || fallbackDropoff.province;
+  const displayDropoffWard = tripDropoffWard || fallbackDropoff.ward;
+  const displayDropoffDetail = (tripEndProvince || tripDropoffWard) 
+    ? (item.dropoffAddressText || '') 
+    : (fallbackDropoff.detail || item.dropoffAddressText || '');
 
   return (
     <TouchableOpacity 
@@ -301,36 +338,74 @@ const BookingCard = ({ item, onPress, onChatPress }) => {
         </View>
       </View>
 
-      {/* ── ROUTE ── */}
+      {/* ── ROUTE (Hiển thị đầy đủ Tỉnh/Thành + Phường/Xã + Chi tiết như màn Tìm chuyến) ── */}
       <View style={styles.cardBody}>
+        {/* Banner ngày khởi hành của chuyến đi */}
+        {trip?.departureTime ? (
+          <View style={styles.departureDateBanner}>
+            <Ionicons name="calendar-outline" size={13} color={COLORS.primary} style={{ marginRight: 5 }} />
+            <Text style={styles.departureDateBannerText}>
+              Ngày khởi hành: <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>{formatDate(trip.departureTime)}</Text>
+            </Text>
+          </View>
+        ) : null}
+
         {/* Điểm đón */}
         <View style={styles.routeRow}>
-          <View style={styles.iconWrap}>
-            <Ionicons name="location" size={20} color={COLORS.primary} />
+          <View style={styles.timeBox}>
+            <Text style={styles.timeText}>{formatTime(trip?.departureTime || item.createdAt)}</Text>
           </View>
-          <View style={[styles.textColumn, { marginBottom: 12 }]}>
-            <Text style={styles.routeLabel}>ĐIỂM ĐÓN</Text>
-            <Text style={styles.routeAddr} numberOfLines={2}>
-              {item.pickupAddressText || 'Điểm đón'}
+          <View style={styles.iconBox}>
+            <Ionicons name="location" size={18} color={COLORS.primary} />
+            <View style={styles.routeLine} />
+          </View>
+          <View style={styles.addressBox}>
+            {/* Tỉnh / Thành */}
+            <Text style={styles.addressText} numberOfLines={1}>
+              {displayPickupProvince || 'Điểm đón'}
             </Text>
+            {/* Phường / Xã */}
+            {displayPickupWard ? (
+              <Text style={styles.subAddressText} numberOfLines={1}>
+                ↳ {displayPickupWard}
+              </Text>
+            ) : null}
+            {/* Địa chỉ chi tiết */}
+            {displayPickupDetail ? (
+              <Text style={styles.detailAddressText} numberOfLines={2}>
+                <Ionicons name="navigate-outline" size={11} color={COLORS.textMuted} />{' '}{displayPickupDetail}
+              </Text>
+            ) : null}
           </View>
         </View>
 
         {/* Điểm trả */}
         <View style={styles.routeRow}>
-          <View style={styles.iconWrap}>
-            <Ionicons name="flag" size={20} color="#F59E0B" />
+          <View style={styles.timeBox}>
+            <Text style={styles.timeText}>{formatTime(trip?.estimatedArrivalTime)}</Text>
           </View>
-          <View style={styles.textColumn}>
-            <Text style={styles.routeLabel}>ĐIỂM ĐẾN</Text>
-            <Text style={styles.routeAddr} numberOfLines={2}>
-              {item.dropoffAddressText || 'Điểm đến'}
+          <View style={styles.iconBox}>
+            <Ionicons name="flag" size={18} color="#F59E0B" />
+          </View>
+          <View style={styles.addressBox}>
+            {/* Tỉnh / Thành */}
+            <Text style={styles.addressText} numberOfLines={1}>
+              {displayDropoffProvince || 'Điểm đến'}
             </Text>
+            {/* Phường / Xã */}
+            {displayDropoffWard ? (
+              <Text style={styles.subAddressText} numberOfLines={1}>
+                ↳ {displayDropoffWard}
+              </Text>
+            ) : null}
+            {/* Địa chỉ chi tiết */}
+            {displayDropoffDetail ? (
+              <Text style={styles.detailAddressText} numberOfLines={2}>
+                <Ionicons name="navigate-outline" size={11} color={COLORS.textMuted} />{' '}{displayDropoffDetail}
+              </Text>
+            ) : null}
           </View>
         </View>
-        
-        {/* Dòng kẻ nối 2 icon */}
-        <View style={styles.routeLine} />
       </View>
 
       {/* ── FOOTER: Chat Action ── */}
@@ -363,6 +438,7 @@ const TABS = [
 // ===== MAIN SCREEN =====
 const MyTripsScreen = ({ navigation }) => {
   const [bookings, setBookings] = useState([]);
+  const [tripMap, setTripMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(null);
@@ -390,8 +466,31 @@ const MyTripsScreen = ({ navigation }) => {
     try {
       const response = await apiService.getMyBookings();
       const data = response?.data?.result ?? (Array.isArray(response?.data) ? response.data : []);
-      setBookings(Array.isArray(data) ? data : []);
+      const bookingList = Array.isArray(data) ? data : [];
+      setBookings(bookingList);
       if (isRefresh) setPage(0);
+
+      // Thu thập các tripId duy nhất để tải thông tin trip chi tiết (tỉnh thành, phường xã, giờ khởi hành)
+      const uniqueTripIds = [...new Set(bookingList.map(b => b.tripId).filter(Boolean))];
+      if (uniqueTripIds.length > 0) {
+        const tripPromises = uniqueTripIds.map(async (tripId) => {
+          try {
+            const tripRes = await apiService.getTripDetail(tripId);
+            return { tripId, trip: tripRes?.data?.result || null };
+          } catch (e) {
+            console.log('Error fetching trip detail:', tripId, e);
+            return { tripId, trip: null };
+          }
+        });
+        const tripResults = await Promise.all(tripPromises);
+        const map = {};
+        tripResults.forEach(item => {
+          if (item.trip) {
+            map[item.tripId] = item.trip;
+          }
+        });
+        setTripMap(prev => ({ ...prev, ...map }));
+      }
     } catch (error) {
       console.log('Fetch bookings error:', error);
     } finally {
@@ -451,13 +550,12 @@ const MyTripsScreen = ({ navigation }) => {
     });
   }, [bookings]);
 
-  // Lọc theo các tiêu chí giống màn tìm kiếm
-  const filtered = useMemo(() => {
-    const startProvName = provinces.find(p => p.id === startProvinceId)?.name || '';
-    const startWardName = startWards.find(w => w.id === startWardId)?.name || '';
-    const endProvName = provinces.find(p => p.id === endProvinceId)?.name || '';
-    const endWardName = endWards.find(w => w.id === endWardId)?.name || '';
+  // Tạo Set wardId thuộc tỉnh đang chọn để lọc nhanh theo provinceId
+  const startWardIdSet = useMemo(() => new Set(startWards.map(w => w.id)), [startWards]);
+  const endWardIdSet = useMemo(() => new Set(endWards.map(w => w.id)), [endWards]);
 
+  // Lọc theo các tiêu chí giống màn Tìm chuyến: dùng cả thông tin trip lẫn booking
+  const filtered = useMemo(() => {
     return sortedBookings.filter((b) => {
       // 1. Tab status
       if (activeTab) {
@@ -470,44 +568,35 @@ const MyTripsScreen = ({ navigation }) => {
         }
       }
 
-      // 2. Điểm đón (Tỉnh / Phường đi)
+      const trip = tripMap[b.tripId];
+
+      // 2. Điểm đón: match bằng wardId hoặc provinceId
       if (startWardId) {
-        if (b.pickupWardId && b.pickupWardId === startWardId) {
-          // match wardId trực tiếp
-        } else if (startWardName && b.pickupAddressText) {
-          if (!removeDiacritics(b.pickupAddressText).includes(removeDiacritics(startWardName))) {
-            return false;
-          }
-        } else {
-          return false;
-        }
-      } else if (startProvinceId && startProvName) {
-        if (!b.pickupAddressText || !removeDiacritics(b.pickupAddressText).includes(removeDiacritics(startProvName))) {
-          return false;
-        }
+        const matchWard = String(b.pickupWardId) === String(startWardId) ||
+          trip?.stops?.some(s => s.stopType === 'PICKUP' && String(s.wardId) === String(startWardId));
+        if (!matchWard) return false;
+      } else if (startProvinceId) {
+        const matchProvince = (trip?.startProvinceId && String(trip.startProvinceId) === String(startProvinceId)) ||
+          (b.pickupWardId && startWardIdSet.has(b.pickupWardId));
+        if (!matchProvince) return false;
       }
 
-      // 3. Điểm trả (Tỉnh / Phường đến)
+      // 3. Điểm trả: match bằng wardId hoặc provinceId
       if (endWardId) {
-        if (b.dropoffWardId && b.dropoffWardId === endWardId) {
-          // match wardId trực tiếp
-        } else if (endWardName && b.dropoffAddressText) {
-          if (!removeDiacritics(b.dropoffAddressText).includes(removeDiacritics(endWardName))) {
-            return false;
-          }
-        } else {
-          return false;
-        }
-      } else if (endProvinceId && endProvName) {
-        if (!b.dropoffAddressText || !removeDiacritics(b.dropoffAddressText).includes(removeDiacritics(endProvName))) {
-          return false;
-        }
+        const matchWard = String(b.dropoffWardId) === String(endWardId) ||
+          trip?.stops?.some(s => s.stopType === 'DROPOFF' && String(s.wardId) === String(endWardId));
+        if (!matchWard) return false;
+      } else if (endProvinceId) {
+        const matchProvince = (trip?.endProvinceId && String(trip.endProvinceId) === String(endProvinceId)) ||
+          (b.dropoffWardId && endWardIdSet.has(b.dropoffWardId));
+        if (!matchProvince) return false;
       }
 
-      // 4. Ngày đặt hoặc ngày đi
+      // 4. Ngày đi: lọc theo ngày khởi hành của chuyến đi (hoặc ngày đặt); không chặn >= hôm nay vì là màn lịch sử
       if (selectedDate) {
-        const itemDate = b.createdAt ? new Date(b.createdAt) : null;
-        if (!itemDate) return false;
+        const compareDateStr = trip?.departureTime || b.createdAt;
+        if (!compareDateStr) return false;
+        const itemDate = new Date(compareDateStr);
         const isSame =
           itemDate.getDate() === selectedDate.getDate() &&
           itemDate.getMonth() === selectedDate.getMonth() &&
@@ -517,7 +606,7 @@ const MyTripsScreen = ({ navigation }) => {
 
       return true;
     });
-  }, [sortedBookings, activeTab, startProvinceId, startWardId, endProvinceId, endWardId, selectedDate, provinces, startWards, endWards]);
+  }, [sortedBookings, activeTab, startProvinceId, startWardId, endProvinceId, endWardId, selectedDate, startWardIdSet, endWardIdSet, tripMap]);
 
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -701,18 +790,22 @@ const MyTripsScreen = ({ navigation }) => {
         <FlatList
           data={paginatedData}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <BookingCard
-              item={item}
-              onPress={() => navigation.navigate('BookingDetail', { booking: item })}
-              onChatPress={() => navigation.navigate('BookingChat', { 
-                bookingId: item.id, 
-                driverName: item.trip?.driverName || 'Tài xế', 
-                driverAvatar: item.trip?.driverAvatar,
-                vehicleInfo: item.trip?.vehicleType || 'Xe máy'
-              })}
-            />
-          )}
+          renderItem={({ item }) => {
+            const trip = tripMap[item.tripId];
+            return (
+              <BookingCard
+                item={item}
+                trip={trip}
+                onPress={() => navigation.navigate('BookingDetail', { booking: { ...item, trip } })}
+                onChatPress={() => navigation.navigate('BookingChat', { 
+                  bookingId: item.id, 
+                  driverName: trip?.driverName || 'Tài xế', 
+                  driverAvatar: trip?.avatarUrl,
+                  vehicleInfo: [trip?.vehicleBrand, trip?.vehicleModel].filter(Boolean).join(' ') || 'Phương tiện'
+                })}
+              />
+            );
+          }}
           contentContainerStyle={styles.listContainer}
           refreshControl={
             <RefreshControl
@@ -885,15 +978,31 @@ const styles = StyleSheet.create({
   statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   statusText: { fontSize: 11, fontWeight: '800', marginLeft: 4 },
 
-  // Card Body (Route)
-  cardBody: { padding: 14, paddingLeft: 10, position: 'relative' },
-  routeRow: { flexDirection: 'row', alignItems: 'flex-start', zIndex: 2 },
-  iconWrap: { width: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, paddingVertical: 2 },
-  textColumn: { flex: 1, paddingLeft: 8, justifyContent: 'center' },
-  routeLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5, marginBottom: 2 },
-  routeAddr: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
-  
-  routeLine: { position: 'absolute', left: 23, top: 35, width: 2, height: 26, backgroundColor: '#E2E8F0', borderStyle: 'dashed', zIndex: 1 },
+  // Card Body (Route - Giống màn Tìm chuyến)
+  cardBody: { padding: 14, position: 'relative' },
+  departureDateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  departureDateBannerText: {
+    color: COLORS.text,
+    fontSize: 12,
+  },
+  routeRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
+  timeBox: { width: 44, paddingTop: 2 },
+  timeText: { color: COLORS.text, fontSize: 13, fontWeight: '800' },
+  iconBox: { width: 24, alignItems: 'center', zIndex: 2, paddingTop: 2 },
+  routeLine: { width: 2, height: 38, backgroundColor: '#CBD5E1', borderStyle: 'dashed', position: 'absolute', top: 22 },
+  addressBox: { flex: 1, paddingLeft: 8 },
+  addressText: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
+  subAddressText: { color: COLORS.primary, fontSize: 12, marginTop: 2, fontWeight: '600' },
+  detailAddressText: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontWeight: '500', lineHeight: 17 },
 
   // Footer Card
   cardFooter: { borderTopWidth: 1, borderTopColor: '#F8FAFC', padding: 12 },

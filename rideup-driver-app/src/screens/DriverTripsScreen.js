@@ -52,44 +52,111 @@ const BOOKING_STATUS_CONFIG = {
 };
 const getBookingStatus = (status) => BOOKING_STATUS_CONFIG[status] || { label: status || 'Không rõ', color: COLORS.textMuted, bg: 'rgba(148,163,184,0.1)' };
 
-// Component Dropdown
-const DropdownSelect = ({ label, placeholder, value, options, onSelect }) => {
+// Component Dropdown có ô tìm kiếm và chọn tất cả
+const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled, loading = false }) => {
   const [modalVisible, setModalVisible] = useState(false);
-  const selectedItem = options?.find(o => String(o.id) === String(value));
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const safeOptions = Array.isArray(options) ? options : [];
+  const selectedItem = safeOptions.find(o => String(o?.id) === String(value));
+
+  const query = (searchQuery || '').trim().toLowerCase();
+  const filteredOptions = safeOptions.filter(o => {
+    if (!o) return false;
+    const itemName = (o.name || o.wardName || o.provinceName || '').toString().toLowerCase();
+    return itemName.includes(query);
+  });
+
+  const handleOpen = () => {
+    if (disabled) {
+      Alert.alert('Chưa chọn Tỉnh/Thành', 'Vui lòng chọn Tỉnh/Thành trước khi chọn Phường/Xã.');
+      return;
+    }
+    setSearchQuery('');
+    setModalVisible(true);
+  };
 
   return (
-    <View style={{ marginBottom: 16 }}>
+    <View style={{ marginBottom: 14 }}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TouchableOpacity style={styles.inputBox} onPress={() => setModalVisible(true)}>
-        <Text style={{ color: selectedItem ? COLORS.text : COLORS.textMuted }}>
-          {selectedItem ? selectedItem.name : placeholder}
+      <TouchableOpacity
+        style={[styles.inputBox, disabled && { opacity: 0.5, backgroundColor: '#F1F5F9' }]}
+        onPress={handleOpen}
+        activeOpacity={0.8}
+      >
+        <Text style={{ color: selectedItem ? COLORS.text : COLORS.textMuted, fontSize: 13, fontWeight: selectedItem ? '600' : '400' }} numberOfLines={1}>
+          {loading ? 'Đang tải...' : (selectedItem ? (selectedItem.name || selectedItem.wardName) : placeholder)}
         </Text>
-        <Ionicons name="chevron-down" size={20} color={COLORS.textMuted} />
+        {loading ? (
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        ) : (
+          <Ionicons name="chevron-down" size={18} color={disabled ? COLORS.border : COLORS.textMuted} />
+        )}
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} transparent animationType="slide">
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.dropdownOverlay}>
           <View style={styles.dropdownContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Chọn {label || placeholder}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
+              <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
               </TouchableOpacity>
             </View>
+
+            {/* Ô tìm kiếm */}
+            <View style={styles.dropdownSearchBox}>
+              <Ionicons name="search" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.dropdownSearchInput}
+                placeholder="Nhập tên để tìm kiếm nhanh..."
+                placeholderTextColor={COLORS.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={16} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Mục: Tất cả */}
+            {!searchQuery && (
+              <TouchableOpacity
+                style={styles.modalItem}
+                onPress={() => { onSelect(''); setModalVisible(false); }}
+              >
+                <Text style={[styles.modalItemText, !value && { color: COLORS.primary, fontWeight: 'bold' }]}>
+                  -- Tất cả --
+                </Text>
+                {!value && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
+              </TouchableOpacity>
+            )}
+
             <FlatList
-              data={options}
+              data={filteredOptions}
               keyExtractor={(item) => String(item.id)}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <Text style={{ textAlign: 'center', color: COLORS.textMuted, paddingVertical: 24, fontSize: 13 }}>
+                  Không tìm thấy kết quả phù hợp
+                </Text>
+              }
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => { onSelect(item.id); setModalVisible(false); }}
                 >
-                  <Text style={[styles.modalItemText, String(item.id) === String(value) && { color: COLORS.primary }]}>
-                    {item.name}
+                  <Text style={[styles.modalItemText, String(item.id) === String(value) && { color: COLORS.primary, fontWeight: 'bold' }]} numberOfLines={1}>
+                    {item.name || item.wardName}
                   </Text>
-                  {String(item.id) === String(value) && <Ionicons name="checkmark" size={20} color={COLORS.primary} />}
+                  {String(item.id) === String(value) && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
                 </TouchableOpacity>
               )}
+              style={{ maxHeight: 360 }}
             />
           </View>
         </View>
@@ -103,19 +170,27 @@ export default function DriverTripsScreen({ navigation }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('ACTIVE'); // 'ACTIVE' or 'ALL'
+  const [activeTab, setActiveTab] = useState('ALL'); // 'ALL', 'OPEN', 'STARTED', 'COMPLETED', 'CANCELLED'
 
   // Filter state
   const [provinces, setProvinces] = useState([]);
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState({
     startProvinceId: '',
+    startWardId: '',
     endProvinceId: '',
+    endWardId: '',
     startDate: null,
     endDate: null,
     pickupAddress: '',
     dropoffAddress: '',
   });
+
+  const [startWards, setStartWards] = useState([]);
+  const [loadingStartWards, setLoadingStartWards] = useState(false);
+  const [endWards, setEndWards] = useState([]);
+  const [loadingEndWards, setLoadingEndWards] = useState(false);
+
   const [datePickerType, setDatePickerType] = useState(null);
   const [page, setPage] = useState(0);
   const [totalTripsCount, setTotalTripsCount] = useState(0);
@@ -133,6 +208,34 @@ export default function DriverTripsScreen({ navigation }) {
   useEffect(() => {
     fetchProvinces();
   }, []);
+
+  // Tự động tải phường/xã đón khi chọn tỉnh đón
+  useEffect(() => {
+    if (filters.startProvinceId) {
+      setLoadingStartWards(true);
+      apiService.getAllWards(filters.startProvinceId)
+        .then(res => setStartWards(res?.data?.result || []))
+        .catch(e => console.log('Fetch start wards error:', e))
+        .finally(() => setLoadingStartWards(false));
+    } else {
+      setStartWards([]);
+      setFilters(p => ({ ...p, startWardId: '' }));
+    }
+  }, [filters.startProvinceId]);
+
+  // Tự động tải phường/xã trả khi chọn tỉnh trả
+  useEffect(() => {
+    if (filters.endProvinceId) {
+      setLoadingEndWards(true);
+      apiService.getAllWards(filters.endProvinceId)
+        .then(res => setEndWards(res?.data?.result || []))
+        .catch(e => console.log('Fetch end wards error:', e))
+        .finally(() => setLoadingEndWards(false));
+    } else {
+      setEndWards([]);
+      setFilters(p => ({ ...p, endWardId: '' }));
+    }
+  }, [filters.endProvinceId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -157,8 +260,22 @@ export default function DriverTripsScreen({ navigation }) {
       if (filters.endProvinceId) params.endProvinceId = filters.endProvinceId;
       if (filters.startDate) params.startDate = filters.startDate.toISOString().split('T')[0];
       if (filters.endDate) params.endDate = filters.endDate.toISOString().split('T')[0];
-      if (filters.pickupAddress?.trim()) params.pickupAddress = filters.pickupAddress.trim();
-      if (filters.dropoffAddress?.trim()) params.dropoffAddress = filters.dropoffAddress.trim();
+      
+      // Nếu có chọn startWardId, truyền tên phường vào pickupAddress để backend tìm trong trip_stop
+      if (filters.startWardId) {
+        const wardObj = startWards.find(w => String(w.id) === String(filters.startWardId));
+        if (wardObj?.name) params.pickupAddress = wardObj.name;
+      } else if (filters.pickupAddress?.trim()) {
+        params.pickupAddress = filters.pickupAddress.trim();
+      }
+
+      // Nếu có chọn endWardId, truyền tên phường vào dropoffAddress để backend tìm trong trip_stop
+      if (filters.endWardId) {
+        const wardObj = endWards.find(w => String(w.id) === String(filters.endWardId));
+        if (wardObj?.name) params.dropoffAddress = wardObj.name;
+      } else if (filters.dropoffAddress?.trim()) {
+        params.dropoffAddress = filters.dropoffAddress.trim();
+      }
 
       const res = await apiService.getDriverTrips(params);
       const count = res?.data?.count ?? 0;
@@ -172,6 +289,14 @@ export default function DriverTripsScreen({ navigation }) {
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return timeB - timeA;
       });
+
+      // Lọc client-side đảm bảo khớp đúng wardId nếu có chọn
+      if (filters.startWardId) {
+        list = list.filter(t => t.stops?.some(s => s.stopType === 'PICKUP' && String(s.wardId) === String(filters.startWardId)));
+      }
+      if (filters.endWardId) {
+        list = list.filter(t => t.stops?.some(s => s.stopType === 'DROPOFF' && String(s.wardId) === String(filters.endWardId)));
+      }
 
       setTrips(list);
     } catch (e) {
@@ -450,15 +575,41 @@ export default function DriverTripsScreen({ navigation }) {
     ]);
   };
 
-  // Lọc chuyến theo tab
+  const STATUS_TABS = [
+    { key: 'ALL', label: 'Tất cả' },
+    { key: 'OPEN', label: 'Mở bán' },
+    { key: 'STARTED', label: 'Đang chạy' },
+    { key: 'COMPLETED', label: 'Hoàn thành' },
+    { key: 'CANCELLED', label: 'Đã huỷ' },
+  ];
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.startProvinceId) count++;
+    if (filters.startWardId) count++;
+    if (filters.endProvinceId) count++;
+    if (filters.endWardId) count++;
+    if (filters.startDate) count++;
+    if (filters.endDate) count++;
+    if (filters.pickupAddress) count++;
+    if (filters.dropoffAddress) count++;
+    return count;
+  }, [filters]);
+
+  // Lọc chuyến theo tab trạng thái
   const displayTrips = useMemo(() => {
     return trips.filter(t => {
       const s = (t.status || '').toUpperCase();
-      if (activeTab === 'ACTIVE') {
-        return ['OPEN', 'FULL', 'STARTED'].includes(s);
-      } else {
-        return true; // Tab ALL hiển thị tất cả
+      if (activeTab === 'OPEN') {
+        return ['OPEN', 'FULL'].includes(s);
+      } else if (activeTab === 'STARTED') {
+        return s === 'STARTED';
+      } else if (activeTab === 'COMPLETED') {
+        return s === 'COMPLETED';
+      } else if (activeTab === 'CANCELLED') {
+        return ['CANCELLED', 'CANCELED'].includes(s);
       }
+      return true; // Tab ALL hiển thị tất cả
     }).sort((a, b) => new Date(b.departureTime) - new Date(a.departureTime));
   }, [trips, activeTab]);
 
@@ -486,7 +637,7 @@ export default function DriverTripsScreen({ navigation }) {
 
         <View style={styles.divider} />
 
-        {/* Lộ trình Timeline */}
+        {/* Lộ trình Timeline (Hiển thị đầy đủ Tỉnh/Thành + Phường/Xã các điểm đón/trả) */}
         <View style={styles.timelineContainer}>
           <View style={styles.timelineGraphic}>
             <View style={styles.timelineDotStart} />
@@ -496,13 +647,26 @@ export default function DriverTripsScreen({ navigation }) {
             </View>
           </View>
           <View style={styles.timelineContent}>
+            {/* Điểm đón */}
             <View style={styles.locationBlock}>
               <Text style={styles.locationLabel}>ĐIỂM ĐÓN</Text>
-              <Text style={styles.locationText} numberOfLines={1}>{item.startAddressText || 'Chưa cập nhật'}</Text>
+              <Text style={styles.locationText} numberOfLines={1}>{item.startAddressText || 'Điểm đón'}</Text>
+              {item.stops?.filter(s => s.stopType === 'PICKUP').map((s, i) => (
+                <Text key={`pickup-${i}`} style={styles.subLocationText} numberOfLines={1}>
+                  ↳ {s.addressText}
+                </Text>
+              ))}
             </View>
-            <View style={[styles.locationBlock, { marginTop: 16 }]}>
+
+            {/* Điểm trả */}
+            <View style={[styles.locationBlock, { marginTop: 14 }]}>
               <Text style={styles.locationLabel}>ĐIỂM TRẢ</Text>
-              <Text style={styles.locationText} numberOfLines={1}>{item.endAddressText || 'Chưa cập nhật'}</Text>
+              <Text style={styles.locationText} numberOfLines={1}>{item.endAddressText || 'Điểm đến'}</Text>
+              {item.stops?.filter(s => s.stopType === 'DROPOFF').map((s, i) => (
+                <Text key={`dropoff-${i}`} style={styles.subLocationText} numberOfLines={1}>
+                  ↳ {s.addressText}
+                </Text>
+              ))}
             </View>
           </View>
         </View>
@@ -728,31 +892,44 @@ export default function DriverTripsScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <View>
             <Text style={styles.headerAppTitle}>RIDEUP</Text>
             <Text style={styles.headerTitle}>Quản lý chuyến xe</Text>
           </View>
           <TouchableOpacity style={styles.filterBtnIcon} onPress={() => setShowFilter(true)}>
             <Ionicons name="filter" size={20} color={COLORS.primary} />
+            {activeFilterCount > 0 && (
+              <View style={styles.activeFilterBadge}>
+                <Text style={styles.activeFilterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'ACTIVE' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('ACTIVE')}
-          >
-            <Text style={[styles.tabText, activeTab === 'ACTIVE' && styles.tabTextActive]}>Đang hoạt động</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'ALL' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('ALL')}
-          >
-            <Text style={[styles.tabText, activeTab === 'ALL' && styles.tabTextActive]}>Tất cả chuyến</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Status Filter Tabs (Cuộn ngang linh hoạt) */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.statusTabsScroll}
+          style={{ marginHorizontal: -4 }}
+        >
+          {STATUS_TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.statusTabBtn, isActive && styles.statusTabBtnActive]}
+                onPress={() => setActiveTab(tab.key)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.statusTabText, isActive && styles.statusTabTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {loading && !refreshing ? (
@@ -772,11 +949,17 @@ export default function DriverTripsScreen({ navigation }) {
               </View>
               <Text style={styles.emptyTitle}>Chưa có chuyến xe nào</Text>
               <Text style={styles.emptySub}>
-                {activeTab === 'ACTIVE'
-                  ? 'Bạn chưa mở chuyến nào sắp tới. Hãy tạo chuyến ngay để bắt đầu kiếm tiền nhé.'
+                {activeTab === 'OPEN'
+                  ? 'Không có chuyến xe nào đang mở bán.'
+                  : activeTab === 'STARTED'
+                  ? 'Không có chuyến xe nào đang chạy.'
+                  : activeTab === 'COMPLETED'
+                  ? 'Chưa có chuyến xe nào hoàn thành.'
+                  : activeTab === 'CANCELLED'
+                  ? 'Không có chuyến xe nào đã huỷ.'
                   : 'Lịch sử chuyến đi của bạn hiện đang trống.'}
               </Text>
-              {activeTab === 'ACTIVE' && (
+              {(activeTab === 'ALL' || activeTab === 'OPEN') && (
                 <TouchableOpacity style={styles.createBtn} onPress={() => navigation.navigate('CreateTrip')}>
                   <Text style={styles.createBtnText}>Mở chuyến ngay</Text>
                 </TouchableOpacity>
@@ -1077,15 +1260,32 @@ export default function DriverTripsScreen({ navigation }) {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Điểm đón */}
               <DropdownSelect
-                label="Tỉnh đi" placeholder="Chọn tỉnh xuất phát"
+                label="Tỉnh xuất phát (Điểm đón)" placeholder="Chọn tỉnh xuất phát"
                 value={filters.startProvinceId} options={provinces}
                 onSelect={(val) => setFilters(p => ({ ...p, startProvinceId: val }))}
               />
               <DropdownSelect
-                label="Tỉnh đến" placeholder="Chọn tỉnh đích"
+                label="Phường/Xã xuất phát" placeholder="Chọn phường/xã đón"
+                value={filters.startWardId} options={startWards}
+                disabled={!filters.startProvinceId}
+                loading={loadingStartWards}
+                onSelect={(val) => setFilters(p => ({ ...p, startWardId: val }))}
+              />
+
+              {/* Điểm trả */}
+              <DropdownSelect
+                label="Tỉnh đích (Điểm trả)" placeholder="Chọn tỉnh đích"
                 value={filters.endProvinceId} options={provinces}
                 onSelect={(val) => setFilters(p => ({ ...p, endProvinceId: val }))}
+              />
+              <DropdownSelect
+                label="Phường/Xã đích" placeholder="Chọn phường/xã trả"
+                value={filters.endWardId} options={endWards}
+                disabled={!filters.endProvinceId}
+                loading={loadingEndWards}
+                onSelect={(val) => setFilters(p => ({ ...p, endWardId: val }))}
               />
 
               <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -1111,7 +1311,7 @@ export default function DriverTripsScreen({ navigation }) {
               </View>
 
               {/* Lọc theo Điểm đón & Điểm trả chi tiết */}
-              <Text style={[styles.label, { marginTop: 12 }]}>Điểm đón (Địa chỉ / Trạm đón)</Text>
+              <Text style={[styles.label, { marginTop: 12 }]}>Từ khóa điểm đón (Địa chỉ / Trạm đón)</Text>
               <View style={styles.addressInputBox}>
                 <Ionicons name="location" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
                 <TextInput
@@ -1128,7 +1328,7 @@ export default function DriverTripsScreen({ navigation }) {
                 ) : null}
               </View>
 
-              <Text style={[styles.label, { marginTop: 12 }]}>Điểm trả (Địa chỉ / Trạm trả)</Text>
+              <Text style={[styles.label, { marginTop: 12 }]}>Từ khóa điểm trả (Địa chỉ / Trạm trả)</Text>
               <View style={styles.addressInputBox}>
                 <Ionicons name="flag" size={18} color="#F59E0B" style={{ marginRight: 8 }} />
                 <TextInput
@@ -1174,7 +1374,18 @@ export default function DriverTripsScreen({ navigation }) {
               <TouchableOpacity
                 style={styles.resetBtn}
                 onPress={() => {
-                  setFilters({ startProvinceId: '', endProvinceId: '', startDate: null, endDate: null, pickupAddress: '', dropoffAddress: '' });
+                  setFilters({
+                    startProvinceId: '',
+                    startWardId: '',
+                    endProvinceId: '',
+                    endWardId: '',
+                    startDate: null,
+                    endDate: null,
+                    pickupAddress: '',
+                    dropoffAddress: '',
+                  });
+                  setStartWards([]);
+                  setEndWards([]);
                   fetchTrips(0);
                   setShowFilter(false);
                 }}
@@ -1198,9 +1409,56 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, zIndex: 10 },
   headerAppTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.primary, letterSpacing: 1, marginBottom: 2 },
   headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
-  filterBtnIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  filterBtnIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  activeFilterBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: COLORS.error,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: COLORS.surface,
+  },
+  activeFilterBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '900',
+  },
 
-  // Tabs
+  // Status Filter Tabs
+  statusTabsScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  statusTabBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  statusTabBtnActive: {
+    backgroundColor: 'rgba(14, 165, 233, 0.12)',
+    borderColor: COLORS.primary,
+  },
+  statusTabText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '700',
+  },
+  statusTabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+
+  // Tabs cũ (giữ tương thích)
   tabContainer: { flexDirection: 'row', backgroundColor: COLORS.surface, borderRadius: 12, padding: 4, marginVertical: 12, borderWidth: 1, borderColor: COLORS.border },
   tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
   tabBtnActive: { backgroundColor: `${COLORS.primary}15` },
@@ -1230,6 +1488,24 @@ const styles = StyleSheet.create({
   locationBlock: { marginBottom: 12 },
   locationLabel: { color: COLORS.textMuted, fontSize: 9, fontWeight: '800', letterSpacing: 0.5, marginBottom: 2, textTransform: 'uppercase' },
   locationText: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+  subLocationText: { color: COLORS.primary, fontSize: 12, marginTop: 2, fontWeight: '600' },
+  dropdownSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dropdownSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.text,
+    paddingVertical: 0,
+  },
 
   // Stats Row
   tripStatsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border, borderStyle: 'dashed' },
