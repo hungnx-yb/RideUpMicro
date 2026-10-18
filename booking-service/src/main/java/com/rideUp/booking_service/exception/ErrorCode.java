@@ -37,7 +37,8 @@ public enum ErrorCode {
     INVALID_TRANSACTION_ID(7003, "Invalid transaction ID", HttpStatus.BAD_REQUEST),
 
     // Wallet / Debt errors
-    ACCOUNT_BLOCKED_DUE_TO_DEBT(8001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN);
+    ACCOUNT_BLOCKED_DUE_TO_DEBT(8001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN),
+    DUPLICATE_BOOKING(6011, "Bạn đã có vé đang hoạt động cho chuyến xe này. Không thể đặt thêm.", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

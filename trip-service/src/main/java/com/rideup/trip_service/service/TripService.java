@@ -127,6 +127,14 @@ public class TripService {
             return modelMapper.map(saved, TripResponse.class);
         }
 
+        // Chặn bắt đầu chuyến khi chưa có khách (seatAvailable == seatTotal => chưa có ai đặt)
+        if (request.getStatus() == TripStatus.STARTED) {
+            if (trip.getSeatAvailable() != null && trip.getSeatTotal() != null
+                    && trip.getSeatAvailable().equals(trip.getSeatTotal())) {
+                throw new AppException(ErrorCode.CANNOT_START_WITHOUT_PASSENGERS);
+            }
+        }
+
         trip.setStatus(request.getStatus());
         return modelMapper.map(tripRepository.save(trip), TripResponse.class);
     }

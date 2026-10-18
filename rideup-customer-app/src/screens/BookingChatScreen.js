@@ -252,11 +252,11 @@ const BookingChatScreen = ({ route, navigation }) => {
                   <Text style={styles.avatarText}>{displayDriverName.charAt(0).toUpperCase()}</Text>
                 </View>
               )}
-              <View style={styles.onlineBadge} />
+
             </View>
             <View>
               <Text style={styles.headerTitle}>{displayDriverName}</Text>
-              <Text style={styles.headerSubTitle}>{vehicleInfo || 'Đang hoạt động'}</Text>
+              {vehicleInfo ? <Text style={styles.headerSubTitle}>{vehicleInfo}</Text> : null}
             </View>
           </View>
           <TouchableOpacity
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   avatarPlaceholder: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(14, 165, 233, 0.15)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(14, 165, 233, 0.3)' },
   avatarImage: { width: 42, height: 42, borderRadius: 21 },
   avatarText: { color: COLORS.primary, fontSize: 18, fontWeight: 'bold' },
-  onlineBadge: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.success || '#10b981', position: 'absolute', bottom: 0, right: 0, borderWidth: 2, borderColor: COLORS.surface },
+
   headerTitle: { color: COLORS.text, fontSize: 16, fontWeight: 'bold', marginBottom: 2 },
   headerSubTitle: { color: COLORS.textMuted, fontSize: 12, fontWeight: '500' },
   callBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.success || '#10b981', justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.success || '#10b981', shadowOpacity: 0.4, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4 },

@@ -28,4 +28,5 @@ public class PaymentRequestedEvent {
     BigDecimal amount;
     String paymentMethod;
     LocalDateTime createdAt;
+    String transactionId;
 }

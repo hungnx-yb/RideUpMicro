@@ -33,4 +33,6 @@ public class CreatePaymentRequest {
     PaymentMethod paymentMethod;
 
     String correlationId;
+
+    String transactionId;
 }

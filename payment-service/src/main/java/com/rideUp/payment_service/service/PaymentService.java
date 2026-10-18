@@ -68,7 +68,8 @@ public class PaymentService {
 				.correlationId(request.getCorrelationId())
 				.amount(request.getAmount())
 				.method(request.getPaymentMethod())
-				.status(PaymentStatus.PENDING)
+				.status(request.getTransactionId() != null ? PaymentStatus.HOLDING : PaymentStatus.PENDING)
+				.transactionId(request.getTransactionId())
 				.build();
 
 		if (request.getPaymentMethod() == PaymentMethod.CASH) {
@@ -78,7 +79,7 @@ public class PaymentService {
 
 		Payment savedPayment = paymentRepository.save(payment);
 
-		if (request.getPaymentMethod() == PaymentMethod.STRIPE) {
+		if (request.getPaymentMethod() == PaymentMethod.STRIPE && savedPayment.getTransactionId() == null) {
 			try {
 				PaymentIntentCreateParams params =
 						com.stripe.param.PaymentIntentCreateParams.builder()
@@ -99,6 +100,29 @@ public class PaymentService {
 		}
 
 		return modelMapper.map(savedPayment, PaymentResponse.class);
+	}
+
+	public Map<String, String> createPaymentIntent(com.rideUp.payment_service.dto.request.CreatePaymentIntentRequest request) {
+		if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+			throw new AppException(ErrorCode.INVALID_PAYMENT_AMOUNT);
+		}
+		try {
+			PaymentIntentCreateParams params =
+					PaymentIntentCreateParams.builder()
+							.setAmount(request.getAmount().longValue())
+							.setCurrency("vnd")
+							.setCaptureMethod(PaymentIntentCreateParams.CaptureMethod.MANUAL)
+							.putMetadata("tripId", request.getTripId() != null ? request.getTripId() : "")
+							.build();
+			PaymentIntent paymentIntent = PaymentIntent.create(params);
+			Map<String, String> result = new HashMap<>();
+			result.put("clientSecret", paymentIntent.getClientSecret());
+			result.put("paymentIntentId", paymentIntent.getId());
+			return result;
+		} catch (StripeException e) {
+			log.error("Stripe error creating PaymentIntent: ", e);
+			throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+		}
 	}
 
 

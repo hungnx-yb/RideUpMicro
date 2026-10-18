@@ -23,4 +23,6 @@ public interface BookingRepository extends JpaRepository<Booking, String> {
     List<Booking> findByStatusInAndExpiresAtBefore(List<BookingStatus> statuses, LocalDateTime now);
 
     List<Booking> findByTripIdAndStatusIn(String tripId, List<BookingStatus> statuses);
+
+    boolean existsByCustomerIdAndTripIdAndStatusIn(String customerId, String tripId, List<BookingStatus> activeStatuses);
 }

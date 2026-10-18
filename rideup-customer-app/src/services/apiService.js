@@ -54,6 +54,9 @@ export const apiService = {
   },
 
   // Booking Service
+  checkDuplicateBooking: async (tripId) => {
+    return await apiClient.get(`/api/booking/bookings/check-duplicate/${tripId}`);
+  },
   createBooking: async (payload, idempotencyKey) => {
     return await apiClient.post('/api/booking/bookings', payload, {
       headers: { 'Idempotency-Key': idempotencyKey },
@@ -67,6 +70,9 @@ export const apiService = {
   },
 
   // Payment Service
+  createPaymentIntent: async (payload) => {
+    return await apiClient.post('/api/payment/payments/create-intent', payload);
+  },
   getPaymentUrl: async (bookingId) => {
     return await apiClient.get(`/api/payment/payments/booking/${bookingId}`);
   },

@@ -56,23 +56,49 @@ public class BookingService {
     @Value("${expiryTime:3600}")
     long expirySeconds;
 
+    public void checkDuplicateBooking(String tripId) {
+        String currentCustomerId = SecurityUtils.getCurrentUserId();
+        List<BookingStatus> activeStatuses = List.of(
+                BookingStatus.PENDING_PAYMENT,
+                BookingStatus.WAITING_DRIVER_APPROVAL,
+                BookingStatus.CONFIRMED
+        );
+        boolean alreadyBooked = bookingRepository.existsByCustomerIdAndTripIdAndStatusIn(
+                currentCustomerId, tripId, activeStatuses);
+        if (alreadyBooked) {
+            throw new AppException(ErrorCode.DUPLICATE_BOOKING);
+        }
+    }
+
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request) {
+        // Chặn đặt trùng: kiểm tra khách đã có vé đang hoạt động cho chuyến này chưa
+        checkDuplicateBooking(request.getTripId());
+
         BigDecimal tripPricePerSeat = getTripPriceAndValidateSeats(request.getTripId(), request.getSeatCount());
         LocalDateTime now = LocalDateTime.now();
         String correlationId = UUID.randomUUID().toString();
         Booking booking = modelMapper.map(request, Booking.class);
         booking.setBookingCode(generateBookingCode());
-        booking.setStatus(request.getPaymentMethod() == PaymentMethod.CASH ? BookingStatus.WAITING_DRIVER_APPROVAL : BookingStatus.PENDING_PAYMENT);
-        booking.setPaymentStatus(PaymentStatus.PENDING);
+
+        boolean isStripePrePaid = request.getPaymentMethod() == PaymentMethod.STRIPE
+                && request.getPaymentIntentId() != null
+                && !request.getPaymentIntentId().isBlank();
+
+        booking.setStatus(
+                (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid)
+                        ? BookingStatus.WAITING_DRIVER_APPROVAL
+                        : BookingStatus.PENDING_PAYMENT
+        );
+        booking.setPaymentStatus(isStripePrePaid ? PaymentStatus.HOLDING : PaymentStatus.PENDING);
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
         booking.setReservedAt(now);
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
         booking.setExpiresAt(now.plusSeconds(expirySeconds)); // Áp dụng cho cả Cash và Stripe
         Booking saved = bookingRepository.save(booking);
-        publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId);
+        publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId, request.getPaymentIntentId());
 
-        if (request.getPaymentMethod() == PaymentMethod.CASH) {
+        if (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid) {
             com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent waitEvent = com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent.builder()
                     .eventId(UUID.randomUUID().toString())
                     .correlationId(correlationId)
@@ -547,7 +573,7 @@ public class BookingService {
     }
 
 
-    private void publishPaymentRequested(Booking booking, PaymentMethod paymentMethod, LocalDateTime now, String correlationId) {
+    private void publishPaymentRequested(Booking booking, PaymentMethod paymentMethod, LocalDateTime now, String correlationId, String transactionId) {
         PaymentRequestedEvent event = PaymentRequestedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .correlationId(correlationId)
@@ -558,9 +584,10 @@ public class BookingService {
                 .amount(booking.getTotalAmount())
                 .paymentMethod(paymentMethod.name())
                 .createdAt(now)
+                .transactionId(transactionId)
                 .build();
 
-        log.info("Publishing payment request for bookingId={}, correlationId={}", booking.getId(), correlationId);
+        log.info("Publishing payment request for bookingId={}, correlationId={}, transactionId={}", booking.getId(), correlationId, transactionId);
         bookingServicePublisher.publishPaymentRequested(event);
     }
 

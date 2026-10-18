@@ -302,6 +302,8 @@ export default function SearchRideScreen({ navigation }) {
   // Success Modal State
   const [successBooking, setSuccessBooking] = useState(null);
   const [isRedirectingPayment, setIsRedirectingPayment] = useState(false);
+  const [stripeCheckoutData, setStripeCheckoutData] = useState(null);
+  const [isStripePaying, setIsStripePaying] = useState(false);
 
   const [pickupWardId, setPickupWardId] = useState('');
   const [pickupLocation, setPickupLocation] = useState({ lat: NaN, lng: NaN, addressText: '' });
@@ -438,43 +440,69 @@ export default function SearchRideScreen({ navigation }) {
       Alert.alert('Thiếu thông tin', 'Vui lòng chọn phường/xã và địa chỉ chi tiết điểm trả');
       return;
     }
+
     setIsBooking(true);
+
+    // 1. ƯU TIÊN KIỂM TRA TRÙNG BOOKING TRƯỚC TIÊN (cho cả CASH và STRIPE)
     try {
-      const pickupWardName = selectedTrip?.stops?.find(s => String(s.wardId) === String(pickupWardId))?.addressText || '';
-      const dropoffWardName = selectedTrip?.stops?.find(s => String(s.wardId) === String(dropoffWardId))?.addressText || '';
-      const startProvName = selectedTrip?.startAddressText || '';
-      const endProvName = selectedTrip?.endAddressText || '';
+      await apiService.checkDuplicateBooking(selectedTrip.id);
+    } catch (error) {
+      setIsBooking(false);
+      const errData = error?.response?.data;
+      const errMsg = errData?.message || 'Bạn đã có vé đang hoạt động cho chuyến xe này. Không thể đặt thêm.';
+      Alert.alert('Không thể đặt chuyến', errMsg);
+      return;
+    }
 
-      const buildFullAddress = (detail, ward, province) => {
-        let parts = [];
-        if (detail) parts.push(detail);
-        if (ward && (!detail || !removeDiacritics(detail).includes(removeDiacritics(ward)))) {
-          parts.push(ward);
-        }
-        if (province && (!detail || !removeDiacritics(detail).includes(removeDiacritics(province)))) {
-          parts.push(province);
-        }
-        return parts.join(', ');
-      };
+    const pickupWardName = selectedTrip?.stops?.find(s => String(s.wardId) === String(pickupWardId))?.addressText || '';
+    const dropoffWardName = selectedTrip?.stops?.find(s => String(s.wardId) === String(dropoffWardId))?.addressText || '';
+    const startProvName = selectedTrip?.startAddressText || '';
+    const endProvName = selectedTrip?.endAddressText || '';
 
-      const fullPickupAddress = buildFullAddress(pickupAddr, pickupWardName, startProvName);
-      const fullDropoffAddress = buildFullAddress(dropoffAddr, dropoffWardName, endProvName);
+    const buildFullAddress = (detail, ward, province) => {
+      let parts = [];
+      if (detail) parts.push(detail);
+      if (ward && (!detail || !removeDiacritics(detail).includes(removeDiacritics(ward)))) {
+        parts.push(ward);
+      }
+      if (province && (!detail || !removeDiacritics(detail).includes(removeDiacritics(province)))) {
+        parts.push(province);
+      }
+      return parts.join(', ');
+    };
 
-      const payload = {
-        tripId: selectedTrip.id,
+    const fullPickupAddress = buildFullAddress(pickupAddr, pickupWardName, startProvName);
+    const fullDropoffAddress = buildFullAddress(dropoffAddr, dropoffWardName, endProvName);
+
+    const payload = {
+      tripId: selectedTrip.id,
+      seatCount: seatCount,
+      paymentMethod: paymentMethod,
+      pickupLat: pickupLocation.lat || 0,
+      pickupLng: pickupLocation.lng || 0,
+      pickupWardId: pickupWardId,
+      pickupAddressText: fullPickupAddress,
+      dropoffLat: dropoffLocation.lat || 0,
+      dropoffLng: dropoffLocation.lng || 0,
+      dropoffWardId: dropoffWardId,
+      dropoffAddressText: fullDropoffAddress,
+      note: bookingNote.trim() || 'Đặt qua Mobile App',
+    };
+
+    // Nếu chọn STRIPE: KHÔNG tạo booking ngay! Hiển thị popup direct thanh toán + nút thay đổi phương thức
+    if (paymentMethod === 'STRIPE') {
+      setIsBooking(false);
+      setStripeCheckoutData({
+        trip: selectedTrip,
+        payload: payload,
+        totalAmount: (selectedTrip?.priceVnd || 0) * seatCount,
         seatCount: seatCount,
-        paymentMethod: paymentMethod,
-        pickupLat: pickupLocation.lat || 0,
-        pickupLng: pickupLocation.lng || 0,
-        pickupWardId: pickupWardId,
-        pickupAddressText: fullPickupAddress,
-        dropoffLat: dropoffLocation.lat || 0,
-        dropoffLng: dropoffLocation.lng || 0,
-        dropoffWardId: dropoffWardId,
-        dropoffAddressText: fullDropoffAddress,
-        note: bookingNote.trim() || 'Đặt qua Mobile App',
-      };
+      });
+      return;
+    }
 
+    // Với CASH: Tạo booking trực tiếp
+    try {
       const response = await apiService.createBooking(payload, bookingIdempotencyKey);
       if (response.data.code === 1000) {
         const result = response.data.result;
@@ -483,7 +511,7 @@ export default function SearchRideScreen({ navigation }) {
         setSuccessBooking({
           id: result.id,
           bookingCode: result.bookingCode || '',
-          paymentMethod: paymentMethod,
+          paymentMethod: 'CASH',
         });
       } else {
         Alert.alert('Lỗi', response.data.message || 'Lỗi đặt chuyến');
@@ -495,6 +523,83 @@ export default function SearchRideScreen({ navigation }) {
     } finally {
       setIsBooking(false);
     }
+  };
+
+  const handleStripeDirectPay = async () => {
+    if (!stripeCheckoutData || isStripePaying) return;
+    setIsStripePaying(true);
+    try {
+      // 1. Tạo Stripe Payment Intent trên payment-service (chưa tạo booking)
+      const res = await apiService.createPaymentIntent({
+        amount: stripeCheckoutData.totalAmount,
+        tripId: stripeCheckoutData.trip?.id,
+      });
+
+      const intentData = res?.data?.result;
+      if (!intentData?.clientSecret) {
+        Alert.alert('Lỗi khởi tạo', 'Không thể tạo thông tin thanh toán Stripe. Vui lòng thử lại.');
+        setIsStripePaying(false);
+        return;
+      }
+
+      // 2. Khởi tạo Stripe PaymentSheet
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'RideUp',
+        paymentIntentClientSecret: intentData.clientSecret,
+      });
+
+      if (initError) {
+        Alert.alert('Lỗi khởi tạo', initError.message);
+        setIsStripePaying(false);
+        return;
+      }
+
+      // 3. Hiển thị PaymentSheet để người dùng thanh toán
+      const { error: presentError } = await presentPaymentSheet();
+
+      if (presentError) {
+        if (presentError.code !== 'Canceled') {
+          Alert.alert('Thanh toán thất bại', presentError.message || 'Giao dịch chưa hoàn thành');
+        }
+        setIsStripePaying(false);
+        return;
+      }
+
+      // 4. Thanh toán thành công! CHỈ KHI NÀY MỚI TẠO BOOKING
+      const bookingPayload = {
+        ...stripeCheckoutData.payload,
+        paymentIntentId: intentData.paymentIntentId,
+      };
+
+      const key = bookingIdempotencyKey || generateUuid();
+      const createRes = await apiService.createBooking(bookingPayload, key);
+
+      if (createRes.data.code === 1000) {
+        const result = createRes.data.result;
+        setStripeCheckoutData(null);
+        setSelectedTrip(null);
+        setBookingIdempotencyKey('');
+        setStripeSuccessBooking({
+          id: result.id,
+          bookingCode: result.bookingCode || '',
+        });
+      } else {
+        Alert.alert('Lỗi tạo booking', createRes.data.message || 'Không thể ghi nhận đặt chỗ.');
+      }
+    } catch (error) {
+      console.error('Stripe direct pay error:', error);
+      const errData = error?.response?.data;
+      const errMsg = errData?.message || error?.message || 'Không thể hoàn tất thanh toán. Vui lòng thử lại.';
+      Alert.alert('Lỗi thanh toán', errMsg);
+    } finally {
+      setIsStripePaying(false);
+    }
+  };
+
+  const handleChangePaymentMethod = () => {
+    // Đóng popup Stripe, giữ modal đặt chỗ và chuyển phương thức sang Tiền mặt
+    setStripeCheckoutData(null);
+    setPaymentMethod('CASH');
   };
 
   // Retry lấy link tối đa 6 lần
@@ -937,6 +1042,68 @@ export default function SearchRideScreen({ navigation }) {
                 {isBooking ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.confirmText}>XÁC NHẬN</Text>}
               </TouchableOpacity>
             </View>
+
+            {/* Stripe Direct Payment Overlay Popup */}
+            {!!stripeCheckoutData && (
+              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(15,23,42,0.85)', justifyContent: 'center', padding: 24, zIndex: 9999, elevation: 9999 }]}>
+                <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 28, alignItems: 'center', shadowColor: '#0ea5e9', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 30, elevation: 20 }}>
+                  {/* Header Icon */}
+                  <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 2, borderColor: 'rgba(14, 165, 233, 0.3)' }}>
+                    <Ionicons name="card" size={38} color="#0ea5e9" />
+                  </View>
+                  
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A', marginBottom: 6, textAlign: 'center' }}>Thanh Toán Stripe</Text>
+                  
+                  <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
+                    Tiền cọc sẽ được giữ an toàn qua Stripe và chỉ thanh toán sau khi hoàn tất chuyến đi.
+                  </Text>
+
+                  {/* Thông tin chuyến đi & giá */}
+                  <View style={{ width: '100%', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ color: '#64748B', fontSize: 13 }}>Tài xế:</Text>
+                      <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: 'bold' }}>{stripeCheckoutData?.trip?.driverName || 'Tài xế RideUp'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ color: '#64748B', fontSize: 13 }}>Số lượng vé:</Text>
+                      <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: 'bold' }}>{stripeCheckoutData?.seatCount} ghế</Text>
+                    </View>
+                    <View style={{ height: 1, backgroundColor: '#E2E8F0', marginVertical: 8 }} />
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ color: '#0F172A', fontSize: 14, fontWeight: '700' }}>Tổng thanh toán:</Text>
+                      <Text style={{ color: '#0ea5e9', fontSize: 20, fontWeight: '900' }}>{formatMoney(stripeCheckoutData?.totalAmount)}</Text>
+                    </View>
+                  </View>
+
+                  {/* Nút thanh toán trực tiếp */}
+                  <TouchableOpacity 
+                    style={{ backgroundColor: '#0F172A', width: '100%', paddingVertical: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8, marginBottom: 12 }} 
+                    onPress={handleStripeDirectPay} 
+                    disabled={isStripePaying}
+                  >
+                    {isStripePaying ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="card" size={20} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>THANH TOÁN BẰNG THẺ</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Nút thay đổi phương thức thanh toán */}
+                  <TouchableOpacity
+                    style={{ width: '100%', paddingVertical: 14, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }}
+                    onPress={handleChangePaymentMethod}
+                    disabled={isStripePaying}
+                  >
+                    <Ionicons name="swap-horizontal" size={18} color="#475569" style={{ marginRight: 6 }} />
+                    <Text style={{ color: '#475569', fontSize: 14, fontWeight: '700' }}>Thay đổi phương thức thanh toán</Text>
+                  </TouchableOpacity>
+
+                </View>
+              </View>
+            )}
           </View>
           </SafeAreaView>
         </KeyboardAvoidingView>
@@ -973,6 +1140,12 @@ export default function SearchRideScreen({ navigation }) {
                       <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>THANH TOÁN BẰNG THẺ</Text>
                     </>
                   )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ width: '100%', marginTop: 12, paddingVertical: 12, alignItems: 'center' }}
+                  onPress={() => setSuccessBooking(null)}
+                >
+                  <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>Đóng</Text>
                 </TouchableOpacity>
               </View>
             ) : (

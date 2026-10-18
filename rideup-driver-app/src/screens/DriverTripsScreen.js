@@ -419,8 +419,17 @@ export default function DriverTripsScreen({ navigation }) {
     ]);
   };
 
-  // Bắt đầu chuyến - Cảnh báo chặn nếu còn đơn chờ duyệt
+  // Bắt đầu chuyến - Chặn nếu chưa có khách đã duyệt, cảnh báo nếu còn đơn chờ duyệt
   const handleStartTrip = () => {
+    const confirmedList = (bookings || []).filter(b => b.status === 'CONFIRMED');
+    if (confirmedList.length === 0) {
+      Alert.alert(
+        'Chưa có khách!',
+        'Chuyến đi chưa có hành khách nào được duyệt. Bạn cần duyệt ít nhất 1 khách trước khi bắt đầu chuyến.',
+        [{ text: 'Đã hiểu', style: 'default' }]
+      );
+      return;
+    }
     const waitingList = (bookings || []).filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
     if (waitingList.length > 0) {
       Alert.alert(

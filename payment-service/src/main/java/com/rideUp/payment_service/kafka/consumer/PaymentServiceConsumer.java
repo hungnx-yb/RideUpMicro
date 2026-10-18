@@ -68,6 +68,7 @@ public class PaymentServiceConsumer {
                             .amount(event.getAmount())
                             .paymentMethod(paymentMethod)
                             .correlationId(correlationId)
+                            .transactionId(event.getTransactionId())
                             .build()
             );
         } catch (AppException ex) {

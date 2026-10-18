@@ -28,6 +28,14 @@ public class BookingController {
 
     BookingService bookingService;
 
+    @GetMapping("/check-duplicate/{tripId}")
+    public ApiResponse<Void> checkDuplicateBooking(@PathVariable String tripId) {
+        bookingService.checkDuplicateBooking(tripId);
+        return ApiResponse.<Void>builder()
+                .message("Eligible to book")
+                .build();
+    }
+
     @PostMapping
     public ApiResponse<BookingResponse> createBooking(@Valid @RequestBody CreateBookingRequest request) {
         return ApiResponse.<BookingResponse>builder()

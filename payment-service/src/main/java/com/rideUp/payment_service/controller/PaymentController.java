@@ -1,5 +1,6 @@
 package com.rideUp.payment_service.controller;
 
+import com.rideUp.payment_service.dto.request.CreatePaymentIntentRequest;
 import com.rideUp.payment_service.dto.request.CreatePaymentRequest;
 import com.rideUp.payment_service.dto.request.MarkPaymentFailedRequest;
 import com.rideUp.payment_service.dto.request.MarkPaymentPaidRequest;
@@ -29,6 +30,14 @@ import java.util.Map;
 public class PaymentController {
 
     PaymentService paymentService;
+
+    @PostMapping("/create-intent")
+    public ApiResponse<Map<String, String>> createPaymentIntent(@Valid @RequestBody CreatePaymentIntentRequest request) {
+        return ApiResponse.<Map<String, String>>builder()
+                .message("Payment intent created successfully")
+                .result(paymentService.createPaymentIntent(request))
+                .build();
+    }
 
     @GetMapping("/booking/{bookingId}")
     public ApiResponse<PaymentResponse> getPaymentByBookingId(@PathVariable String bookingId) {
