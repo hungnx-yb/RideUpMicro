@@ -399,11 +399,28 @@ export default function DriverTripsScreen({ navigation }) {
   };
 
   // Complete a booking
-  const handleCompleteBooking = (bookingId, userName) => {
-    Alert.alert('Hoàn thành chuyến', `Xác nhận đã trả khách và hoàn thành chuyến cho "${userName || 'Khách hàng'}"?`, [
+  const handleCompleteBooking = (item) => {
+    const bookingId = item?.id;
+    const userName = item?.userName || 'Khách hàng';
+    const isStripe = item?.paymentMethod === 'STRIPE' || (item?.paymentMethod !== 'CASH' && (item?.paymentStatus === 'HOLDING' || item?.paymentId?.startsWith('pi_')));
+    const isPaid = item?.paymentStatus === 'PAID';
+    const amountStr = formatMoney(item?.totalAmount);
+
+    let msg = `Xác nhận đã trả khách và hoàn thành chuyến cho "${userName}"?`;
+    let confirmBtnText = 'Hoàn thành';
+
+    if (!isStripe && !isPaid) {
+      msg = `Hành khách "${userName}" thanh toán TIỀN MẶT: ${amountStr}.\n\nBạn đã nhận đủ ${amountStr} tiền mặt từ khách trước khi trả khách chưa?`;
+      confirmBtnText = 'Đã thu tiền & Hoàn thành';
+    } else if (isStripe) {
+      msg = `Hành khách "${userName}" đã thanh toán/cọc qua thẻ Stripe (${amountStr}).\n\nTiền sẽ được tự động quyết toán vào ví của bạn (⛔ Không thu tiền mặt của khách).`;
+      confirmBtnText = 'Xác nhận hoàn thành';
+    }
+
+    Alert.alert('Hoàn thành chuyến', msg, [
       { text: 'Huỷ', style: 'cancel' },
       {
-        text: 'Hoàn thành', style: 'default', onPress: async () => {
+        text: confirmBtnText, style: 'default', onPress: async () => {
           setActionLoading(bookingId);
           try {
             await apiService.completeBooking(bookingId);
@@ -795,6 +812,63 @@ export default function DriverTripsScreen({ navigation }) {
           )}
         </View>
 
+        {/* ── Payment Badge for Driver ── */}
+        {(() => {
+          const isStripe = item.paymentMethod === 'STRIPE' || (item.paymentMethod !== 'CASH' && (item.paymentStatus === 'HOLDING' || item.paymentId?.startsWith('pi_')));
+          if (isStripe) {
+            const isPaid = item.paymentStatus === 'PAID';
+            const isHolding = item.paymentStatus === 'HOLDING';
+            const isRefunded = item.paymentStatus === 'REFUNDED' || item.paymentStatus === 'VOIDED';
+            let label, subLabel, bg, borderCol, textCol, icon;
+            if (isPaid) {
+              label = '💳 Thẻ Stripe • Đã thanh toán';
+              subLabel = 'Không thu tiền mặt';
+              bg = '#ECFDF5'; borderCol = '#A7F3D0'; textCol = '#059669'; icon = 'checkmark-circle';
+            } else if (isHolding) {
+              label = '💳 Thẻ Stripe • Đã cọc giữ tiền';
+              subLabel = 'Không thu tiền mặt';
+              bg = '#EFF6FF'; borderCol = '#BFDBFE'; textCol = '#2563EB'; icon = 'shield-checkmark';
+            } else if (isRefunded) {
+              label = '💳 Thẻ Stripe • Đã hoàn tiền';
+              subLabel = '';
+              bg = '#F3F4F6'; borderCol = '#E5E7EB'; textCol = '#6B7280'; icon = 'refresh-circle';
+            } else {
+              label = '💳 Thẻ Stripe • Đang xử lý';
+              subLabel = 'Không thu tiền mặt';
+              bg = '#EFF6FF'; borderCol = '#BFDBFE'; textCol = '#2563EB'; icon = 'time-outline';
+            }
+            return (
+              <View style={{ marginTop: 10, backgroundColor: bg, borderWidth: 1, borderColor: borderCol, borderRadius: 10, padding: 10, flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name={icon} size={16} color={textCol} style={{ marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: textCol }}>{label}</Text>
+                  {subLabel ? <Text style={{ fontSize: 11, fontWeight: '800', color: textCol, marginTop: 2 }}>⛔ {subLabel}</Text> : null}
+                </View>
+              </View>
+            );
+          } else {
+            // Cash
+            const isPaid = item.paymentStatus === 'PAID';
+            if (isPaid) {
+              return (
+                <View style={{ marginTop: 10, backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 10, padding: 10, flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginRight: 8 }} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>💵 Tiền mặt • Đã thanh toán</Text>
+                </View>
+              );
+            }
+            return (
+              <View style={{ marginTop: 10, backgroundColor: '#FFFBEB', borderWidth: 1.5, borderColor: '#F59E0B', borderRadius: 10, padding: 10, flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="cash" size={16} color="#D97706" style={{ marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E' }}>💵 Tiền mặt • CẦN THU {formatMoney(item.totalAmount)}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#B45309', marginTop: 2 }}>Thu tiền mặt khi đón/trả khách</Text>
+                </View>
+              </View>
+            );
+          }
+        })()}
+
         {/* ── Action Buttons ── */}
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           {/* Nút Gọi nếu có số điện thoại */}
@@ -853,7 +927,7 @@ export default function DriverTripsScreen({ navigation }) {
           {isConfirmed && selectedTrip?.status === 'STARTED' && (
             <TouchableOpacity
               style={styles.actionBtnComplete}
-              onPress={() => handleCompleteBooking(item.id, item.userName)}
+              onPress={() => handleCompleteBooking(item)}
               disabled={isLoading}
               activeOpacity={0.7}
             >

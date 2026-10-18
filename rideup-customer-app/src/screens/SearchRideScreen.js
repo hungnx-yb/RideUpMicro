@@ -14,6 +14,7 @@ import {
   TextInput,
   Alert,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useStripe } from '@stripe/stripe-react-native';
@@ -491,6 +492,7 @@ export default function SearchRideScreen({ navigation }) {
 
     // Nếu chọn STRIPE: KHÔNG tạo booking ngay! Hiển thị popup direct thanh toán + nút thay đổi phương thức
     if (paymentMethod === 'STRIPE') {
+      Keyboard.dismiss();
       setIsBooking(false);
       setStripeCheckoutData({
         trip: selectedTrip,
@@ -943,10 +945,11 @@ export default function SearchRideScreen({ navigation }) {
       )}
 
       {/* Booking Confirmation Modal */}
-      <Modal visible={!!selectedTrip} transparent={false} animationType="slide">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <SafeAreaView style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      <Modal visible={!!selectedTrip} transparent={false} animationType="slide" statusBarTranslucent>
+        <View style={{ flex: 1, backgroundColor: COLORS.background }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <SafeAreaView style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Xác nhận đặt chỗ</Text>
               <TouchableOpacity onPress={() => setSelectedTrip(null)} style={styles.modalCloseIcon}>
@@ -1042,71 +1045,97 @@ export default function SearchRideScreen({ navigation }) {
                 {isBooking ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.confirmText}>XÁC NHẬN</Text>}
               </TouchableOpacity>
             </View>
-
-            {/* Stripe Direct Payment Overlay Popup */}
-            {!!stripeCheckoutData && (
-              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(15,23,42,0.85)', justifyContent: 'center', padding: 24, zIndex: 9999, elevation: 9999 }]}>
-                <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 28, alignItems: 'center', shadowColor: '#0ea5e9', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.3, shadowRadius: 30, elevation: 20 }}>
-                  {/* Header Icon */}
-                  <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 2, borderColor: 'rgba(14, 165, 233, 0.3)' }}>
-                    <Ionicons name="card" size={38} color="#0ea5e9" />
-                  </View>
-                  
-                  <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A', marginBottom: 6, textAlign: 'center' }}>Thanh Toán Stripe</Text>
-                  
-                  <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
-                    Tiền cọc sẽ được giữ an toàn qua Stripe và chỉ thanh toán sau khi hoàn tất chuyến đi.
-                  </Text>
-
-                  {/* Thông tin chuyến đi & giá */}
-                  <View style={{ width: '100%', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Text style={{ color: '#64748B', fontSize: 13 }}>Tài xế:</Text>
-                      <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: 'bold' }}>{stripeCheckoutData?.trip?.driverName || 'Tài xế RideUp'}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <Text style={{ color: '#64748B', fontSize: 13 }}>Số lượng vé:</Text>
-                      <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: 'bold' }}>{stripeCheckoutData?.seatCount} ghế</Text>
-                    </View>
-                    <View style={{ height: 1, backgroundColor: '#E2E8F0', marginVertical: 8 }} />
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ color: '#0F172A', fontSize: 14, fontWeight: '700' }}>Tổng thanh toán:</Text>
-                      <Text style={{ color: '#0ea5e9', fontSize: 20, fontWeight: '900' }}>{formatMoney(stripeCheckoutData?.totalAmount)}</Text>
-                    </View>
-                  </View>
-
-                  {/* Nút thanh toán trực tiếp */}
-                  <TouchableOpacity 
-                    style={{ backgroundColor: '#0F172A', width: '100%', paddingVertical: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8, marginBottom: 12 }} 
-                    onPress={handleStripeDirectPay} 
-                    disabled={isStripePaying}
-                  >
-                    {isStripePaying ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="card" size={20} color="#fff" style={{ marginRight: 8 }} />
-                        <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>THANH TOÁN BẰNG THẺ</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  {/* Nút thay đổi phương thức thanh toán */}
-                  <TouchableOpacity
-                    style={{ width: '100%', paddingVertical: 14, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }}
-                    onPress={handleChangePaymentMethod}
-                    disabled={isStripePaying}
-                  >
-                    <Ionicons name="swap-horizontal" size={18} color="#475569" style={{ marginRight: 6 }} />
-                    <Text style={{ color: '#475569', fontSize: 14, fontWeight: '700' }}>Thay đổi phương thức thanh toán</Text>
-                  </TouchableOpacity>
-
-                </View>
-              </View>
-            )}
           </View>
           </SafeAreaView>
         </KeyboardAvoidingView>
+
+        {/* Stripe Direct Payment Overlay Popup - FULL SCREEN */}
+        {!!stripeCheckoutData && (
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(15,23,42,0.85)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+            zIndex: 999999,
+            elevation: 999999,
+          }}>
+            <View style={{ width: '100%', maxWidth: 380, backgroundColor: '#fff', borderRadius: 24, padding: 24, alignItems: 'center', shadowColor: '#0ea5e9', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.35, shadowRadius: 30, elevation: 25, position: 'relative' }}>
+              {/* Close button top right */}
+              <TouchableOpacity 
+                style={{ position: 'absolute', top: 16, right: 16, padding: 6, zIndex: 10 }}
+                onPress={() => setStripeCheckoutData(null)}
+                disabled={isStripePaying}
+              >
+                <Ionicons name="close-circle" size={24} color="#94A3B8" />
+              </TouchableOpacity>
+
+              {/* Header Icon */}
+              <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2, borderColor: 'rgba(14, 165, 233, 0.3)' }}>
+                <Ionicons name="card" size={36} color="#0ea5e9" />
+              </View>
+              
+              <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A', marginBottom: 6, textAlign: 'center' }}>Thanh Toán Stripe</Text>
+              
+              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 18, lineHeight: 19 }}>
+                Tiền cọc sẽ được giữ an toàn qua Stripe và chỉ thanh toán sau khi hoàn tất chuyến đi.
+              </Text>
+
+              {/* Thông tin chuyến đi & giá */}
+              <View style={{ width: '100%', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 18 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ color: '#64748B', fontSize: 13 }}>Tài xế:</Text>
+                  <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: 'bold' }}>{stripeCheckoutData?.trip?.driverName || 'Tài xế RideUp'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ color: '#64748B', fontSize: 13 }}>Số lượng vé:</Text>
+                  <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: 'bold' }}>{stripeCheckoutData?.seatCount} ghế</Text>
+                </View>
+                <View style={{ height: 1, backgroundColor: '#E2E8F0', marginVertical: 6 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: '700' }}>Tổng thanh toán:</Text>
+                  <Text style={{ color: '#0ea5e9', fontSize: 19, fontWeight: '900' }}>{formatMoney(stripeCheckoutData?.totalAmount)}</Text>
+                </View>
+              </View>
+
+              {/* Nút thanh toán trực tiếp */}
+              <TouchableOpacity 
+                style={{ backgroundColor: '#0F172A', width: '100%', paddingVertical: 15, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 8, marginBottom: 10 }} 
+                onPress={handleStripeDirectPay} 
+                disabled={isStripePaying}
+                activeOpacity={0.8}
+              >
+                {isStripePaying ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="card" size={20} color="#fff" style={{ marginRight: 8 }} />
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>THANH TOÁN BẰNG THẺ</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Nút thay đổi phương thức thanh toán */}
+              <TouchableOpacity
+                style={{ width: '100%', paddingVertical: 13, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }}
+                onPress={handleChangePaymentMethod}
+                disabled={isStripePaying}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="swap-horizontal" size={18} color="#475569" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#475569', fontSize: 14, fontWeight: '700' }}>Thay đổi phương thức thanh toán</Text>
+              </TouchableOpacity>
+
+            </View>
+          </View>
+        )}
+        </View>
       </Modal>
 
       {/* Success Modal (Before Payment) - Premium UI */}

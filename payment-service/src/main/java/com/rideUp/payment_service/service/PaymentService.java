@@ -226,7 +226,15 @@ public class PaymentService {
 		Payment payment = paymentRepository.findByBookingId(bookingId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-		if (payment.getMethod() != PaymentMethod.STRIPE || payment.getStatus() != PaymentStatus.HOLDING) {
+		if (payment.getMethod() == PaymentMethod.CASH) {
+			payment.setStatus(PaymentStatus.PAID);
+			payment.setPaidAt(LocalDateTime.now());
+			paymentRepository.save(payment);
+			publishPaymentCompleted(payment);
+			return;
+		}
+
+		if (payment.getMethod() != PaymentMethod.STRIPE || (payment.getStatus() != PaymentStatus.HOLDING && payment.getStatus() != PaymentStatus.PENDING)) {
 			return;
 		}
 
@@ -251,7 +259,7 @@ public class PaymentService {
 		Payment payment = paymentRepository.findByBookingId(bookingId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-		if (payment.getMethod() != PaymentMethod.STRIPE || payment.getStatus() != PaymentStatus.HOLDING) {
+		if (payment.getMethod() != PaymentMethod.STRIPE || (payment.getStatus() != PaymentStatus.HOLDING && payment.getStatus() != PaymentStatus.PENDING)) {
 			if (payment.getMethod() == PaymentMethod.CASH) {
 				payment.setStatus(PaymentStatus.VOIDED);
 				paymentRepository.save(payment);

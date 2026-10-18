@@ -65,7 +65,7 @@ public class RefundService {
 
         try {
             if (payment.getMethod() == PaymentMethod.STRIPE) {
-                if (payment.getStatus() == PaymentStatus.HOLDING) {
+                if (payment.getStatus() == PaymentStatus.HOLDING || payment.getStatus() == PaymentStatus.PENDING) {
                     // Tiền đang tạm giữ (chưa capture vào ví): Cancel authorization để nhả tiền ngay lập tức
                     try {
                         com.stripe.model.PaymentIntent paymentIntent = com.stripe.model.PaymentIntent.retrieve(payment.getTransactionId());

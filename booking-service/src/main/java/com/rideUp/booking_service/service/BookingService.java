@@ -90,7 +90,10 @@ public class BookingService {
                         ? BookingStatus.WAITING_DRIVER_APPROVAL
                         : BookingStatus.PENDING_PAYMENT
         );
-        booking.setPaymentStatus(isStripePrePaid ? PaymentStatus.HOLDING : PaymentStatus.PENDING);
+        booking.setPaymentStatus(PaymentStatus.PENDING);
+        if (isStripePrePaid) {
+            booking.setPaymentId(request.getPaymentIntentId());
+        }
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
         booking.setReservedAt(now);
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
@@ -123,14 +126,14 @@ public class BookingService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+        if (booking.getStatus() == BookingStatus.CONFIRMED || booking.getStatus() == BookingStatus.COMPLETED) {
             booking.setPaymentId(request.getPaymentId());
             booking.setPaymentStatus(PaymentStatus.PAID);
             Booking saved = bookingRepository.save(booking);
-            return modelMapper.map(saved, BookingResponse.class);
+            return toBookingResponse(saved);
         }
 
-        return modelMapper.map(booking, BookingResponse.class);
+        return toBookingResponse(booking);
     }
 
     @Transactional
@@ -275,11 +278,24 @@ public class BookingService {
 
 
 
+    public PaymentMethod resolvePaymentMethod(Booking booking) {
+        if (booking.getPaymentId() != null && (booking.getPaymentId().startsWith("pi_") || booking.getPaymentId().startsWith("pm_"))) {
+            return PaymentMethod.STRIPE;
+        }
+        return PaymentMethod.CASH;
+    }
+
+    public BookingResponse toBookingResponse(Booking booking) {
+        BookingResponse response = modelMapper.map(booking, BookingResponse.class);
+        response.setPaymentMethod(resolvePaymentMethod(booking));
+        return response;
+    }
+
     public BookingResponse getBookingDetail(String bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
         
-        BookingResponse response = modelMapper.map(booking, BookingResponse.class);
+        BookingResponse response = toBookingResponse(booking);
         
         if (booking.getCustomerId() != null && !booking.getCustomerId().isBlank()) {
             try {
@@ -298,10 +314,10 @@ public class BookingService {
     }
 
     public List<BookingResponse> getMyBookings() {
-        String customerId =SecurityUtils.getCurrentUserId();
+        String customerId = SecurityUtils.getCurrentUserId();
         return bookingRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)
                 .stream()
-                .map(booking -> modelMapper.map(booking, BookingResponse.class))
+                .map(this::toBookingResponse)
                 .toList();
     }
 
@@ -329,7 +345,7 @@ public class BookingService {
 
         return bookingList.stream()
                 .map(booking -> {
-                    BookingResponse responseItem = modelMapper.map(booking, BookingResponse.class);
+                    BookingResponse responseItem = toBookingResponse(booking);
                     UserResponse user = userMap.get(booking.getCustomerId());
                     if (user != null) {
                         responseItem.setUserName(user.getFullName());
@@ -380,6 +396,9 @@ public class BookingService {
         }
 
         booking.setStatus(BookingStatus.COMPLETED);
+        if (resolvePaymentMethod(booking) == PaymentMethod.CASH) {
+            booking.setPaymentStatus(PaymentStatus.PAID);
+        }
         Booking saved = bookingRepository.save(booking);
 
         String correlationId = UUID.randomUUID().toString();
@@ -407,7 +426,7 @@ public class BookingService {
                 
         bookingServicePublisher.publishBookingCompleted(event);
 
-        return modelMapper.map(saved, BookingResponse.class);
+        return toBookingResponse(saved);
     }
 
     @Transactional

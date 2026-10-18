@@ -53,6 +53,18 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const [loadingTrip, setLoadingTrip] = useState(false);
 
   useEffect(() => {
+    if (booking?.id) {
+      apiService.getBookingDetail(booking.id)
+        .then(res => {
+          if (res?.data?.result) {
+            setBooking(prev => ({ ...prev, ...res.data.result }));
+          }
+        })
+        .catch(err => console.log('Fetch booking detail error in BookingDetail:', err));
+    }
+  }, [booking?.id]);
+
+  useEffect(() => {
     if (booking?.tripId) {
       setLoadingTrip(true);
       apiService.getTripDetail(booking.tripId)
@@ -224,6 +236,85 @@ const BookingDetailScreen = ({ route, navigation }) => {
               {money(booking.totalAmount || booking.finalPrice || booking.totalPrice || booking.price)}
             </Text>
           </View>
+
+          {/* ── Phương thức thanh toán ── */}
+          <View style={s.priceDivider} />
+          {(() => {
+            const isStripe = booking.paymentMethod === 'STRIPE' || (booking.paymentMethod !== 'CASH' && (booking.paymentStatus === 'HOLDING' || booking.paymentId?.startsWith('pi_')));
+            const methodLabel = isStripe ? 'Thẻ quốc tế (Stripe)' : 'Tiền mặt';
+            const methodIcon = isStripe ? 'card' : 'cash-outline';
+            const methodColor = isStripe ? '#2563EB' : '#D97706';
+
+            // Payment status config
+            let statusLabel, statusIcon, statusBg, statusColor, guidanceText;
+            if (isStripe) {
+              if (booking.paymentStatus === 'PAID') {
+                statusLabel = 'Đã thanh toán';
+                statusIcon = 'checkmark-circle';
+                statusBg = '#ECFDF5'; statusColor = '#059669';
+                guidanceText = 'Số tiền đã được thanh toán thành công qua thẻ. Bạn không cần trả thêm cho tài xế.';
+              } else if (booking.paymentStatus === 'HOLDING') {
+                statusLabel = 'Đã giữ cọc qua thẻ';
+                statusIcon = 'shield-checkmark';
+                statusBg = '#EFF6FF'; statusColor = '#2563EB';
+                guidanceText = 'Số tiền đang được giữ an toàn trên thẻ của bạn. Sau khi hoàn thành chuyến, tiền sẽ tự động chuyển cho tài xế.';
+              } else if (booking.paymentStatus === 'REFUNDED' || booking.paymentStatus === 'VOIDED') {
+                statusLabel = 'Đã hoàn tiền';
+                statusIcon = 'refresh-circle';
+                statusBg = '#F3F4F6'; statusColor = '#6B7280';
+                guidanceText = 'Số tiền đã được hoàn về thẻ của bạn.';
+              } else if (booking.paymentStatus === 'FAILED') {
+                statusLabel = 'Thanh toán thất bại';
+                statusIcon = 'close-circle';
+                statusBg = '#FEF2F2'; statusColor = '#DC2626';
+                guidanceText = 'Thanh toán qua thẻ không thành công. Vui lòng thử lại hoặc chọn phương thức khác.';
+              } else {
+                statusLabel = 'Chờ thanh toán';
+                statusIcon = 'time-outline';
+                statusBg = '#FEF3C7'; statusColor = '#D97706';
+                guidanceText = 'Đang xử lý thanh toán qua thẻ...';
+              }
+            } else {
+              // Cash
+              if (booking.paymentStatus === 'PAID') {
+                statusLabel = 'Đã thanh toán';
+                statusIcon = 'checkmark-circle';
+                statusBg = '#ECFDF5'; statusColor = '#059669';
+                guidanceText = 'Bạn đã thanh toán tiền mặt cho tài xế.';
+              } else {
+                statusLabel = 'Thu tiền mặt khi đi';
+                statusIcon = 'wallet-outline';
+                statusBg = '#FEF3C7'; statusColor = '#D97706';
+                guidanceText = 'Vui lòng chuẩn bị tiền mặt để trả trực tiếp cho tài xế khi lên xe.';
+              }
+            }
+
+            return (
+              <>
+                <View style={s.priceRow}>
+                  <Text style={s.priceLabel}>Phương thức</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name={methodIcon} size={16} color={methodColor} style={{ marginRight: 5 }} />
+                    <Text style={[s.priceVal, { color: methodColor, fontSize: 14 }]}>{methodLabel}</Text>
+                  </View>
+                </View>
+
+                <View style={s.priceRow}>
+                  <Text style={s.priceLabel}>Thanh toán</Text>
+                  <View style={[s.payStatusBadge, { backgroundColor: statusBg }]}>
+                    <Ionicons name={statusIcon} size={14} color={statusColor} style={{ marginRight: 4 }} />
+                    <Text style={[s.payStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                  </View>
+                </View>
+
+                {/* Guidance box */}
+                <View style={[s.payGuidanceBox, { backgroundColor: statusBg, borderColor: statusColor + '30' }]}>
+                  <Ionicons name="information-circle-outline" size={16} color={statusColor} style={{ marginRight: 8, marginTop: 1 }} />
+                  <Text style={[s.payGuidanceText, { color: statusColor }]}>{guidanceText}</Text>
+                </View>
+              </>
+            );
+          })()}
         </View>
 
         {/* ═══ DRIVER INFO ═══ */}
@@ -388,6 +479,12 @@ const s = StyleSheet.create({
   btnPrimaryText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
   btnOutline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, paddingVertical: 15, borderRadius: 14, gap: 10, borderWidth: 2, borderColor: COLORS.primary },
   btnOutlineText: { color: COLORS.primary, fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
+
+  // Payment Status
+  payStatusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  payStatusText: { fontSize: 12, fontWeight: '700' },
+  payGuidanceBox: { flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderRadius: 10, borderWidth: 1, marginTop: 8 },
+  payGuidanceText: { flex: 1, fontSize: 12, fontWeight: '500', lineHeight: 18 },
 });
 
 export default BookingDetailScreen;

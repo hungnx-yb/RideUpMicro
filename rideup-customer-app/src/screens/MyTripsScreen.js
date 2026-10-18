@@ -314,6 +314,34 @@ const BookingCard = ({ item, trip, onPress, onChatPress }) => {
     ? (item.dropoffAddressText || '') 
     : (fallbackDropoff.detail || item.dropoffAddressText || '');
 
+  const formatMoney = (val) => {
+    if (!val && val !== 0) return '0 đ';
+    return Number(val).toLocaleString('vi-VN') + ' đ';
+  };
+
+  const isStripe = item.paymentMethod === 'STRIPE' || (item.paymentMethod !== 'CASH' && (item.paymentStatus === 'HOLDING' || item.paymentId?.startsWith('pi_')));
+
+  const getPayInfo = () => {
+    if (isStripe) {
+      if (item.paymentStatus === 'PAID') {
+        return { label: 'Thẻ Stripe • Đã thanh toán', icon: 'card', bg: '#ECFDF5', color: '#059669', border: '#A7F3D0' };
+      }
+      if (item.paymentStatus === 'HOLDING') {
+        return { label: 'Thẻ Stripe • Đã cọc giữ tiền', icon: 'shield-checkmark', bg: '#EFF6FF', color: '#2563EB', border: '#BFDBFE' };
+      }
+      if (item.paymentStatus === 'REFUNDED' || item.paymentStatus === 'VOIDED') {
+        return { label: 'Thẻ Stripe • Đã hoàn tiền', icon: 'refresh-circle', bg: '#F3F4F6', color: '#6B7280', border: '#E5E7EB' };
+      }
+      return { label: 'Thẻ Stripe', icon: 'card-outline', bg: '#EFF6FF', color: '#2563EB', border: '#BFDBFE' };
+    }
+    // Tiền mặt
+    if (item.paymentStatus === 'PAID') {
+      return { label: 'Tiền mặt • Đã thanh toán', icon: 'cash', bg: '#ECFDF5', color: '#059669', border: '#A7F3D0' };
+    }
+    return { label: 'Tiền mặt • Trả tài xế khi đi', icon: 'cash-outline', bg: '#FEF3C7', color: '#D97706', border: '#FDE68A' };
+  };
+  const payInfo = getPayInfo();
+
   return (
     <TouchableOpacity 
       style={[styles.card, { borderLeftColor: status.color }]} 
@@ -405,6 +433,20 @@ const BookingCard = ({ item, trip, onPress, onChatPress }) => {
               </Text>
             ) : null}
           </View>
+        </View>
+      </View>
+
+      {/* ── PAYMENT & PRICE ROW ── */}
+      <View style={styles.cardPaymentRow}>
+        <View style={[styles.paymentBadge, { backgroundColor: payInfo.bg, borderColor: payInfo.border }]}>
+          <Ionicons name={payInfo.icon} size={12} color={payInfo.color} style={{ marginRight: 4 }} />
+          <Text style={[styles.paymentBadgeText, { color: payInfo.color }]}>
+            {payInfo.label}
+          </Text>
+        </View>
+        <View style={styles.priceContainer}>
+          <Text style={styles.seatCountText}>{item.seatCount || 1} vé</Text>
+          <Text style={styles.cardPriceAmount}>{formatMoney(item.totalAmount)}</Text>
         </View>
       </View>
 
@@ -1003,6 +1045,45 @@ const styles = StyleSheet.create({
   addressText: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
   subAddressText: { color: COLORS.primary, fontSize: 12, marginTop: 2, fontWeight: '600' },
   detailAddressText: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontWeight: '500', lineHeight: 17 },
+
+  // Payment Row & Badge
+  cardPaymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  paymentBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  seatCountText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
+  cardPriceAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
 
   // Footer Card
   cardFooter: { borderTopWidth: 1, borderTopColor: '#F8FAFC', padding: 12 },
