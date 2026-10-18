@@ -13,6 +13,7 @@ import {
 import { getApiErrorMessage } from "../services/authApi";
 import { getAllProvinces, getAllWards } from "../services/locationApi";
 import { createTripApi } from "../services/tripApi";
+import { getMyVehicleApi } from "../services/driverOnboardingApi";
 
 const initialForm = {
   startProvinceId: "",
@@ -192,6 +193,7 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
   const [provinces, setProvinces] = useState([]);
   const [startWards, setStartWards] = useState([]);
   const [endWards, setEndWards] = useState([]);
+  const [vehicle, setVehicle] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -208,6 +210,7 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
     };
 
     fetchProvinces();
+    getMyVehicleApi().then((res) => setVehicle(res)).catch(() => {});
   }, [open]);
 
   useEffect(() => {
@@ -272,6 +275,11 @@ function DriverCreateTripModal({ open, onClose, onCreated }) {
     event.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
+
+    if (vehicle?.seatCapacity && Number(form.seatTotal) > Number(vehicle.seatCapacity)) {
+      setErrorMessage(`Số ghế tạo chuyến (${form.seatTotal} ghế) không được vượt quá số ghế đăng ký của xe (${vehicle.seatCapacity} chỗ)`);
+      return;
+    }
 
     try {
       setIsSubmitting(true);

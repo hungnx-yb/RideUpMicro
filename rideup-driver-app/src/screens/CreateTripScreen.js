@@ -239,17 +239,41 @@ export default function CreateTripScreen({ navigation }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [vehicle, setVehicle] = useState(null);
 
   const resetForm = () => {
+    const defaultSeat = vehicle?.seatCapacity ? String(Math.min(4, Number(vehicle.seatCapacity))) : '4';
     setForm({
       startProvinceId: '', endProvinceId: '',
       pickups: [{ id: Date.now().toString(), wardId: '' }],
       dropoffs: [{ id: (Date.now() + 1).toString(), wardId: '' }],
       departureTime: new Date(Date.now() + 86400000),
-      seatTotal: '4', priceVnd: '150000'
+      seatTotal: defaultSeat, priceVnd: '150000'
     });
     setStartWards([]);
     setEndWards([]);
+  };
+
+  const fetchVehicle = async () => {
+    try {
+      const res = await apiService.getMyVehicle();
+      if (res?.data?.result) {
+        const v = res.data.result;
+        setVehicle(v);
+        if (v.seatCapacity) {
+          const cap = Number(v.seatCapacity);
+          setForm(prev => {
+            const current = Number(prev.seatTotal) || 4;
+            return {
+              ...prev,
+              seatTotal: String(Math.min(current, cap))
+            };
+          });
+        }
+      }
+    } catch (e) {
+      console.log('Error fetching vehicle:', e);
+    }
   };
 
   const fetchProvinces = async () => {
@@ -292,15 +316,16 @@ export default function CreateTripScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      // Đảm bảo luôn có danh sách tỉnh thành khi vào màn hình
       if (provinces.length === 0) {
         fetchProvinces();
       }
+      fetchVehicle();
     }, [provinces.length])
   );
 
   useEffect(() => {
     fetchProvinces();
+    fetchVehicle();
   }, []);
 
   const updateForm = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
@@ -327,16 +352,24 @@ export default function CreateTripScreen({ navigation }) {
   const removeStop = (type, index) => { const list = [...form[type]]; list.splice(index, 1); updateForm(type, list); };
   const updateStop = (type, index, wardId) => { const list = [...form[type]]; list[index].wardId = wardId; updateForm(type, list); };
 
+  const maxCapacity = vehicle?.seatCapacity ? Number(vehicle.seatCapacity) : 16;
+
   const adjustSeats = (delta) => {
     const current = Number(form.seatTotal) || 0;
-    const next = Math.min(16, Math.max(1, current + delta));
+    const next = Math.min(maxCapacity, Math.max(1, current + delta));
     updateForm('seatTotal', String(next));
   };
 
   const handleSeatBlur = () => {
     let num = Number(form.seatTotal);
     if (isNaN(num) || num < 1) num = 1;
-    if (num > 16) num = 16;
+    if (num > maxCapacity) {
+      num = maxCapacity;
+      Alert.alert(
+        'Vượt quá số ghế đăng ký',
+        `Xe của bạn đăng ký tối đa ${maxCapacity} chỗ. Số ghế đã được điều chỉnh về ${maxCapacity}.`
+      );
+    }
     updateForm('seatTotal', String(num));
   };
 
@@ -348,6 +381,13 @@ export default function CreateTripScreen({ navigation }) {
     }
     if (!form.seatTotal || isNaN(form.seatTotal) || Number(form.seatTotal) < 1) {
       Alert.alert('Lỗi', 'Số ghế không hợp lệ.'); return;
+    }
+    if (vehicle?.seatCapacity && Number(form.seatTotal) > Number(vehicle.seatCapacity)) {
+      Alert.alert(
+        'Số ghế không hợp lệ',
+        `Không được tạo chuyến có số ghế (${form.seatTotal} ghế) vượt quá số ghế xe đăng ký (${vehicle.seatCapacity} chỗ).`
+      );
+      return;
     }
     if (!form.priceVnd || isNaN(form.priceVnd) || Number(form.priceVnd) < 1000) {
       Alert.alert('Lỗi', 'Giá vé phải từ 1.000đ trở lên.'); return;
@@ -396,6 +436,8 @@ export default function CreateTripScreen({ navigation }) {
             { text: 'Đi tới Ví', onPress: () => navigation.navigate('Wallet') }
           ]
         );
+      } else if (errorCode === 5008 || errorMessage.includes('vượt quá số ghế')) {
+        Alert.alert('Không hợp lệ', errorMessage || 'Số ghế tạo chuyến không được vượt quá số ghế đăng ký của xe');
       } else {
         Alert.alert('Lỗi', errorMessage || 'Không thể tạo chuyến lúc này');
       }
@@ -569,7 +611,15 @@ export default function CreateTripScreen({ navigation }) {
             </View>
 
             {/* === SỐ GHẾ === */}
-            <Text style={[styles.sectionLabel, { marginTop: 8 }]}>Số ghế nhận khách</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+              <Text style={[styles.sectionLabel, { marginTop: 0 }]}>Số ghế nhận khách</Text>
+              {vehicle?.seatCapacity ? (
+                <View style={styles.vehicleCapacityBadge}>
+                  <Ionicons name="car-sport" size={13} color={COLORS.primary} />
+                  <Text style={styles.vehicleCapacityText}>Xe đăng ký: {vehicle.seatCapacity} chỗ</Text>
+                </View>
+              ) : null}
+            </View>
             <View style={styles.stepperRow}>
               <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustSeats(-1)} activeOpacity={0.8}>
                 <Ionicons name="remove" size={24} color={COLORS.primary} />
@@ -594,11 +644,19 @@ export default function CreateTripScreen({ navigation }) {
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 32, paddingBottom: 10 }}>
-              {SEAT_OPTIONS.map(seat => (
-                <TouchableOpacity key={seat} style={[styles.chip, String(form.seatTotal) === String(seat) && styles.chipActive]} onPress={() => updateForm('seatTotal', seat)} activeOpacity={0.8}>
-                  <Text style={[styles.chipText, String(form.seatTotal) === String(seat) && styles.chipTextActive]}>{seat} ghế</Text>
-                </TouchableOpacity>
-              ))}
+              {(() => {
+                const maxSeatChip = vehicle?.seatCapacity ? Number(vehicle.seatCapacity) : 7;
+                const chips = [1, 2, 3, 4, 7, 9, 16].filter(n => n <= maxSeatChip);
+                if (vehicle?.seatCapacity && !chips.includes(Number(vehicle.seatCapacity))) {
+                  chips.push(Number(vehicle.seatCapacity));
+                  chips.sort((a, b) => a - b);
+                }
+                return chips.map(String).map(seat => (
+                  <TouchableOpacity key={seat} style={[styles.chip, String(form.seatTotal) === String(seat) && styles.chipActive]} onPress={() => updateForm('seatTotal', seat)} activeOpacity={0.8}>
+                    <Text style={[styles.chipText, String(form.seatTotal) === String(seat) && styles.chipTextActive]}>{seat} ghế</Text>
+                  </TouchableOpacity>
+                ));
+              })()}
             </ScrollView>
 
             {/* === GIÁ VÉ === */}
@@ -778,5 +836,8 @@ const styles = StyleSheet.create({
   successDesc: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24, paddingHorizontal: 10 },
 
   successBtn: { flexDirection: 'row', backgroundColor: COLORS.primary, borderRadius: 14, height: 50, width: '100%', alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
-  successBtnText: { color: COLORS.surface, fontSize: 15, fontWeight: '600' }
+  successBtnText: { color: COLORS.surface, fontSize: 15, fontWeight: '600' },
+
+  vehicleCapacityBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 4 },
+  vehicleCapacityText: { color: COLORS.primary, fontSize: 12, fontWeight: '700' }
 });

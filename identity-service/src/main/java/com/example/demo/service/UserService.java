@@ -60,7 +60,10 @@ public class UserService {
 
     public UserResponse updateMyInfor(UserInforRequest request) {
         User user = getCurrentUser();
-        modelMapper.map(user, request);
+        if (request.getFullName() != null) user.setFullName(request.getFullName());
+        if (request.getPhoneNumber() != null) user.setPhoneNumber(request.getPhoneNumber());
+        if (request.getDateOfBirth() != null) user.setDateOfBirth(request.getDateOfBirth());
+        if (request.getGender() != null) user.setGender(request.getGender());
         return modelMapper.map(userRepository.save(user), UserResponse.class);
     }
 

@@ -33,7 +33,8 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, St
         v.id,
         v.vehicleImage,
         v.vehicleBrand,
-        v.vehicleModel
+        v.vehicleModel,
+        v.seatCapacity
     )
     FROM User u
     JOIN DriverProfile d ON u.id = d.user.id

@@ -9,12 +9,15 @@ import {
   ScrollView,
   Alert,
   Image,
-  Modal
+  Modal,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { apiService } from '../services/apiService';
 import { BASE_URL } from '../config/api';
 
@@ -22,6 +25,45 @@ const COLORS = {
   background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', 
   text: '#0F172A', textMuted: '#64748B', error: '#ef4444', 
   border: '#E2E8F0', success: '#10b981', warning: '#f59e0b' 
+};
+
+// Helpers chuyển đổi định dạng ngày giữa UI (DD/MM/YYYY) và Backend API (YYYY-MM-DD)
+const formatDateToDisplay = (dateStr) => {
+  if (!dateStr) return '';
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return dateStr;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return dateStr;
+};
+
+const formatDateToIso = (dateStr) => {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parts = trimmed.split('/');
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    if (d && m && y && d.length <= 2 && m.length <= 2 && y.length === 4) {
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+  }
+  return null;
+};
+
+const parseDateForPicker = (str) => {
+  if (!str) return new Date(2000, 0, 1);
+  if (str.includes('/')) {
+    const [d, m, y] = str.split('/').map(Number);
+    if (d && m && y) return new Date(y, m - 1, d);
+  }
+  if (str.includes('-')) {
+    const [y, m, d] = str.split('-').map(Number);
+    if (d && m && y) return new Date(y, m - 1, d);
+  }
+  return new Date(2000, 0, 1);
 };
 
 const MetricBox = ({ icon, value, label, color }) => (
@@ -52,6 +94,8 @@ export default function DriverProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerDate, setDatePickerDate] = useState(new Date(2000, 0, 1));
   const [isVehicleModalVisible, setIsVehicleModalVisible] = useState(false);
   const [isDriverModalVisible, setIsDriverModalVisible] = useState(false);
   
@@ -94,14 +138,38 @@ export default function DriverProfileScreen({ navigation }) {
   };
 
   const handleUpdate = async () => {
+    if (!editForm.fullName?.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên');
+      return;
+    }
+    if (editForm.phoneNumber?.trim() && !/^[0-9+]{9,15}$/.test(editForm.phoneNumber.trim())) {
+      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ (từ 9 đến 15 số)');
+      return;
+    }
+
+    let isoDob = null;
+    if (editForm.dateOfBirth?.trim()) {
+      isoDob = formatDateToIso(editForm.dateOfBirth);
+      if (!isoDob) {
+        Alert.alert('Lỗi', 'Ngày sinh không đúng định dạng DD/MM/YYYY (Ví dụ: 15/01/2000)');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
-      await apiService.updateMyUserInfo(editForm);
-      setUser(prev => ({ ...prev, ...editForm }));
+      const payload = {
+        fullName: editForm.fullName.trim(),
+        phoneNumber: editForm.phoneNumber?.trim() || '',
+        dateOfBirth: isoDob,
+        gender: editForm.gender || user.gender || 'MALE'
+      };
+      await apiService.updateMyUserInfo(payload);
+      setUser(prev => ({ ...prev, ...payload }));
       Alert.alert('Thành công', 'Đã cập nhật thông tin tài xế!');
       setIsEditModalVisible(false);
     } catch (error) {
-      Alert.alert('Thất bại', 'Vui lòng thử lại sau.');
+      Alert.alert('Thất bại', error.response?.data?.message || 'Vui lòng thử lại sau.');
     } finally {
       setSaving(false);
     }
@@ -253,10 +321,15 @@ export default function DriverProfileScreen({ navigation }) {
             <MenuItem 
               icon="person" title="Thông tin cá nhân" 
               onPress={() => {
+                const formattedDob = formatDateToDisplay(user.dateOfBirth || '');
+                setDatePickerDate(parseDateForPicker(user.dateOfBirth || ''));
                 setEditForm({
-                  fullName: user.fullName || '', phoneNumber: user.phoneNumber || '',
-                  dateOfBirth: user.dateOfBirth || '', gender: user.gender || ''
+                  fullName: user.fullName || '', 
+                  phoneNumber: user.phoneNumber || '',
+                  dateOfBirth: formattedDob, 
+                  gender: user.gender || 'MALE'
                 });
+                setShowDatePicker(false);
                 setIsEditModalVisible(true);
               }} 
             />
@@ -275,39 +348,163 @@ export default function DriverProfileScreen({ navigation }) {
       </ScrollView>
 
       {/* Edit Profile Modal */}
-      <Modal visible={isEditModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Cập Nhật Thông Tin</Text>
-              <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
-                <Ionicons name="close-circle" size={28} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            </View>
+      <Modal 
+        visible={isEditModalVisible} 
+        animationType="slide" 
+        transparent 
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={styles.keyboardAvoidingView}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay} 
+            activeOpacity={1} 
+            onPress={() => setIsEditModalVisible(false)}
+          >
+            <TouchableOpacity 
+              style={styles.modalContent} 
+              activeOpacity={1} 
+              onPress={(e) => e?.stopPropagation?.()}
+            >
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.editModalScroll}
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Cập Nhật Thông Tin</Text>
+                  <TouchableOpacity onPress={() => setIsEditModalVisible(false)}>
+                    <Ionicons name="close-circle" size={28} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Họ và tên</Text>
-              <TextInput 
-                style={styles.input} value={editForm.fullName}
-                onChangeText={(t) => setEditForm(p => ({...p, fullName: t}))}
-                placeholder="Nhập họ và tên" placeholderTextColor={COLORS.textMuted}
-              />
-            </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Họ và tên</Text>
+                  <TextInput 
+                    style={styles.input} value={editForm.fullName}
+                    onChangeText={(t) => setEditForm(p => ({...p, fullName: t}))}
+                    placeholder="Nhập họ và tên" placeholderTextColor={COLORS.textMuted}
+                  />
+                </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Số điện thoại</Text>
-              <TextInput 
-                style={styles.input} value={editForm.phoneNumber} keyboardType="phone-pad"
-                onChangeText={(t) => setEditForm(p => ({...p, phoneNumber: t}))}
-                placeholder="Nhập số điện thoại" placeholderTextColor={COLORS.textMuted}
-              />
-            </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Số điện thoại</Text>
+                  <TextInput 
+                    style={styles.input} value={editForm.phoneNumber} keyboardType="phone-pad"
+                    onChangeText={(t) => setEditForm(p => ({...p, phoneNumber: t}))}
+                    placeholder="Nhập số điện thoại" placeholderTextColor={COLORS.textMuted}
+                  />
+                </View>
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleUpdate} disabled={saving}>
-              {saving ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.saveBtnText}>Lưu Thay Đổi</Text>}
+                <View style={styles.formGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.label}>Ngày sinh (DD/MM/YYYY)</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.chooseDateBtn}>
+                      <Ionicons name="calendar" size={14} color={COLORS.primary} />
+                      <Text style={styles.chooseDateText}>Chọn ngày</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.datePickerInputWrapper} 
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.9}
+                  >
+                    <TextInput 
+                      style={[styles.input, { flex: 1, borderWidth: 0, height: '100%', paddingHorizontal: 0 }]} 
+                      value={editForm.dateOfBirth} 
+                      onChangeText={(t) => {
+                        setEditForm(p => ({...p, dateOfBirth: t}));
+                        const parsed = parseDateForPicker(t);
+                        if (parsed && !isNaN(parsed.getTime())) {
+                          setDatePickerDate(parsed);
+                        }
+                      }}
+                      placeholder="DD/MM/YYYY (VD: 15/01/2000)" 
+                      placeholderTextColor={COLORS.textMuted}
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={10}
+                    />
+                    <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+                      <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                </View>
+
+                {showDatePicker && (
+                  <View style={styles.pickerBox}>
+                    <View style={styles.datePickerHeader}>
+                      <Text style={styles.datePickerHeaderLabel}>
+                        Ngày đã chọn: <Text style={styles.datePickerHeaderValue}>{editForm.dateOfBirth || 'Chưa chọn'}</Text>
+                      </Text>
+                      <TouchableOpacity 
+                        style={styles.datePickerCloseBtn} 
+                        onPress={() => setShowDatePicker(false)}
+                      >
+                        <Ionicons name="close" size={20} color={COLORS.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <DateTimePicker
+                      value={datePickerDate}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      themeVariant="light"
+                      textColor="#0F172A"
+                      maximumDate={new Date()}
+                      locale="vi-VN"
+                      style={styles.pickerStyle}
+                      onChange={(event, selectedDate) => {
+                        if (Platform.OS === 'android') {
+                          setShowDatePicker(false);
+                          if (event.type === 'dismissed') return;
+                        }
+                        if (selectedDate) {
+                          setDatePickerDate(selectedDate);
+                          const d = String(selectedDate.getDate()).padStart(2, '0');
+                          const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                          const y = selectedDate.getFullYear();
+                          setEditForm(p => ({ ...p, dateOfBirth: `${d}/${m}/${y}` }));
+                        }
+                      }}
+                    />
+
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity 
+                        style={styles.pickerDoneBtn} 
+                        onPress={() => setShowDatePicker(false)}
+                      >
+                        <Text style={styles.pickerDoneText}>Xác nhận</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Giới tính</Text>
+                  <View style={styles.genderRow}>
+                    {['MALE', 'FEMALE', 'OTHER'].map(g => (
+                      <TouchableOpacity 
+                        key={g} 
+                        style={[styles.genderBtn, editForm.gender === g && styles.genderBtnActive]}
+                        onPress={() => setEditForm(p => ({...p, gender: g}))}
+                      >
+                        <Text style={[styles.genderText, editForm.gender === g && styles.genderTextActive]}>
+                          {g === 'MALE' ? 'Nam' : g === 'FEMALE' ? 'Nữ' : 'Khác'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <TouchableOpacity style={styles.saveBtn} onPress={handleUpdate} disabled={saving}>
+                  {saving ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.saveBtnText}>Lưu Thay Đổi</Text>}
+                </TouchableOpacity>
+              </ScrollView>
             </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Vehicle Info Modal (Full Screen) */}
@@ -532,15 +729,36 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: COLORS.border, marginLeft: 72 },
 
   // Modal
+  keyboardAvoidingView: { flex: 1 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '88%' },
+  editModalScroll: { paddingBottom: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: 'bold' },
-  formGroup: { marginBottom: 20 },
+  formGroup: { marginBottom: 16 },
   label: { color: COLORS.textMuted, fontSize: 13, marginBottom: 8, fontWeight: '600' },
   input: { backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 16, height: 50, color: COLORS.text },
-  saveBtn: { backgroundColor: COLORS.primary, height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
+  saveBtn: { backgroundColor: COLORS.primary, height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 16 },
   saveBtnText: { color: COLORS.background, fontWeight: 'bold', fontSize: 16 },
+
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  chooseDateBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, paddingHorizontal: 6, backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: 6 },
+  chooseDateText: { color: COLORS.primary, fontSize: 12, fontWeight: '600' },
+  datePickerInputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 16, height: 50 },
+  pickerBox: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  datePickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  datePickerHeaderLabel: { fontSize: 13, color: COLORS.textMuted, fontWeight: '600' },
+  datePickerHeaderValue: { fontSize: 14, color: COLORS.primary, fontWeight: '800' },
+  datePickerCloseBtn: { padding: 4 },
+  pickerStyle: { width: '100%', height: 170, backgroundColor: '#FFFFFF' },
+  pickerDoneBtn: { alignSelf: 'flex-end', paddingHorizontal: 18, paddingVertical: 8, backgroundColor: COLORS.primary, borderRadius: 8, marginTop: 8 },
+  pickerDoneText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+
+  genderRow: { flexDirection: 'row', gap: 8 },
+  genderBtn: { flex: 1, height: 42, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center' },
+  genderBtnActive: { backgroundColor: 'rgba(14, 165, 233, 0.1)', borderColor: COLORS.primary },
+  genderText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
+  genderTextActive: { color: COLORS.primary, fontWeight: 'bold' },
 
   // Info Rows for Modals
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16 },

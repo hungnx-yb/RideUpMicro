@@ -23,5 +23,6 @@ public class DriverResponse {
     String vehicleBrand;
     String vehicleModel;
     String vehicleId;
+    Integer seatCapacity;
 
 }

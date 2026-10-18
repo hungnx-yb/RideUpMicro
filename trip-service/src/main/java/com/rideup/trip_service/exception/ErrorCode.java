@@ -57,7 +57,8 @@ public enum ErrorCode {
     
     // Wallet / Debt errors
     ACCOUNT_BLOCKED_DUE_TO_DEBT(6001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN),
-    CANNOT_CANCEL_STARTED_TRIP(5007, "Chuyến xe đã bắt đầu di chuyển, không thể huỷ chuyến.", HttpStatus.BAD_REQUEST);
+    CANNOT_CANCEL_STARTED_TRIP(5007, "Chuyến xe đã bắt đầu di chuyển, không thể huỷ chuyến.", HttpStatus.BAD_REQUEST),
+    SEAT_EXCEEDS_CAPACITY(5008, "Số ghế tạo chuyến không được vượt quá số ghế đăng ký của xe", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

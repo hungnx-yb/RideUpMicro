@@ -70,10 +70,17 @@ public class TripService {
                                 DriverResponse::getUserId,
                                 Function.identity()
                         ));
+        DriverResponse driver = driverMap.get(userResponse.getId());
+        if (driver != null && driver.getSeatCapacity() != null && request.getSeatTotal() != null) {
+            if (request.getSeatTotal() > driver.getSeatCapacity()) {
+                throw new AppException(ErrorCode.SEAT_EXCEEDS_CAPACITY);
+            }
+        }
+
         Trip trip = modelMapper.map(request, Trip.class);
         trip.setStops(null);
         trip.setDriverId(userResponse.getId());
-        trip.setVehicleId(driverMap.get(userResponse.getId()).getVehicleId());
+        trip.setVehicleId(driver != null ? driver.getVehicleId() : null);
         trip.setStatus(TripStatus.OPEN);
         trip.setSeatAvailable(request.getSeatTotal());
 

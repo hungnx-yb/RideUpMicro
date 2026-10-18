@@ -42,7 +42,7 @@ public class DriverResponse {
     String vehicleBrand;
     String vehicleModel;
     String vehicleId;
-
+    Integer seatCapacity;
 
     public DriverResponse(
             String userId,
@@ -66,6 +66,32 @@ public class DriverResponse {
         this.vehicleImage = vehicleImage;
         this.vehicleBrand = vehicleBrand;
         this.vehicleModel = vehicleModel;
+    }
+
+    public DriverResponse(
+            String userId,
+            String fullName,
+            String email,
+            String phoneNumber,
+            String avatarUrl,
+            Double driverRating,
+            String vehicleId,
+            String vehicleImage,
+            String vehicleBrand,
+            String vehicleModel,
+            Integer seatCapacity
+    ) {
+        this.userId = userId;
+        this.fullName = fullName;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+        this.avatarUrl = avatarUrl;
+        this.driverRating = driverRating;
+        this.vehicleId = vehicleId;
+        this.vehicleImage = vehicleImage;
+        this.vehicleBrand = vehicleBrand;
+        this.vehicleModel = vehicleModel;
+        this.seatCapacity = seatCapacity;
     }
 
 }
