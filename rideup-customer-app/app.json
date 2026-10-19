@@ -45,7 +45,7 @@
       "expo-video"
     ],
     "experiments": {
-      "reactCompiler": true
+      "reactCompiler": false
     }
   }
 }

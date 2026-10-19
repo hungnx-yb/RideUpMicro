@@ -97,7 +97,7 @@ eureka:
 management:
   tracing:
     sampling:
-      probability: 1.0
+      probability: 0.0
 
   endpoints:
     web:
@@ -119,6 +119,13 @@ app:
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
       trip-cancelled: ${KAFKA_TOPIC_TRIP_CANCELLED:trip.cancelled}
+      booking-marketplace-created: ${KAFKA_TOPIC_BOOKING_MARKETPLACE_CREATED:booking-marketplace-created}
+      marketplace-invitation-accepted: ${KAFKA_TOPIC_MARKETPLACE_ACCEPTED:marketplace-invitation-accepted}
+      trip-request-created: ${KAFKA_TOPIC_TRIP_REQUEST_CREATED:trip-request-created}
+      trip-request-invited: ${KAFKA_TOPIC_TRIP_REQUEST_INVITED:trip-request-invited}
+      trip-request-invitation-rejected: ${KAFKA_TOPIC_TRIP_REQUEST_REJECTED:trip-request-invitation-rejected}
+      trip-request-expired: ${KAFKA_TOPIC_TRIP_REQUEST_EXPIRED:trip-request-expired}
+      trip-request-cancelled: ${KAFKA_TOPIC_TRIP_REQUEST_CANCELLED:trip-request-cancelled}
 
 clients:
   location:

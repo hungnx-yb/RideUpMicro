@@ -44,6 +44,14 @@ public class BookingController {
                 .build();
     }
 
+    @PostMapping("/accept-invitation")
+    public ApiResponse<BookingResponse> acceptInvitation(@Valid @RequestBody com.rideUp.booking_service.dto.request.AcceptInvitationRequest request) {
+        return ApiResponse.<BookingResponse>builder()
+                .message("Booking created from invitation successfully")
+                .result(bookingService.createBookingFromInvitation(request))
+                .build();
+    }
+
     @GetMapping("/{id}")
     public ApiResponse<BookingResponse> getBookingDetail(@PathVariable String id) {
         return ApiResponse.<BookingResponse>builder()

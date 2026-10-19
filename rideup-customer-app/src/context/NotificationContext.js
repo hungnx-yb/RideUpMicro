@@ -1,4 +1,5 @@
 import React, { createContext, useState, useCallback, useEffect } from 'react';
+import { Alert } from 'react-native';
 import { apiService } from '../services/apiService';
 import { notificationSocket } from '../services/notificationSocket';
 
@@ -52,8 +53,13 @@ export const NotificationProvider = ({ children }) => {
         // Cập nhật số đỏ ngay lập tức
         incrementUnreadCount();
         
-        // Tuỳ chọn: Ở đây bạn có thể dùng Alert hoặc react-native-toast-message để hiện popup đẩy trên góc màn hình!
-        // console.log("New Notification Received:", newNoti);
+        if (newNoti?.title && newNoti?.message) {
+           Alert.alert(`🔔 ${newNoti.title}`, newNoti.message);
+        } else if (newNoti?.content) {
+           Alert.alert(`🔔 Thông báo`, newNoti.content);
+        } else {
+           Alert.alert('🔔 Cập nhật Marketplace', 'Có tin nhắn hoặc lời mời từ tài xế!');
+        }
       });
     };
 

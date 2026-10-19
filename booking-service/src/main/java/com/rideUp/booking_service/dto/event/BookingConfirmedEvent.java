@@ -21,6 +21,7 @@ public class BookingConfirmedEvent {
     String eventId;
     String correlationId;
     String bookingId;
+    String customerId;
     String tripId;
     Integer seatCount;
     LocalDateTime createdAt;

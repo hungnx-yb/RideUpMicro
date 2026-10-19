@@ -55,6 +55,9 @@ export const apiService = {
   getMyDriverProfile: async () => {
     return await apiClient.get('/api/identity/drivers/me');
   },
+  updateOperatingProvinces: async (operatingProvinceIds) => {
+    return await apiClient.put('/api/identity/drivers/me/operating-provinces', { operatingProvinceIds });
+  },
   getMyVehicle: async () => {
     return await apiClient.get('/api/identity/vehicles/me');
   },
@@ -118,12 +121,26 @@ export const apiService = {
     return await apiClient.get(`/api/trip/trip/${tripId}`);
   },
 
-  // Location Service
-  getAllProvinces: async () => {
-    return await apiClient.get('/api/location/province');
+  // --- MARKETPLACE (CHỢ NHU CẦU) ---
+  getMarketplaceTripRequests: async (params) => {
+    return await apiClient.get('/api/trip/trip-requests/marketplace', { params });
   },
-  getAllWards: async (provinceId) => {
-    return await apiClient.get('/api/location/ward', { params: { provinceId } });
+  getTripRequestById: async (id) => {
+    return await apiClient.get(`/api/trip/trip-requests/${id}`);
+  },
+  sendTripRequestInvitation: async (payload) => {
+    return await apiClient.post('/api/trip/trip-requests/invitations', payload);
+  },
+
+  // Location Service
+  getAllProvinces: async (keyword) => {
+    return await apiClient.get('/api/location/province', { params: keyword ? { keyword } : undefined });
+  },
+  getProvinceById: async (provinceId) => {
+    return await apiClient.get(`/api/location/province/${provinceId}`);
+  },
+  getAllWards: async (provinceId, keyword) => {
+    return await apiClient.get('/api/location/ward', { params: { provinceId, ...(keyword ? { keyword } : {}) } });
   },
   getWardById: async (wardId) => {
     return await apiClient.get(`/api/location/ward/${wardId}`);

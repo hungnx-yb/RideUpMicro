@@ -91,6 +91,20 @@ export const apiService = {
     return await apiClient.get(`/api/booking/bookings/${bookingId}`);
   },
 
+  // --- MARKETPLACE (CHỢ NHU CẦU) ---
+  createTripRequest: async (payload) => {
+    return await apiClient.post('/api/trip/trip-requests', payload);
+  },
+  getMyTripRequests: async (params) => {
+    return await apiClient.get('/api/trip/trip-requests/me', { params });
+  },
+  rejectTripRequestInvitation: async (invitationId) => {
+    return await apiClient.post(`/api/trip/trip-requests/invitations/${invitationId}/reject`);
+  },
+  cancelTripRequest: async (requestId) => {
+    return await apiClient.delete(`/api/trip/trip-requests/${requestId}`);
+  },
+
   // Location Service
   getAllProvinces: async () => {
     return await apiClient.get('/api/location/province');

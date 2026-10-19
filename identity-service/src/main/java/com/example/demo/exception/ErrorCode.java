@@ -28,6 +28,7 @@ public enum ErrorCode {
     GPLX_EXPIRED(2005, "Your GPLX has expired", HttpStatus.BAD_REQUEST),
     CANNOT_UPDATE_APPROVED_DRIVER(2006, "Cannot update approved driver profile. Please contact support.", HttpStatus.BAD_REQUEST),
     DRIVER_NOT_APPROVED(2007, "Your driver profile must be approved before registering a vehicle", HttpStatus.BAD_REQUEST),
+    DRIVER_OPERATING_PROVINCES_EXCEED_LIMIT(2008, "You can only select up to 5 operating provinces", HttpStatus.BAD_REQUEST),
     
     // Vehicle related errors
     VEHICLE_ALREADY_REGISTERED(3001, "You already have a vehicle registered", HttpStatus.BAD_REQUEST),

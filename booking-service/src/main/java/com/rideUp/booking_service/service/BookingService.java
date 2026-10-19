@@ -119,6 +119,56 @@ public class BookingService {
     }
 
     @Transactional
+    public BookingResponse createBookingFromInvitation(AcceptInvitationRequest request) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+
+        com.rideUp.booking_service.dto.response.ProcessMarketplaceBookingResponse processResp;
+        try {
+            var apiResponse = tripServiceClient.validateAndReserve(request.getInvitationId(), currentUserId);
+            if (apiResponse == null || apiResponse.getResult() == null) {
+                throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
+            }
+            processResp = apiResponse.getResult();
+        } catch (feign.FeignException e) {
+            log.error("Failed to process invitation in trip-service: {}", e.getMessage());
+            throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
+        }
+        String correlationId = UUID.randomUUID().toString();
+        LocalDateTime now = LocalDateTime.now();
+        Booking booking = new Booking();
+        booking.setBookingCode(generateBookingCode());
+        booking.setTripId(processResp.getTripId());
+        booking.setCustomerId(currentUserId);
+        booking.setSeatCount(processResp.getSeatCount());
+        booking.setTotalAmount(processResp.getPriceVnd().multiply(BigDecimal.valueOf(processResp.getSeatCount())));
+        booking.setPaymentStatus(PaymentStatus.PENDING);
+        booking.setReservedAt(now);
+        if (request.getPaymentMethod() == PaymentMethod.CASH) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+            booking.setExpiresAt(null);
+        } else {
+            booking.setStatus(BookingStatus.PENDING_PAYMENT);
+            booking.setExpiresAt(now.plusSeconds(expirySeconds));
+        }
+
+        Booking saved = bookingRepository.save(booking);
+        publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId);
+        if (request.getPaymentMethod() == PaymentMethod.CASH) {
+                publishBookingConfirmed(saved, correlationId); 
+        }
+
+        bookingServicePublisher.publishMarketplaceBookingCreated(
+            com.rideUp.booking_service.dto.event.MarketplaceBookingCreatedEvent.builder()
+                .bookingId(saved.getId())
+                .invitationId(request.getInvitationId())
+                .customerId(saved.getCustomerId())
+                .build()
+        );
+
+        return modelMapper.map(saved, BookingResponse.class);
+    }
+
+    @Transactional
     public BookingResponse handlePaymentCompleted(PaymentCompletedRequest request) {
         log.info("Handling payment completed for bookingId={}, paymentId={}, correlationId={}",
             request.getBookingId(), request.getPaymentId(), request.getCorrelationId());
@@ -592,6 +642,10 @@ public class BookingService {
     }
 
 
+    private void publishPaymentRequested(Booking booking, PaymentMethod paymentMethod, LocalDateTime now, String correlationId) {
+        publishPaymentRequested(booking, paymentMethod, now, correlationId, null);
+    }
+
     private void publishPaymentRequested(Booking booking, PaymentMethod paymentMethod, LocalDateTime now, String correlationId, String transactionId) {
         PaymentRequestedEvent event = PaymentRequestedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
@@ -615,6 +669,7 @@ public class BookingService {
                 .eventId(UUID.randomUUID().toString())
                 .correlationId(correlationId)
                 .bookingId(booking.getId())
+                .customerId(booking.getCustomerId())
                 .tripId(booking.getTripId())
                 .seatCount(booking.getSeatCount())
                 .createdAt(LocalDateTime.now())

@@ -92,8 +92,6 @@ export default function DriverDashboardScreen() {
   useEffect(() => {
     let unsubscribe;
     const setup = async () => {
-      // Initial fetch
-      fetchDashboardData();
       // Setup Socket
       await notificationSocket.connect();
 
@@ -129,16 +127,18 @@ export default function DriverDashboardScreen() {
     else setLoading(true);
 
     try {
-      // Lấy thông tin tài xế
-      const userRes = await apiService.getMyUserInfo().catch(() => null);
-      if (userRes && userRes.data && userRes.data.result) {
+      // 1. Gọi song song thông tin tài xế và danh sách chuyến đi
+      const [userRes, res] = await Promise.all([
+        apiService.getMyUserInfo().catch(() => null),
+        apiService.getDriverTrips({ size: 100, page: 0 }).catch(() => null),
+      ]);
+
+      if (userRes?.data?.result) {
         setDriverInfo(userRes.data.result);
       }
 
-      // TODO: Tích hợp API thống kê thực tế nếu có
-      // Tạm thời lấy danh sách chuyến xe để tự tính toán
-      const res = await apiService.getDriverTrips({ size: 100, page: 0 });
-      const trips = res?.data?.result || [];
+      const rawTrips = res?.data?.result;
+      const trips = Array.isArray(rawTrips) ? rawTrips : (rawTrips?.content || []);
 
       let revenue = 0;
       let completed = 0;
@@ -176,19 +176,24 @@ export default function DriverDashboardScreen() {
       });
       setUpcomingTrip(nextTrip);
 
-      // Fetch pending requests for all active trips
-      let pending = [];
+      // 2. Gọi song song các request booking cho tất cả chuyến xe đang mở
       const activeTripsList = trips.filter(t => t.status === 'OPEN' || t.status === 'FULL');
-      for (const trip of activeTripsList) {
-        const bookingRes = await apiService.getBookingsByTripId(trip.id).catch(() => null);
-        const bookings = bookingRes?.data?.result || [];
-        const waiting = bookings.filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
-
-        // Gắn thêm thông tin chuyến đi vào booking để hiển thị
-        const enrichedWaiting = waiting.map(b => ({ ...b, tripDetails: trip }));
-        pending = [...pending, ...enrichedWaiting];
+      if (activeTripsList.length > 0) {
+        const bookingResponses = await Promise.all(
+          activeTripsList.map(trip =>
+            apiService.getBookingsByTripId(trip.id)
+              .then(bookingRes => {
+                const bookings = bookingRes?.data?.result || [];
+                const waiting = bookings.filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
+                return waiting.map(b => ({ ...b, tripDetails: trip }));
+              })
+              .catch(() => [])
+          )
+        );
+        setPendingRequests(bookingResponses.flat());
+      } else {
+        setPendingRequests([]);
       }
-      setPendingRequests(pending);
 
     } catch (error) {
       console.log('Error fetching dashboard data:', error);
