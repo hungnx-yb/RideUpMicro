@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
-  ActivityIndicator, FlatList, TouchableOpacity, RefreshControl, ScrollView,
+  ActivityIndicator, FlatList, TouchableOpacity, RefreshControl, ScrollView, Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import InvitationCard from '../components/InvitationCard';
@@ -28,6 +29,24 @@ const STATUS_CONFIG = {
 
 const getStatus = (status) =>
   STATUS_CONFIG[status] || { label: status || 'Không rõ', color: COLORS.textMuted, icon: 'ellipse-outline', bg: 'rgba(160,160,160,0.1)' };
+
+const REQUEST_STATUS_CONFIG = {
+  OPEN: { label: 'Đang tìm xe', color: COLORS.green, bg: 'rgba(16, 185, 129, 0.12)', icon: 'radio-outline' },
+  ACCEPTED: { label: 'Đã chốt xe', color: COLORS.blue, bg: 'rgba(59, 130, 246, 0.12)', icon: 'checkmark-circle-outline' },
+  EXPIRED: { label: 'Hết hạn', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)', icon: 'time-outline' },
+  CANCELLED: { label: 'Đã huỷ', color: COLORS.textMuted, bg: 'rgba(100, 116, 139, 0.12)', icon: 'close-circle-outline' },
+};
+
+const getRequestStatus = (status) =>
+  REQUEST_STATUS_CONFIG[status] || { label: status || 'Chưa rõ', color: COLORS.textMuted, bg: 'rgba(100, 116, 139, 0.12)', icon: 'ellipse-outline' };
+
+const REQUEST_TABS = [
+  { key: null, label: 'Tất cả' },
+  { key: 'OPEN', label: 'Đang tìm xe' },
+  { key: 'ACCEPTED', label: 'Đã chốt' },
+  { key: 'EXPIRED', label: 'Hết hạn' },
+  { key: 'CANCELLED', label: 'Đã huỷ' },
+];
 
 // ===== TRIP CARD =====
 const BookingCard = ({ item, onPress, onChatPress }) => {
@@ -126,28 +145,58 @@ const TABS = [
 ];
 
 // ===== MAIN SCREEN =====
-const MyTripsScreen = ({ navigation }) => {
-  const [mainTab, setMainTab] = useState('BOOKINGS'); // 'BOOKINGS' | 'REQUESTS'
+const MyTripsScreen = ({ navigation, route }) => {
+  const [mainTab, setMainTab] = useState(route?.params?.initialTab || 'BOOKINGS'); // 'BOOKINGS' | 'REQUESTS'
   const [bookings, setBookings] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(null);
+  const [requestActiveTab, setRequestActiveTab] = useState(null);
 
-  const fetchMyRequests = async (isRefresh = false) => {
+  useEffect(() => {
+    if (route?.params?.initialTab) {
+      setMainTab(route.params.initialTab);
+    }
+  }, [route?.params?.initialTab]);
+
+  const fetchMyRequests = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const res = await apiService.getMyTripRequests({});
-      if (res.data.code === 1000) {
-        setRequests(res.data.result.content || []);
-      }
+      const res = await apiService.getMyTripRequests();
+      const rawData = res?.data?.result ?? res?.data;
+      const data = Array.isArray(rawData) ? rawData : (rawData?.content || []);
+      setRequests(data);
     } catch (e) {
-      console.warn('Fetch requests error:', e);
+      console.warn('Fetch requests error:', e?.response?.data || e);
+      setRequests([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  }, []);
+
+  const handleCancelRequest = (requestId) => {
+    Alert.alert(
+      'Hủy yêu cầu tìm xe',
+      'Bạn có chắc chắn muốn hủy yêu cầu phát tín hiệu tìm xe này không?',
+      [
+        { text: 'Không', style: 'cancel' },
+        {
+          text: 'Hủy yêu cầu',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiService.cancelTripRequest(requestId);
+              setRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: 'CANCELLED' } : r));
+            } catch (e) {
+              Alert.alert('Lỗi', e?.response?.data?.message || 'Không thể hủy yêu cầu.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const fetchMyBookings = useCallback(async (isRefresh = false) => {
@@ -171,14 +220,20 @@ const MyTripsScreen = ({ navigation }) => {
     } else {
       fetchMyRequests(true);
     }
-  }, [mainTab, fetchMyBookings]);
+  }, [mainTab, fetchMyBookings, fetchMyRequests]);
 
-  useEffect(() => { 
-    if (mainTab === 'BOOKINGS') fetchMyBookings();
-    else fetchMyRequests();
-  }, [mainTab]);
+  useFocusEffect(
+    useCallback(() => {
+      if (mainTab === 'BOOKINGS') {
+        fetchMyBookings();
+      } else {
+        fetchMyRequests();
+      }
+    }, [mainTab, fetchMyBookings, fetchMyRequests])
+  );
 
   const filteredBookings = activeTab ? bookings.filter(b => b.status === activeTab) : bookings;
+  const filteredRequests = requestActiveTab ? requests.filter(r => r.status === requestActiveTab) : requests;
 
   const handleRejectInvitation = async (inv) => {
     try {
@@ -186,7 +241,7 @@ const MyTripsScreen = ({ navigation }) => {
       // Optimistic update: remove from local state
       setRequests(prev => prev.map(req => {
         if (req.id === inv.tripRequestId) {
-          return { ...req, invitations: req.invitations.filter(i => i.id !== inv.id) };
+          return { ...req, invitations: (req.invitations || []).filter(i => i.id !== inv.id) };
         }
         return req;
       }));
@@ -229,14 +284,27 @@ const MyTripsScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* ── FILTER TABS (Only for Bookings) ── */}
-      {mainTab === 'BOOKINGS' && (
+      {/* ── FILTER TABS ── */}
+      {mainTab === 'BOOKINGS' ? (
         <View style={styles.tabsWrapper}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer} style={styles.tabsScroll}>
             {TABS.map((tab) => {
               const isActive = activeTab === tab.key;
               return (
                 <TouchableOpacity key={String(tab.key)} style={[styles.tab, isActive && styles.tabActive]} onPress={() => setActiveTab(tab.key)}>
+                  <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : (
+        <View style={styles.tabsWrapper}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer} style={styles.tabsScroll}>
+            {REQUEST_TABS.map((tab) => {
+              const isActive = requestActiveTab === tab.key;
+              return (
+                <TouchableOpacity key={String(tab.key)} style={[styles.tab, isActive && styles.tabActive]} onPress={() => setRequestActiveTab(tab.key)}>
                   <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab.label}</Text>
                 </TouchableOpacity>
               );
@@ -250,7 +318,7 @@ const MyTripsScreen = ({ navigation }) => {
         <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 60 }} />
       ) : (
         <FlatList
-          data={mainTab === 'BOOKINGS' ? filteredBookings : requests}
+          data={mainTab === 'BOOKINGS' ? filteredBookings : filteredRequests}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => {
             if (mainTab === 'BOOKINGS') {
@@ -268,24 +336,97 @@ const MyTripsScreen = ({ navigation }) => {
               );
             } else {
               // YÊU CẦU TÌM XE
+              const reqStatus = getRequestStatus(item.status);
+              const depTime = item.departureTime ? new Date(item.departureTime) : (item.createdAt ? new Date(item.createdAt) : null);
+              const formattedTime = depTime 
+                ? `${depTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • ${depTime.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}` 
+                : '--';
+
               return (
-                <View style={{ marginBottom: 24, marginHorizontal: 14 }}>
-                  <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 8, color: COLORS.text }}>
-                    Yêu cầu lúc {new Date(item.fromTime).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'})}
-                  </Text>
-                  
+                <View style={{ marginBottom: 16, marginHorizontal: 16, backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 }}>
+                  {/* Card Header */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+                        <Ionicons name="radio" size={14} color={COLORS.primary} />
+                      </View>
+                      <Text style={{ fontWeight: '700', fontSize: 13, color: COLORS.text }}>
+                        Khởi hành: {formattedTime}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ backgroundColor: reqStatus.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name={reqStatus.icon} size={12} color={reqStatus.color} />
+                        <Text style={{ color: reqStatus.color, fontSize: 11, fontWeight: 'bold' }}>
+                          {reqStatus.label}
+                        </Text>
+                      </View>
+                      {item.status === 'OPEN' && (
+                        <TouchableOpacity onPress={() => handleCancelRequest(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="trash-outline" size={16} color={COLORS.error} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Route */}
+                  <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <Ionicons name="location" size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                        {item.startAddressText || 'Điểm đón'}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="flag" size={16} color="#F59E0B" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                        {item.endAddressText || 'Điểm đến'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Seat & Note */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="people-outline" size={14} color={COLORS.textMuted} style={{ marginRight: 4 }} />
+                      <Text style={{ fontSize: 12, color: COLORS.textMuted, fontWeight: '600' }}>
+                        {item.seatTotal || 1} ghế
+                      </Text>
+                    </View>
+                    {item.note ? (
+                      <Text style={{ fontSize: 12, color: COLORS.textMuted, fontStyle: 'italic', maxWidth: '65%' }} numberOfLines={1}>
+                        "{item.note}"
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {/* Invitations section */}
                   {item.invitations && item.invitations.length > 0 ? (
-                    item.invitations.map(inv => (
-                      <InvitationCard 
-                        key={inv.id} 
-                        invitation={inv} 
-                        onAccept={() => handleAcceptInvitation(inv, item)} 
-                        onReject={() => handleRejectInvitation(inv)} 
-                      />
-                    ))
+                    <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.primary }}>
+                          Lời mời từ tài xế ({item.invitations.length}):
+                        </Text>
+                        <Text style={{ fontSize: 11, color: COLORS.textMuted }}>
+                          Chọn xe để tiếp tục
+                        </Text>
+                      </View>
+                      {item.invitations.map(inv => (
+                        <InvitationCard 
+                          key={inv.id} 
+                          invitation={inv} 
+                          onAccept={() => handleAcceptInvitation(inv, item)} 
+                          onReject={() => handleRejectInvitation(inv)} 
+                        />
+                      ))}
+                    </View>
                   ) : (
-                    <View style={{ padding: 16, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                      <Text style={{ color: COLORS.textMuted, fontStyle: 'italic' }}>Đang chờ tài xế nhận...</Text>
+                    <View style={{ paddingVertical: 8, alignItems: 'center' }}>
+                      <Text style={{ color: COLORS.textMuted, fontStyle: 'italic', fontSize: 12 }}>
+                        {item.status === 'OPEN' 
+                          ? 'Đang phát sóng tìm tài xế gần bạn nhất...' 
+                          : 'Không có lời mời nào.'}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -302,13 +443,24 @@ const MyTripsScreen = ({ navigation }) => {
           }
           ListEmptyComponent={
             <View style={styles.emptyBox}>
-              <Ionicons name="car-outline" size={60} color={COLORS.border} />
-              <Text style={styles.emptyTitle}>Chưa có chuyến nào</Text>
+              <Ionicons name={mainTab === 'BOOKINGS' ? "ticket-outline" : "radio-outline"} size={60} color={COLORS.border} />
+              <Text style={styles.emptyTitle}>
+                {mainTab === 'BOOKINGS' ? 'Chưa có chuyến nào' : 'Chưa có yêu cầu nào'}
+              </Text>
               <Text style={styles.emptySubtitle}>
                 {mainTab === 'BOOKINGS' 
                   ? (activeTab ? 'Không có chuyến nào trong trạng thái này.' : 'Hãy đặt chuyến đầu tiên của bạn!')
-                  : 'Bạn chưa phát tín hiệu tìm xe nào.'}
+                  : 'Bạn chưa phát tín hiệu tìm xe nào hoặc không có yêu cầu trong mục này.'}
               </Text>
+              {mainTab === 'REQUESTS' && (
+                <TouchableOpacity 
+                  style={[styles.emptyBtn, { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20 }]}
+                  onPress={() => navigation.navigate('SearchRide')}
+                >
+                  <Ionicons name="radio" size={18} color="#FFFFFF" />
+                  <Text style={styles.emptyBtnText}>Phát tín hiệu tìm xe ngay</Text>
+                </TouchableOpacity>
+              )}
             </View>
           }
         />

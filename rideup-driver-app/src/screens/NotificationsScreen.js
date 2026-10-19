@@ -135,10 +135,27 @@ const NotificationsScreen = ({ navigation }) => {
   );
 
   const handlePress = async (item) => {
-    // Chuyển hướng tới màn hình Dashboard để xử lý cuốc xe (Approve/Reject)
-    const titleLower = (item.title || '').toLowerCase();
-    if (titleLower.includes('đặt') || titleLower.includes('booking') || titleLower.includes('chờ duyệt') || titleLower.includes('mới')) {
-      navigation.navigate('Dashboard');
+    let metadata = {};
+    try {
+      metadata = typeof item.metadata === 'string' ? JSON.parse(item.metadata) : (item.metadata || {});
+    } catch (e) {
+      console.log('Error parsing notification metadata', e);
+    }
+
+    // Nếu thông báo liên quan đến Chợ Khách (Trip Request) -> Điều hướng thẳng sang Marketplace
+    const targetRequestId = metadata.tripRequestId || metadata.requestId || metadata.id;
+    if (targetRequestId || metadata.type === 'TRIP_REQUEST_CREATED') {
+      navigation.navigate('Marketplace', { 
+        targetRequestId: targetRequestId,
+        startProvinceId: metadata.startProvinceId,
+        endProvinceId: metadata.endProvinceId,
+      });
+    } else {
+      // Chuyển hướng tới màn hình Dashboard để xử lý cuốc xe (Approve/Reject)
+      const titleLower = (item.title || '').toLowerCase();
+      if (titleLower.includes('đặt') || titleLower.includes('booking') || titleLower.includes('chờ duyệt')) {
+        navigation.navigate('Dashboard');
+      }
     }
 
     if (item.isRead) return;

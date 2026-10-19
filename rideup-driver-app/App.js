@@ -81,11 +81,13 @@ function MainTabNavigator() {
 
 const STRIPE_PUBLISHABLE_KEY = "pk_test_51Tnh1VCbDzrK5kTtfmmaD9oTXwuIzcgGGwn65xwB9vdB3JVuNQ7FALsVkad3s11A11MWmSqDwiV0Apq6GSWoqeLu00KUtkUqZ5";
 
+import { navigationRef } from './src/services/navigationRef';
+
 export default function App() {
   return (
     <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
       <NotificationProvider>
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
           <StatusBar style="dark" />
           <Stack.Navigator 
             initialRouteName="Login"

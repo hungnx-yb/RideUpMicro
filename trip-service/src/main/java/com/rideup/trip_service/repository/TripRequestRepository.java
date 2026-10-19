@@ -12,6 +12,10 @@ import java.util.List;
 @Repository
 public interface TripRequestRepository extends JpaRepository<TripRequest, String>, TripRequestRepositoryCustom {
             
+    List<TripRequest> findByPassengerIdOrderByCreatedAtDesc(String passengerId);
+
+    List<TripRequest> findByPassengerIdAndStatusOrderByCreatedAtDesc(String passengerId, TripRequestStatus status);
+
     List<TripRequest> findByPassengerIdAndStatus(String passengerId, TripRequestStatus status);
 
     Page<TripRequest> findByStatusAndExpiresAtLessThanEqual(TripRequestStatus status, java.time.LocalDateTime time, Pageable pageable);

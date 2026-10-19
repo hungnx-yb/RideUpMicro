@@ -37,10 +37,19 @@ public class TripRequestController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<List<TripRequestResponse>> getMyTripRequests() {
+    public ApiResponse<List<TripRequestResponse>> getMyTripRequests(
+            @RequestParam(required = false) com.rideup.trip_service.enums.TripRequestStatus status) {
         return ApiResponse.<List<TripRequestResponse>>builder()
-                .result(tripRequestService.getMyTripRequests())
+                .result(tripRequestService.getMyTripRequests(status))
                 .message("Your trip requests retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<TripRequestResponse> getTripRequestById(@PathVariable String id) {
+        return ApiResponse.<TripRequestResponse>builder()
+                .result(tripRequestService.getTripRequestById(id))
+                .message("Trip request retrieved successfully")
                 .build();
     }
 

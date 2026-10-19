@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -32,6 +33,7 @@ public class TripRequestResponse {
     LocalDateTime cancelledAt;
     String cancelReason;
     Integer pendingInvitationCount;
+    List<TripRequestInvitationResponse> invitations;
 
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

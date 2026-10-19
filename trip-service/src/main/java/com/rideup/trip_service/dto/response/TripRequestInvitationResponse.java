@@ -4,6 +4,7 @@ import com.rideup.trip_service.enums.InvitationStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -24,4 +25,10 @@ public class TripRequestInvitationResponse {
     LocalDateTime respondedAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
+
+    String driverName;
+    String driverAvatar;
+    Double driverRating;
+    String vehicleInfo;
+    BigDecimal price;
 }

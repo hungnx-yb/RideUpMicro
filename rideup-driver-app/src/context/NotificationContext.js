@@ -2,6 +2,7 @@ import React, { createContext, useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { apiService } from '../services/apiService';
 import { notificationSocket } from '../services/notificationSocket';
+import { navigate } from '../services/navigationRef';
 
 export const NotificationContext = createContext();
 
@@ -53,7 +54,34 @@ export const NotificationProvider = ({ children }) => {
         // Cập nhật số đỏ ngay lập tức
         incrementUnreadCount();
         
-        if (newNoti?.title && newNoti?.message) {
+        let metadata = {};
+        try {
+          metadata = typeof newNoti?.metadata === 'string' ? JSON.parse(newNoti.metadata) : (newNoti?.metadata || {});
+        } catch (e) {}
+
+        const targetRequestId = metadata.tripRequestId || metadata.requestId || metadata.id;
+        if (targetRequestId || metadata.type === 'TRIP_REQUEST_CREATED') {
+          Alert.alert(
+            `🔔 ${newNoti.title || 'Có khách tìm xe mới!'}`,
+            newNoti.message || 'Có khách vừa đăng nhu cầu chuyến đi trên tuyến bạn chạy.',
+            [
+              { text: 'Để sau', style: 'cancel' },
+              {
+                text: 'Xem & Báo Giá',
+                onPress: () => {
+                  navigate('MainTabs', {
+                    screen: 'Marketplace',
+                    params: { 
+                      targetRequestId: targetRequestId,
+                      startProvinceId: metadata.startProvinceId,
+                      endProvinceId: metadata.endProvinceId,
+                    },
+                  });
+                },
+              },
+            ]
+          );
+        } else if (newNoti?.title && newNoti?.message) {
            Alert.alert(`🔔 ${newNoti.title}`, newNoti.message);
         } else if (newNoti?.content) {
            Alert.alert(`🔔 Thông báo`, newNoti.content);

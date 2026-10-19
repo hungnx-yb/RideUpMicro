@@ -4,6 +4,7 @@ import com.rideup.trip_service.dto.event.TripRequestCancelEvent;
 import com.rideup.trip_service.dto.request.MarketplaceTripRequestFilter;
 import com.rideup.trip_service.dto.request.TripRequestCreate;
 import com.rideup.trip_service.dto.request.TripRequestInvitationCreateDTO;
+import com.rideup.trip_service.dto.response.DriverResponse;
 import com.rideup.trip_service.dto.response.TripRequestInvitationResponse;
 import com.rideup.trip_service.dto.response.TripRequestResponse;
 import com.rideup.trip_service.dto.response.UserResponse;
@@ -34,8 +35,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -58,10 +64,17 @@ public class TripRequestService {
         if (request.getSeatTotal() == null || request.getSeatTotal() < 1 || request.getSeatTotal() > 10) {
             throw new AppException(ErrorCode.INVALID_SEAT_COUNT);
         }
-        java.time.LocalDateTime expiresAt = request.getDepartureTime().minusMinutes(60);
-        if (java.time.LocalDateTime.now().plusMinutes(60).isBefore(expiresAt)) {
-            expiresAt = java.time.LocalDateTime.now().plusMinutes(60);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime latestPossibleExpire = request.getDepartureTime().minusMinutes(15);
+        LocalDateTime maxOpenTime = now.plusHours(12);
+        if (maxOpenTime.isAfter(latestPossibleExpire)) {
+            maxOpenTime = latestPossibleExpire;
         }
+        LocalDateTime expiresAt = maxOpenTime;
+        if (expiresAt.isBefore(now.plusMinutes(15))) {
+            expiresAt = request.getDepartureTime().minusMinutes(5);
+        }
+
         String userId = SecurityUtils.getCurrentUserId();
         TripRequest tripRequest = TripRequest.builder()
                 .passengerId(userId)
@@ -79,25 +92,71 @@ public class TripRequestService {
                 .build();
 
         tripRequest = tripRequestRepository.save(tripRequest);
-        marketplaceEventProducer.publishTripRequestCreatedEvent(modelMapper.map(tripRequest, TripRequestCreatedEvent.class));
+
+        TripRequestCreatedEvent createdEvent = TripRequestCreatedEvent.builder()
+                .tripRequestId(tripRequest.getId())
+                .passengerId(tripRequest.getPassengerId())
+                .startProvinceId(tripRequest.getStartProvinceId())
+                .endProvinceId(tripRequest.getEndProvinceId())
+                .seatTotal(tripRequest.getSeatTotal())
+                .departureTime(tripRequest.getDepartureTime())
+                .build();
+        marketplaceEventProducer.publishTripRequestCreatedEvent(createdEvent);
         return modelMapper.map(tripRequest, TripRequestResponse.class);
     }
 
+    @Transactional(readOnly = true)
     public List<TripRequestResponse> getMyTripRequests() {
-        UserResponse user = identityServiceClient.getUserInfo().getResult();
-        return tripRequestRepository.findByPassengerIdAndStatus(user.getId(), TripRequestStatus.OPEN)
-                .stream()
-                .map(req -> mapToTripRequestResponse(req, user))
+        return getMyTripRequests(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TripRequestResponse> getMyTripRequests(TripRequestStatus status) {
+        String userId = SecurityUtils.getCurrentUserId();
+        List<TripRequest> requests = (status != null)
+                ? tripRequestRepository.findByPassengerIdAndStatusOrderByCreatedAtDesc(userId, status)
+                : tripRequestRepository.findByPassengerIdOrderByCreatedAtDesc(userId);
+
+        UserResponse user = null;
+        try {
+            user = identityServiceClient.getUserInfo().getResult();
+        } catch (Exception e) {
+            log.warn("Could not fetch user info from identity-service: {}", e.getMessage());
+        }
+
+        final UserResponse finalUser = user;
+        return requests.stream()
+                .map(req -> mapToTripRequestResponse(req, finalUser))
                 .toList();
+    }
+
+    public TripRequestResponse getTripRequestById(String id) {
+        TripRequest tripRequest = tripRequestRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.TRIP_REQUEST_NOT_FOUND));
+
+        UserResponse passenger = null;
+        try {
+            var usersResp = identityServiceClient.getUsersInfoByIds(List.of(tripRequest.getPassengerId()));
+            if (usersResp != null && usersResp.getResult() != null && !usersResp.getResult().isEmpty()) {
+                passenger = usersResp.getResult().get(0);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch passenger info for tripRequest {}", id, e);
+        }
+
+        TripRequestResponse response = mapToTripRequestResponse(tripRequest, passenger);
+        long pendingCount = invitationRepository.countByTripRequestIdAndStatus(tripRequest.getId(), InvitationStatus.PENDING);
+        response.setPendingInvitationCount((int) pendingCount);
+        return response;
     }
 
     @Transactional
     public void cancelTripRequest(String id) {
-        UserResponse user = identityServiceClient.getUserInfo().getResult();
+        String currentUserId = SecurityUtils.getCurrentUserId();
         TripRequest tripRequest = tripRequestRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_REQUEST_NOT_FOUND));
 
-        if (!tripRequest.getPassengerId().equals(user.getId())) {
+        if (!tripRequest.getPassengerId().equals(currentUserId)) {
             throw new AppException(ErrorCode.NOT_YOUR_REQUEST);
         }
 
@@ -117,12 +176,15 @@ public class TripRequestService {
                     .invitationId(inv.getId())
                     .tripRequestId(tripRequest.getId())
                     .driverId(inv.getDriverId())
-                    .passengerId(user.getId())
+                    .passengerId(tripRequest.getPassengerId())
                     .build());
         });
         invitationRepository.saveAll(pendingInvitations);
         
-        marketplaceEventProducer.publishTripRequestCancelledEvent(modelMapper.map(tripRequest, TripRequestCancelEvent.class));
+        marketplaceEventProducer.publishTripRequestCancelledEvent(TripRequestCancelEvent.builder()
+                .tripRequestId(tripRequest.getId())
+                .passengerId(tripRequest.getPassengerId())
+                .build());
     }
 
     @Transactional
@@ -145,7 +207,10 @@ public class TripRequestService {
                         .build());
             });
             invitationRepository.saveAll(pendingInvitations);
-            marketplaceEventProducer.publishTripRequestCancelledEvent(modelMapper.map(request, TripRequestCancelEvent.class));
+            marketplaceEventProducer.publishTripRequestCancelledEvent(TripRequestCancelEvent.builder()
+                    .tripRequestId(request.getId())
+                    .passengerId(passengerId)
+                    .build());
         }
     }
 
@@ -269,13 +334,6 @@ public class TripRequestService {
         TripRequest tripRequest = tripRequestRepository.findById(request.getTripRequestId())
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_REQUEST_NOT_FOUND));
 
-        if (tripRequest.getStatus() != TripRequestStatus.OPEN) {
-            throw new AppException(ErrorCode.REQUEST_NOT_OPEN);
-        }
-        
-        if (tripRequest.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
-            throw new AppException(ErrorCode.TRIP_REQUEST_EXPIRED);
-        }
 
         Trip trip = tripRepository.findById(request.getTripId())
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
@@ -283,11 +341,7 @@ public class TripRequestService {
         if (!trip.getDriverId().equals(driver.getId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
-        
-        if (trip.getStatus() != com.rideup.trip_service.enums.TripStatus.STARTED) {
-            throw new AppException(ErrorCode.TRIP_NOT_AVAILABLE);
-        }
-        
+
         if (trip.getSeatAvailable() < tripRequest.getSeatTotal()) {
             throw new AppException(ErrorCode.SEAT_NOT_AVAILABLE);
         }
@@ -328,11 +382,63 @@ public class TripRequestService {
         TripRequestResponse response = modelMapper.map(request, TripRequestResponse.class);
         if (passenger != null) {
             response.setPassenger(passenger);
-        } else {
-            // Can fetch passenger info from identity-service via Feign if needed for the marketplace view
-            // e.g. UserResponse p = identityServiceClient.getUserInfoById(request.getPassengerId()).getResult();
-            // response.setPassenger(p);
         }
+
+        if (request.getInvitations() != null && !request.getInvitations().isEmpty()) {
+            List<TripRequestInvitationResponse> invResponses = request.getInvitations().stream()
+                    .map(inv -> {
+                        TripRequestInvitationResponse invResp = modelMapper.map(inv, TripRequestInvitationResponse.class);
+                        invResp.setTripRequestId(request.getId());
+                        try {
+                            tripRepository.findById(inv.getTripId()).ifPresent(trip -> {
+                                if (trip.getPriceVnd() != null && request.getSeatTotal() != null) {
+                                    invResp.setPrice(trip.getPriceVnd().multiply(BigDecimal.valueOf(request.getSeatTotal())));
+                                } else if (trip.getPriceVnd() != null) {
+                                    invResp.setPrice(trip.getPriceVnd());
+                                }
+                            });
+                        } catch (Exception e) {
+                            log.warn("Failed to get trip price for invitation {}", inv.getId(), e);
+                        }
+                        return invResp;
+                    })
+                    .toList();
+
+            List<String> driverIds = invResponses.stream()
+                    .map(TripRequestInvitationResponse::getDriverId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+
+            if (!driverIds.isEmpty()) {
+                try {
+                    var driverResp = identityServiceClient.getDriverDetail(driverIds);
+                    if (driverResp != null && driverResp.getResult() != null) {
+                        Map<String, DriverResponse> driverMap = driverResp.getResult().stream()
+                                .collect(Collectors.toMap(DriverResponse::getUserId, d -> d, (d1, d2) -> d1));
+
+                        for (TripRequestInvitationResponse invResp : invResponses) {
+                            DriverResponse d = driverMap.get(invResp.getDriverId());
+                            if (d != null) {
+                                invResp.setDriver(d);
+                                invResp.setDriverName(d.getFullName());
+                                invResp.setDriverAvatar(d.getAvatarUrl());
+                                invResp.setDriverRating(d.getDriverRating());
+                                if (d.getVehicleBrand() != null) {
+                                    invResp.setVehicleInfo(d.getVehicleBrand() + (d.getVehicleModel() != null ? " " + d.getVehicleModel() : ""));
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to fetch driver details for invitations: {}", e.getMessage());
+                }
+            }
+            response.setInvitations(invResponses);
+        } else {
+            response.setInvitations(Collections.emptyList());
+        }
+
         return response;
     }
 }

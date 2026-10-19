@@ -184,7 +184,14 @@ public class NotificationConsumer {
                             title,
                             message,
                             NotificationType.SYSTEM,
-                            buildMetadata("tripRequestId", event.getTripRequestId(), "passengerId", event.getPassengerId())
+                            buildMetadata(
+                                    "tripRequestId", event.getTripRequestId(),
+                                    "requestId", event.getTripRequestId(),
+                                    "passengerId", event.getPassengerId(),
+                                    "startProvinceId", event.getStartProvinceId(),
+                                    "endProvinceId", event.getEndProvinceId(),
+                                    "type", "TRIP_REQUEST_CREATED"
+                            )
                     );
                 }
                 log.info("Sent notifications for tripRequestId {} to {} matching drivers", event.getTripRequestId(), matchingDrivers.size());
@@ -259,14 +266,15 @@ public class NotificationConsumer {
         ack.acknowledge();
     }
 
-	private String buildMetadata(String key1, String value1, String key2, String value2) {
+	private String buildMetadata(String... keyValues) {
 		try {
 			Map<String, String> metadata = new HashMap<>();
-			if (key1 != null && value1 != null) {
-				metadata.put(key1, value1);
-			}
-			if (key2 != null && value2 != null) {
-				metadata.put(key2, value2);
+			for (int i = 0; i < keyValues.length - 1; i += 2) {
+				String k = keyValues[i];
+				String v = keyValues[i + 1];
+				if (k != null && v != null) {
+					metadata.put(k, v);
+				}
 			}
 			return objectMapper.writeValueAsString(metadata);
 		} catch (Exception ex) {
