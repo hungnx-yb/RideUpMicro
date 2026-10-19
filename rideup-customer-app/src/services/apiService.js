@@ -34,7 +34,7 @@ apiClient.interceptors.request.use(
 export const apiService = {
   // Identity Service
   login: async (email, password) => {
-    return await apiClient.post('/api/identity/auth/authentication', { email, password });
+    return await apiClient.post('/api/identity/auth/authentication', { email, password, role: 'CUSTOMER' });
   },
   register: async (payload) => {
     return await apiClient.post('/api/identity/auth/register', payload);

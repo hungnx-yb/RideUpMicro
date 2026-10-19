@@ -49,8 +49,13 @@ const LoginScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.log(error);
-      const backendError = error.response?.data?.message || error.message || 'Không thể kết nối đến máy chủ.';
-      setErrorMsg(backendError);
+      const backendMsg = error.response?.data?.message || error.message || 'Không thể kết nối đến máy chủ.';
+      const backendCode = error.response?.data?.code;
+      if (backendCode === 1007) {
+        setErrorMsg('Tài khoản này không phải tài khoản tài xế. Vui lòng sử dụng app khách hàng.');
+      } else {
+        setErrorMsg(backendMsg);
+      }
     } finally {
       setLoading(false);
     }

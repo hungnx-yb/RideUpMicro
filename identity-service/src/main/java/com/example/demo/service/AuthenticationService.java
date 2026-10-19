@@ -98,6 +98,18 @@ public class AuthenticationService {
         boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPassword());
         if (!authenticated) throw new AppException(ErrorCode.PASSWORD_NOT_CORRECT);
 
+        // Validate role: ngăn tài xế login app customer và ngược lại
+        if (request.getRole() != null && !request.getRole().isEmpty()) {
+            try {
+                Role requiredRole = Role.valueOf(request.getRole().toUpperCase());
+                if (user.getRoles() == null || !user.getRoles().contains(requiredRole)) {
+                    throw new AppException(ErrorCode.UNAUTHORIZED);
+                }
+            } catch (IllegalArgumentException e) {
+                throw new AppException(ErrorCode.UNAUTHORIZED);
+            }
+        }
+
         var token = generateToken(user);
         redisTemplate.opsForValue().set(
                 RedisPrefixKeyConstant.TOKEN + token,
