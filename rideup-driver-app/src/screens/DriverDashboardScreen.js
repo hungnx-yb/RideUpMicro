@@ -127,6 +127,7 @@ export default function DriverDashboardScreen() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
+    try {
       // 1. Gọi song song thông tin người dùng, hồ sơ sinh trắc học và danh sách chuyến đi
       const [userRes, driverRes, res] = await Promise.all([
         apiService.getMyUserInfo().catch(() => null),
@@ -232,7 +233,7 @@ export default function DriverDashboardScreen() {
         'Bạn cần hoàn thành đăng ký khuôn mặt (eKYC) trước khi duyệt nhận khách.',
         [
           { text: 'Để sau', style: 'cancel' },
-          { text: 'Đăng ký ngay', onPress: () => setFaceModalVisible(true) }
+          { text: 'Đăng ký ngay', onPress: () => navigation.navigate('DriverOnboarding') }
         ]
       );
       return;
