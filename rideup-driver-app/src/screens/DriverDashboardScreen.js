@@ -37,6 +37,7 @@ export default function DriverDashboardScreen() {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [driverInfo, setDriverInfo] = useState(null);
+  const [driverProfile, setDriverProfile] = useState(null);
   const [resultModal, setResultModal] = useState(null); // { type: 'success'|'reject'|'error'|'debt', bookingId }
 
   useFocusEffect(
@@ -126,15 +127,28 @@ export default function DriverDashboardScreen() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
-    try {
-      // 1. Gọi song song thông tin tài xế và danh sách chuyến đi
-      const [userRes, res] = await Promise.all([
+      // 1. Gọi song song thông tin người dùng, hồ sơ sinh trắc học và danh sách chuyến đi
+      const [userRes, driverRes, res] = await Promise.all([
         apiService.getMyUserInfo().catch(() => null),
+        apiService.getMyDriverProfile().catch(() => null),
         apiService.getDriverTrips({ size: 100, page: 0 }).catch(() => null),
       ]);
-
       if (userRes?.data?.result) {
         setDriverInfo(userRes.data.result);
+      }
+      if (driverRes?.data?.result) {
+        const dProfile = driverRes.data.result;
+        setDriverProfile(dProfile);
+
+        // Bảo vệ route: Nếu chưa duyệt hoặc chưa eKYC thì không cho ở lại Dashboard
+        if (dProfile.status !== 'APPROVED' || !dProfile.isFaceEnrolled) {
+          navigation.reset({ index: 0, routes: [{ name: 'DriverOnboarding' }] });
+          return;
+        }
+      } else {
+        // Chưa có profile -> đá về Onboarding
+        navigation.reset({ index: 0, routes: [{ name: 'DriverOnboarding' }] });
+        return;
       }
 
       const rawTrips = res?.data?.result;
@@ -212,6 +226,18 @@ export default function DriverDashboardScreen() {
   }
 
   const handleApprove = async (bookingId) => {
+    if (!driverProfile?.isFaceEnrolled) {
+      Alert.alert(
+        'Yêu cầu đăng ký sinh trắc học',
+        'Bạn cần hoàn thành đăng ký khuôn mặt (eKYC) trước khi duyệt nhận khách.',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { text: 'Đăng ký ngay', onPress: () => setFaceModalVisible(true) }
+        ]
+      );
+      return;
+    }
+
     setActionLoading(true);
     try {
       await apiService.approveBooking(bookingId);
@@ -280,6 +306,7 @@ export default function DriverDashboardScreen() {
           </View>
           <Text style={styles.statusText}>Bạn đang trực tuyến và sẵn sàng nhận chuyến</Text>
         </View>
+
 
 
         {/* THẺ DOANH THU & HIỆU SUẤT TỔNG HỢP */}
@@ -611,6 +638,7 @@ export default function DriverDashboardScreen() {
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }

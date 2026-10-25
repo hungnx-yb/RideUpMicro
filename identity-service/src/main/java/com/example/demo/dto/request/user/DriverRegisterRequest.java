@@ -7,6 +7,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -21,9 +22,29 @@ public class DriverRegisterRequest {
     
     MultipartFile cccdImageBack;
     
+    MultipartFile portraitImage;
+    
     String gplx;
-    
+    LocalDate gplxIssueDate;
     LocalDate gplxExpiryDate;
+    String gplxIssuePlace;
     
-    MultipartFile gplxImage;
+    MultipartFile gplxImageFront;
+    MultipartFile gplxImageBack;
+
+    List<String> gplxClasses;
+
+    // Vehicle information
+    String plateNumber;
+    String vehicleBrand;
+    String vehicleModel;
+    String vehicleColor;
+    Integer vehicleYear;
+    Integer seatCapacity;
+    com.example.demo.enums.VehicleType vehicleType;
+    MultipartFile vehicleImage;
+    MultipartFile registrationImage;
+    MultipartFile registrationImageFront;
+    MultipartFile registrationImageBack;
+    MultipartFile insuranceImage;
 }

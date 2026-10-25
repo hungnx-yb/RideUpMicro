@@ -18,17 +18,24 @@ const SIZES = { base: 8, small: 12, medium: 16, large: 20, extraLarge: 28, title
 
 const RegisterScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({ name: '', password: '', email: '' });
+  const [formData, setFormData] = useState({ fullName: '', password: '', email: '' });
 
   const handleRegister = async () => {
-    if (!formData.name || !formData.password || !formData.email) {
+    const payload = {
+      fullName: formData.fullName.trim(),
+      email: formData.email.trim(),
+      password: formData.password,
+      role: 'CUSTOMER',
+    };
+
+    if (!payload.fullName || !payload.password || !payload.email) {
       alert('Vui lòng nhập đầy đủ Tên, Email và Mật khẩu!');
       return;
     }
     
     setLoading(true);
     try {
-      const response = await apiService.register(formData);
+      const response = await apiService.register(payload);
       if (response.data.code === 1000) {
         alert('Đăng ký thành công! Vui lòng kiểm tra email để xác thực.');
         navigation.goBack();
@@ -36,8 +43,8 @@ const RegisterScreen = ({ navigation }) => {
         alert(response.data.message || 'Đăng ký thất bại!');
       }
     } catch (error) {
-      console.log('Register error:', error);
-      alert('Đã xảy ra lỗi khi đăng ký. Vui lòng thử lại.');
+      console.log('Register error:', error?.response?.data || error?.message || error);
+      alert(error?.response?.data?.message || 'Đã xảy ra lỗi khi đăng ký. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -54,8 +61,8 @@ const RegisterScreen = ({ navigation }) => {
             <Text style={styles.label}>Họ và Tên *</Text>
             <TextInput
               style={styles.input}
-              value={formData.name}
-              onChangeText={(text) => setFormData({...formData, name: text})}
+              value={formData.fullName}
+              onChangeText={(text) => setFormData({...formData, fullName: text})}
               placeholder="VD: Nguyễn Văn A"
               placeholderTextColor={COLORS.textMuted}
             />

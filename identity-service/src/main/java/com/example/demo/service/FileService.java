@@ -57,6 +57,34 @@ public class FileService {
         return supabaseConfig.getPublicUrl(objectPath);
     }
 
+    public String downloadAsBase64(String objectPath) {
+        if (objectPath == null || objectPath.isBlank()) {
+            return null;
+        }
+        try {
+            String downloadUrl = objectPath.startsWith("http://") || objectPath.startsWith("https://")
+                    ? objectPath
+                    : getFileUrl(objectPath);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + supabaseConfig.getApiKey());
+            headers.set("apikey", supabaseConfig.getApiKey());
+
+            HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+            ResponseEntity<byte[]> response = restTemplate.exchange(
+                    downloadUrl, HttpMethod.GET, requestEntity, byte[].class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return java.util.Base64.getEncoder().encodeToString(response.getBody());
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to download image as base64 for path: {}, error: {}", objectPath, e.getMessage());
+            return null;
+        }
+    }
+
     public void delete(String objectPath) {
         try {
             String deleteUrl = supabaseConfig.getStorageApiUrl()

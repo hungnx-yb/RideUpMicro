@@ -43,7 +43,20 @@ const LoginScreen = ({ navigation }) => {
         // Mở kết nối Chat Socket ngay sau khi lưu token
         chatSocket.connect();
 
-        navigation.replace('MainTabs');
+        // Kiểm tra hồ sơ tài xế & trạng thái phê duyệt
+        try {
+          const profileRes = await apiService.getMyDriverProfile();
+          const driverData = profileRes?.data?.result;
+
+          if (driverData && driverData.status === 'APPROVED' && driverData.isFaceEnrolled) {
+            navigation.replace('MainTabs');
+          } else {
+            navigation.replace('DriverOnboarding');
+          }
+        } catch (profileErr) {
+          // Chưa có hồ sơ driver -> chuyển ngay vào màn hình Onboarding
+          navigation.replace('DriverOnboarding');
+        }
       } else {
         setErrorMsg(response.data.message || 'Sai thông tin đăng nhập');
       }

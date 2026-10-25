@@ -52,17 +52,43 @@ export const apiService = {
       },
     });
   },
+  registerDriver: async (formData) => {
+    return await apiClient.post('/api/identity/drivers/register', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   getMyDriverProfile: async () => {
     return await apiClient.get('/api/identity/drivers/me');
   },
   updateOperatingProvinces: async (operatingProvinceIds) => {
     return await apiClient.put('/api/identity/drivers/me/operating-provinces', { operatingProvinceIds });
   },
+  registerVehicle: async (formData) => {
+    return await apiClient.post('/api/identity/vehicles', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   getMyVehicle: async () => {
     return await apiClient.get('/api/identity/vehicles/me');
   },
   getMyWallet: async () => {
     return await apiClient.get('/api/identity/drivers/me/wallet');
+  },
+  enrollDriverFace: async (imageBase64, cccdImageBase64 = null) => {
+    return await apiClient.post('/api/identity/drivers/face/enroll', {
+      imageBase64,
+      cccdImageBase64,
+    });
+  },
+  verifyDriverFace: async (imageBase64) => {
+    return await apiClient.post('/api/identity/drivers/face/verify', { imageBase64 });
+  },
+  getDriverFaceStatus: async () => {
+    return await apiClient.get('/api/identity/drivers/face/status');
   },
 
   // Booking Service

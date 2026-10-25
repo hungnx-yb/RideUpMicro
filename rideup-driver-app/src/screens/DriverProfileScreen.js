@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { apiService } from '../services/apiService';
 import { BASE_URL } from '../config/api';
+import FaceVerificationModal from '../components/FaceVerificationModal';
 
 const COLORS = { 
   background: '#F8FAFC', surface: '#FFFFFF', primary: '#0ea5e9', 
@@ -98,6 +99,8 @@ export default function DriverProfileScreen({ navigation }) {
   const [datePickerDate, setDatePickerDate] = useState(new Date(2000, 0, 1));
   const [isVehicleModalVisible, setIsVehicleModalVisible] = useState(false);
   const [isDriverModalVisible, setIsDriverModalVisible] = useState(false);
+  const [isFaceModalVisible, setIsFaceModalVisible] = useState(false);
+  const [faceModalMode, setFaceModalMode] = useState('enroll');
   
   const [user, setUser] = useState({
     username: '', email: '', fullName: '',
@@ -274,7 +277,6 @@ export default function DriverProfileScreen({ navigation }) {
           <View style={styles.menuCard}>
             <MenuItem 
               icon="car-sport" title="Phương tiện của tôi" 
-              subtitle={vehicle ? `${vehicle.vehicleBrand} ${vehicle.vehicleModel} - ${vehicle.plateNumber}` : "Đang tải / Chưa đăng ký"}
               onPress={async () => {
                 try {
                   const res = await apiService.getMyVehicle();
@@ -305,6 +307,21 @@ export default function DriverProfileScreen({ navigation }) {
                 } catch (e) {
                   Alert.alert('Thông báo', 'Không thể lấy thông tin hồ sơ lúc này.');
                 }
+              }} 
+            />
+            <View style={styles.divider} />
+            <MenuItem 
+              icon="scan-circle" 
+              title="Xác thực khuôn mặt" 
+              subtitle={
+                driver?.isFaceEnrolled 
+                  ? "Đã kích hoạt"
+                  : "Chưa đăng ký • Cần chụp ảnh chân dung"
+              }
+              color={driver?.isFaceEnrolled ? COLORS.success : COLORS.warning}
+              onPress={() => {
+                setFaceModalMode('enroll');
+                setIsFaceModalVisible(true);
               }} 
             />
             <View style={styles.divider} />
@@ -572,6 +589,7 @@ export default function DriverProfileScreen({ navigation }) {
                     <Text style={styles.infoValue}>{vehicle.seatCapacity} chỗ</Text>
                   </View>
                   <View style={styles.divider} />
+              <View style={styles.divider} />
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Hạn đăng kiểm</Text>
                     <Text style={[styles.infoValue, { color: COLORS.primary }]}>{vehicle.registrationExpiryDate || 'Chưa cập nhật'}</Text>
@@ -581,6 +599,43 @@ export default function DriverProfileScreen({ navigation }) {
                     <Text style={styles.infoLabel}>Hạn bảo hiểm</Text>
                     <Text style={[styles.infoValue, { color: COLORS.primary }]}>{vehicle.insuranceExpiryDate || 'Chưa cập nhật'}</Text>
                   </View>
+
+              {/* Ảnh Giấy Đăng Ký Xe / Giấy tờ xe */}
+              {(vehicle.registrationImage || vehicle.insuranceImage || vehicle.registrationImageBack) && (
+                <View style={{ marginTop: 16, marginBottom: 12 }}>
+                  <Text style={[styles.infoLabel, { marginBottom: 10, fontSize: 14, fontWeight: 'bold', color: COLORS.text }]}>
+                    Giấy đăng ký xe
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    {vehicle.registrationImage && (
+                      <View style={{ flex: 1 }}>
+                        <Image
+                          source={{
+                            uri: vehicle.registrationImage.startsWith('http')
+                              ? vehicle.registrationImage
+                              : `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${vehicle.registrationImage}`
+                          }}
+                          style={styles.documentImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+                    {(vehicle.registrationImageBack || vehicle.insuranceImage) && (
+                      <View style={{ flex: 1 }}>
+                        <Image
+                          source={{
+                            uri: (vehicle.registrationImageBack || vehicle.insuranceImage).startsWith('http')
+                              ? (vehicle.registrationImageBack || vehicle.insuranceImage)
+                              : `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${vehicle.registrationImageBack || vehicle.insuranceImage}`
+                          }}
+                          style={styles.documentImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
             </ScrollView>
           ) : (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -657,19 +712,61 @@ export default function DriverProfileScreen({ navigation }) {
               </View>
               <View style={styles.divider} />
               <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Hạng bằng lái</Text>
+                <Text style={[styles.infoValue, { color: COLORS.primary }]}>
+                  {driver.gplxClasses && driver.gplxClasses.length > 0
+                    ? driver.gplxClasses.join(', ')
+                    : 'Chưa cập nhật'}
+                </Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Ngày cấp</Text>
+                <Text style={styles.infoValue}>{driver.gplxIssueDate || 'Chưa cập nhật'}</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Hạn bằng lái</Text>
-                <Text style={[styles.infoValue, { color: COLORS.primary }]}>{driver.gplxExpiryDate || 'Chưa cập nhật'}</Text>
+                <Text style={[styles.infoValue, { color: COLORS.primary }]}>{driver.gplxExpiryDate || 'Không thời hạn'}</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Nơi cấp</Text>
+                <Text style={styles.infoValue}>{driver.gplxIssuePlace || 'Chưa cập nhật'}</Text>
               </View>
 
               {/* Ảnh Bằng lái */}
-              {driver.gplxImage && (
+              {(driver.gplxImageFront || driver.gplxImageBack || driver.gplxImage) && (
                 <View style={{ marginTop: 16, marginBottom: 24 }}>
                   <Text style={[styles.infoLabel, { marginBottom: 8, fontSize: 13 }]}>Hình ảnh Bằng Lái Xe</Text>
-                  <Image 
-                    source={{ uri: `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${driver.gplxImage}` }} 
-                    style={[styles.documentImage, { height: 180 }]} 
-                    resizeMode="cover"
-                  />
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.infoLabel, { marginBottom: 6, fontSize: 12, color: COLORS.textMuted }]}>
+                        Mặt trước
+                      </Text>
+                      <Image
+                        source={{
+                          uri: `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${driver.gplxImageFront || driver.gplxImage}`
+                        }}
+                        style={styles.documentImage}
+                        resizeMode="cover"
+                      />
+                    </View>
+                    {driver.gplxImageBack && (
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.infoLabel, { marginBottom: 6, fontSize: 12, color: COLORS.textMuted }]}>
+                          Mặt sau (QR)
+                        </Text>
+                        <Image 
+                          source={{
+                            uri: `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${driver.gplxImageBack}`
+                          }}
+                          style={styles.documentImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+                  </View>
                 </View>
               )}
             </ScrollView>
@@ -687,6 +784,16 @@ export default function DriverProfileScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Modal Quét và Xác thực khuôn mặt AI */}
+      <FaceVerificationModal
+        visible={isFaceModalVisible}
+        mode={faceModalMode}
+        onClose={() => setIsFaceModalVisible(false)}
+        onSuccess={() => {
+          fetchProfileData();
+        }}
+      />
     </SafeAreaView>
   );
 }

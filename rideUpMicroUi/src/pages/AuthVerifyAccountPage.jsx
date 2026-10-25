@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
 import { getApiErrorMessage, verifyAccountApi } from "../services/authApi";
@@ -9,6 +9,7 @@ function AuthVerifyAccountPage() {
   const token = searchParams.get("token");
   const [status, setStatus] = useState("loading");
   const [message, setMessage] = useState("Đang xác thực tài khoản...");
+  const hasRequested = useRef(false);
 
   useEffect(() => {
     if (!token) {
@@ -16,6 +17,11 @@ function AuthVerifyAccountPage() {
       setMessage("Liên kết xác thực không hợp lệ.");
       return;
     }
+
+    if (hasRequested.current) {
+      return;
+    }
+    hasRequested.current = true;
 
     const verify = async () => {
       try {

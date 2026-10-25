@@ -76,6 +76,9 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<mainClass>com.DuongXaChungLoi.discovery_server.DiscoveryServerApplication</mainClass>
+				</configuration>
 			</plugin>
 
 			<plugin>
@@ -86,11 +89,6 @@
 					<source>17</source>
 					<target>17</target>
 				</configuration>
-			</plugin>
-
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
 		</plugins>
 	</build>

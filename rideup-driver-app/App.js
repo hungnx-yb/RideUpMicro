@@ -14,6 +14,7 @@ import CreateTripScreen from './src/screens/CreateTripScreen';
 import DriverTripsScreen from './src/screens/DriverTripsScreen';
 import DriverProfileScreen from './src/screens/DriverProfileScreen';
 import MarketplaceScreen from './src/screens/MarketplaceScreen';
+import DriverOnboardingScreen from './src/screens/DriverOnboardingScreen';
 import BookingChatScreen from './src/screens/BookingChatScreen';
 import WalletScreen from './src/screens/WalletScreen';
 
@@ -98,6 +99,7 @@ export default function App() {
           >
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="DriverOnboarding" component={DriverOnboardingScreen} />
             <Stack.Screen name="MainTabs" component={MainTabNavigator} />
             <Stack.Screen name="Chat" component={BookingChatScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />

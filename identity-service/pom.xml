@@ -109,6 +109,12 @@
 			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
 		</dependency>
 
+		<!-- OpenFeign for Service-to-Service REST communication -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
+
 		<!-- Actuator (Eureka health check) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

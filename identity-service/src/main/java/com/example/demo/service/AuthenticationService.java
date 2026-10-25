@@ -64,10 +64,21 @@ public class AuthenticationService {
 
     public UserResponse  registerAccount(AccountRegisterRequest request) throws Exception {
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
-        Role role = Role.valueOf(request.getRole().toUpperCase());
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new AppException(ErrorCode.EMAIL_EXISTED);
+        }
+
+        String requestedRole = request.getRole();
+        Role role = requestedRole == null || requestedRole.isBlank()
+                ? Role.CUSTOMER
+                : Role.valueOf(requestedRole.toUpperCase());
         User user = modelMapper.map(request, User.class);
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
+            user.setPhoneNumber(request.getPhoneNumber());
+        }
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRoles(new HashSet<>(Collections.singletonList(role)));
+        user.setVerified(false);
 
         userRepository.save(user);
 

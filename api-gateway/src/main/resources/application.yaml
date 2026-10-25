@@ -24,13 +24,6 @@ spring:
           uri: lb://identity-service
           predicates:
             - Path=/api/identity/**
-          filters:
-            - name: RequestRateLimiter
-              args:
-                key-resolver: "#{@userKeyResolver}"
-                redis-rate-limiter.replenishRate: 10
-                redis-rate-limiter.burstCapacity: 20
-                redis-rate-limiter.requestedTokens: 1
 
         - id: location-service
           uri: lb://location-service
@@ -117,12 +110,27 @@ spring:
                 redis-rate-limiter.burstCapacity: 20
                 redis-rate-limiter.requestedTokens: 1
 
+        - id: ai-service
+          uri: lb://ai-service
+          predicates:
+            - Path=/api/ai/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userKeyResolver}"
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+
       globalcors:
         cors-configurations:
           "[/**]":
-            allowedOrigins:
-              - "http://localhost:5173"
-              - "http://localhost:3000"
+            allowedOriginPatterns:
+              - "http://localhost:*"
+              - "http://127.0.0.1:*"
+              - "http://192.168.*:*"
+              - "http://10.*:*"
+              - "http://172.*:*"
             allowedMethods:
               - GET
               - POST
@@ -143,6 +151,8 @@ jwt:
   signerKey: S5eUx6DQSJ3ce3Dokj+qZmVlpj3hG7M841wX3NEj3oMcPwx6+oOA9AdHzbZE3Nb84
 
 eureka:
+  instance:
+    prefer-ip-address: true
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka

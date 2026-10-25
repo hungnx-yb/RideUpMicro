@@ -29,6 +29,12 @@ public enum ErrorCode {
     CANNOT_UPDATE_APPROVED_DRIVER(2006, "Cannot update approved driver profile. Please contact support.", HttpStatus.BAD_REQUEST),
     DRIVER_NOT_APPROVED(2007, "Your driver profile must be approved before registering a vehicle", HttpStatus.BAD_REQUEST),
     DRIVER_OPERATING_PROVINCES_EXCEED_LIMIT(2008, "You can only select up to 5 operating provinces", HttpStatus.BAD_REQUEST),
+    FACE_ALREADY_ENROLLED(2009, "Driver face is already registered", HttpStatus.BAD_REQUEST),
+    FACE_NOT_ENROLLED(2010, "Driver face is not enrolled yet. Please complete face registration.", HttpStatus.BAD_REQUEST),
+    FACE_VERIFICATION_FAILED(2011, "Face verification failed. Face does not match registered driver profile.", HttpStatus.BAD_REQUEST),
+    FACE_SPOOF_DETECTED(2012, "Spoofed or fake face detected. Please use live camera.", HttpStatus.BAD_REQUEST),
+    AI_SERVICE_ERROR(2013, "AI face verification service is unavailable or encountered an error.", HttpStatus.SERVICE_UNAVAILABLE),
+    FACE_NOT_MATCH_ID_CARD(2014, "Khuôn mặt quét eKYC không khớp với ảnh chân dung trên thẻ CCCD. Vui lòng quét khuôn mặt chính chủ.", HttpStatus.BAD_REQUEST),
     
     // Vehicle related errors
     VEHICLE_ALREADY_REGISTERED(3001, "You already have a vehicle registered", HttpStatus.BAD_REQUEST),
