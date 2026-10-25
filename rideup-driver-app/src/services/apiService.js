@@ -52,8 +52,22 @@ export const apiService = {
       },
     });
   },
+  registerDriver: async (formData) => {
+    return await apiClient.post('/api/identity/drivers/register', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   getMyDriverProfile: async () => {
     return await apiClient.get('/api/identity/drivers/me');
+  },
+  registerVehicle: async (formData) => {
+    return await apiClient.post('/api/identity/vehicles', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
   },
   getMyVehicle: async () => {
     return await apiClient.get('/api/identity/vehicles/me');
@@ -61,8 +75,11 @@ export const apiService = {
   getMyWallet: async () => {
     return await apiClient.get('/api/identity/drivers/me/wallet');
   },
-  enrollDriverFace: async (imageBase64) => {
-    return await apiClient.post('/api/identity/drivers/face/enroll', { imageBase64 });
+  enrollDriverFace: async (imageBase64, cccdImageBase64 = null) => {
+    return await apiClient.post('/api/identity/drivers/face/enroll', {
+      imageBase64,
+      cccdImageBase64,
+    });
   },
   verifyDriverFace: async (imageBase64) => {
     return await apiClient.post('/api/identity/drivers/face/verify', { imageBase64 });

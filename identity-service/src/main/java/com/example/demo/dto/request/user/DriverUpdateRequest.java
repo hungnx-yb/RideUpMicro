@@ -5,6 +5,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -16,6 +17,10 @@ public class DriverUpdateRequest {
     MultipartFile cccdImageFront;
     MultipartFile cccdImageBack;
     String gplx;
+    LocalDate gplxIssueDate;
     LocalDate gplxExpiryDate;
-    MultipartFile gplxImage;
+    String gplxIssuePlace;
+    MultipartFile gplxImageFront;
+    MultipartFile gplxImageBack;
+    List<String> gplxClasses;
 }

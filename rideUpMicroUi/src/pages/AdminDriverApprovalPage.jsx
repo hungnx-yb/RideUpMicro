@@ -18,6 +18,7 @@ import {
   FaTimes,
   FaTimesCircle,
   FaUser,
+  FaUserCheck,
   FaUserCircle,
   FaUserFriends,
   FaUserShield,
@@ -49,6 +50,8 @@ function AdminDriverApprovalPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [processedDriverCount, setProcessedDriverCount] = useState({ approved: 0, rejected: 0 });
   const [selectedDriver, setSelectedDriver] = useState(null);
+  const [rejectingDriver, setRejectingDriver] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const menuRef = useRef(null);
@@ -134,21 +137,40 @@ function AdminDriverApprovalPage() {
     }
   };
 
-  const handleRejectDriver = async (driver) => {
-    const reason = window.prompt("Nhập lý do từ chối hồ sơ tài xế", "Thiếu thông tin cần xác minh") || "";
+  const handleOpenRejectModal = (driver) => {
+    setRejectingDriver(driver);
+    setRejectionReason("Ảnh CCCD hoặc Giấy phép lái xe bị mờ, không đọc được thông tin.");
+  };
+
+  const handleCloseRejectModal = () => {
+    setRejectingDriver(null);
+    setRejectionReason("");
+  };
+
+  const handleConfirmRejectDriver = async () => {
+    if (!rejectingDriver) return;
+    const finalReason = rejectionReason.trim() || "Hồ sơ không đáp ứng tiêu chuẩn xét duyệt của hệ thống.";
 
     try {
-      setActionLoadingId(driver.id);
+      setActionLoadingId(rejectingDriver.id);
       setErrorMessage("");
-      await rejectDriverApi(driver.id, reason.trim());
+      await rejectDriverApi(rejectingDriver.id, finalReason);
       setProcessedDriverCount((previous) => ({ ...previous, rejected: previous.rejected + 1 }));
-      setSuccessMessage("Đã từ chối hồ sơ tài xế.");
+      setSuccessMessage("Đã từ chối hồ sơ tài xế thành công.");
+      handleCloseRejectModal();
+      if (selectedDriver?.id === rejectingDriver.id) {
+        closeQuickView();
+      }
       await loadDrivers();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Từ chối tài xế thất bại"));
     } finally {
       setActionLoadingId("");
     }
+  };
+
+  const handleRejectDriver = (driver) => {
+    handleOpenRejectModal(driver);
   };
 
   const openQuickView = (driver) => {
@@ -168,13 +190,11 @@ function AdminDriverApprovalPage() {
     closeQuickView();
   };
 
-  const handleRejectFromModal = async () => {
+  const handleRejectFromModal = () => {
     if (!selectedDriver) {
       return;
     }
-
-    await handleRejectDriver(selectedDriver);
-    closeQuickView();
+    handleOpenRejectModal(selectedDriver);
   };
 
   return (
@@ -384,18 +404,21 @@ function AdminDriverApprovalPage() {
                       </div>
                     </div>
 
-                    <div className="grid gap-1 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
-                      <p className="inline-flex items-center gap-2 text-sm text-slate-600">
+                    <div className="grid gap-1 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-sm text-slate-600 sm:grid-cols-2">
+                      <p className="inline-flex items-center gap-2">
                         <FaPhoneAlt className="text-xs text-orange-500" /> {phone}
                       </p>
-                      <p className="inline-flex items-center gap-2 text-sm text-slate-600">
+                      <p className="inline-flex items-center gap-2">
+                        <FaIdBadge className="text-xs text-orange-500" /> CCCD: {driver?.cccd || "-"}
+                      </p>
+                      <p className="inline-flex items-center gap-2">
+                        <FaIdBadge className="text-xs text-orange-500" /> GPLX: {driver?.gplx || "-"} {driver?.gplxClasses?.length ? `(${driver.gplxClasses.join(",")})` : ""}
+                      </p>
+                      <p className="inline-flex items-center gap-2">
+                        <FaTaxi className="text-xs text-orange-500" /> Xe: {driver?.plateNumber ? `${driver.plateNumber} (${driver?.vehicleBrand || ""})` : "Chưa đăng ký xe"}
+                      </p>
+                      <p className="inline-flex items-center gap-2 sm:col-span-2">
                         <FaCalendarAlt className="text-xs text-orange-500" /> Đăng ký: {createdAtText}
-                      </p>
-                      <p className="inline-flex items-center gap-2 text-sm text-slate-600">
-                        <FaEnvelope className="text-xs text-orange-500" /> {email}
-                      </p>
-                      <p className="inline-flex items-center gap-2 text-sm text-slate-600">
-                        <FaIdBadge className="text-xs text-orange-500" /> ID: {driver.id?.slice(0, 8) || "-"}
                       </p>
                     </div>
 
@@ -496,12 +519,68 @@ function AdminDriverApprovalPage() {
                       GPLX: {selectedDriver?.gplx || "Chưa cập nhật"}
                     </p>
                     <p className="flex items-center gap-2 text-slate-700">
+                      <FaIdBadge className="text-orange-500" />
+                      Hạng GPLX:{" "}
+                      {selectedDriver?.gplxClasses && selectedDriver.gplxClasses.length > 0 ? (
+                        <span className="font-semibold text-slate-900">
+                          {selectedDriver.gplxClasses.join(", ")}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">Chưa cập nhật</span>
+                      )}
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
                       <FaCalendarAlt className="text-orange-500" />
-                      Hết hạn GPLX: {selectedDriver?.gplxExpiryDate || "Chưa cập nhật"}
+                      Ngày cấp GPLX: {selectedDriver?.gplxIssueDate || "Chưa cập nhật"}
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaCalendarAlt className="text-orange-500" />
+                      Hết hạn GPLX: {selectedDriver?.gplxExpiryDate || "Không thời hạn"}
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaIdBadge className="text-orange-500" />
+                      Nơi cấp GPLX: {selectedDriver?.gplxIssuePlace || "Chưa cập nhật"}
                     </p>
                     <p className="flex items-center gap-2 text-slate-700">
                       <FaUserShield className="text-orange-500" />
                       Trạng thái: {selectedDriver?.status || "PENDING"}
+                    </p>
+                  </div>
+                </section>
+
+                {/* THÔNG TIN PHƯƠNG TIỆN */}
+                <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                  <h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-500">Thông tin phương tiện đăng ký</h4>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaTaxi className="text-orange-500" />
+                      Biển số xe:{" "}
+                      <span className="font-bold text-slate-900">
+                        {selectedDriver?.plateNumber || "Chưa cập nhật"}
+                      </span>
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaTaxi className="text-orange-500" />
+                      Hãng & Dòng xe:{" "}
+                      <span className="font-semibold text-slate-900">
+                        {selectedDriver?.vehicleBrand || "-"} {selectedDriver?.vehicleModel || ""}
+                      </span>
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaTaxi className="text-orange-500" />
+                      Màu xe: {selectedDriver?.vehicleColor || "Chưa cập nhật"}
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaTaxi className="text-orange-500" />
+                      Loại xe: {selectedDriver?.vehicleType || "CAR_4_SEAT"}
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaTaxi className="text-orange-500" />
+                      Số chỗ ngồi: {selectedDriver?.seatCapacity || 4} chỗ
+                    </p>
+                    <p className="flex items-center gap-2 text-slate-700">
+                      <FaCalendarAlt className="text-orange-500" />
+                      Năm sản xuất: {selectedDriver?.vehicleYear || "-"}
                     </p>
                   </div>
                 </section>
@@ -513,40 +592,65 @@ function AdminDriverApprovalPage() {
                       <FaUserShield className="text-orange-500" />
                       eKYC khuôn mặt:{" "}
                       {selectedDriver?.isFaceEnrolled ? (
-                        <span className="font-bold text-emerald-600">✓ Đã đăng ký</span>
+                        <span className="font-bold text-emerald-600">✓ Đã xác thực</span>
                       ) : (
-                        <span className="font-bold text-amber-600">Chưa đăng ký</span>
+                          <span className="font-bold text-amber-600">Chưa xác thực</span>
                       )}
                     </p>
                     <p className="flex items-center gap-2 text-slate-700">
-                      <FaClock className="text-orange-500" />
-                      Điểm danh gần nhất:{" "}
-                      {selectedDriver?.lastFaceVerifiedAt
-                        ? new Date(selectedDriver.lastFaceVerifiedAt).toLocaleString("vi-VN")
-                        : "Chưa có dữ liệu"}
+                      <FaUserCheck className="text-orange-500" />
+                      Độ khớp CCCD & Chân dung:{" "}
+                      {selectedDriver?.faceMatchScore != null ? (
+                        (() => {
+                          const rawScore = Number(selectedDriver.faceMatchScore);
+                          const percentage = rawScore > 1 ? rawScore : rawScore * 100;
+                          const isHigh = percentage >= 70;
+                          const isValid = percentage >= 55;
+                          return (
+                            <span
+                              className={`font-bold ${isHigh
+                                ? "text-emerald-600"
+                                : isValid
+                                  ? "text-amber-600"
+                                  : "text-rose-600"
+                                }`}
+                            >
+                              {percentage.toFixed(1)}%
+                              {isHigh ? " (Rất cao)" : isValid ? " (Hợp lệ)" : " (Thấp)"}
+                            </span>
+                          );
+                        })()
+                      ) : (
+                        <span className="font-medium text-slate-400">Chưa đối soát</span>
+                      )}
                     </p>
                   </div>
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 md:col-span-2">
-                  <h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-500">Ảnh giấy tờ</h4>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-500">Hình ảnh chứng từ & Phương tiện</h4>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
                     {[
+                      { label: "Ảnh chân dung", url: resolveImageUrl(selectedDriver?.portraitImage || selectedDriver?.avatarUrl) },
                       { label: "CCCD mặt trước", url: resolveImageUrl(selectedDriver?.cccdImageFront) },
                       { label: "CCCD mặt sau", url: resolveImageUrl(selectedDriver?.cccdImageBack) },
-                      { label: "GPLX", url: resolveImageUrl(selectedDriver?.gplxImage) },
+                      { label: "GPLX mặt trước", url: resolveImageUrl(selectedDriver?.gplxImageFront || selectedDriver?.gplxImage) },
+                      { label: "GPLX mặt sau", url: resolveImageUrl(selectedDriver?.gplxImageBack) },
+                      { label: "Đăng ký xe mặt trước", url: resolveImageUrl(selectedDriver?.registrationImage) },
+                      { label: "Đăng ký xe mặt sau", url: resolveImageUrl(selectedDriver?.insuranceImage || selectedDriver?.registrationImageBack) },
+                      { label: "Hình ảnh xe", url: resolveImageUrl(selectedDriver?.vehicleImage) },
                     ].map((doc) => (
-                      <div key={doc.label} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                      <div key={doc.label} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
                         {doc.url ? (
                           <a href={doc.url} target="_blank" rel="noreferrer" title={doc.label}>
-                            <img src={doc.url} alt={doc.label} className="h-36 w-full object-cover" loading="lazy" />
+                            <img src={doc.url} alt={doc.label} className="h-36 w-full object-cover transition hover:scale-105" loading="lazy" />
                           </a>
                         ) : (
                           <div className="flex h-36 items-center justify-center text-xs font-semibold text-slate-400">
                             Chưa có ảnh
                           </div>
                         )}
-                        <p className="px-3 py-2 text-center text-xs font-semibold text-slate-600">{doc.label}</p>
+                        <p className="px-3 py-2 text-center text-xs font-semibold text-slate-600 bg-white border-t border-slate-100">{doc.label}</p>
                       </div>
                     ))}
                   </div>
@@ -576,6 +680,95 @@ function AdminDriverApprovalPage() {
                   className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-red-600 disabled:opacity-60"
                 >
                   <FaTimesCircle /> Từ chối
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* MODAL TỪ CHỐI HỒ SƠ CHUYÊN NGHIỆP */}
+        {rejectingDriver ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn">
+            <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 transition-all">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-rose-100 bg-rose-50/70 px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500 text-white shadow-md shadow-rose-200">
+                    <FaExclamationTriangle size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Từ Chối Hồ Sơ Tài Xế</h3>
+                    <p className="text-xs font-medium text-slate-500">
+                      Tài xế: <span className="font-semibold text-rose-600">{getDriverName(rejectingDriver)}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseRejectModal}
+                  className="rounded-xl p-2 text-slate-400 hover:bg-white hover:text-slate-600 transition"
+                >
+                  <FaTimes size={16} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                  Gợi ý lý do phổ biến
+                </label>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {[
+                    "Ảnh chụp CCCD/GPLX bị mờ, lóa sáng",
+                    "Khuôn mặt chụp eKYC không trùng khớp CCCD",
+                    "Ảnh đăng ký xe không hợp lệ",
+                    "Thông tin xe và biển số không trùng khớp",
+                    "Giấy phép lái xe đã hết hạn",
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setRejectionReason(preset)}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition font-medium text-left ${rejectionReason === preset
+                        ? "bg-rose-50 border-rose-300 text-rose-700 font-semibold"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                        }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                <label htmlFor="reject-reason" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                  Lý do chi tiết gửi đến tài xế
+                </label>
+                <textarea
+                  id="reject-reason"
+                  rows={4}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Nhập lý do từ chối để tài xế biết và chụp lại hồ sơ..."
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 text-sm text-slate-800 focus:border-rose-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-rose-50 transition resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4">
+                <button
+                  type="button"
+                  disabled={actionLoadingId === rejectingDriver.id}
+                  onClick={handleCloseRejectModal}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoadingId === rejectingDriver.id || !rejectionReason.trim()}
+                  onClick={handleConfirmRejectDriver}
+                  className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:shadow-none transition disabled:opacity-60"
+                >
+                  {actionLoadingId === rejectingDriver.id ? "Đang xử lý..." : "Xác nhận"}
                 </button>
               </div>
             </div>

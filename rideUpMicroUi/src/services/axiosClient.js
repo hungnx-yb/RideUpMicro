@@ -1,6 +1,14 @@
 import axios from "axios";
 
-const gatewayUrl = import.meta.env.VITE_API_GATEWAY_URL || "http://localhost:8080";
+let rawGatewayUrl = import.meta.env.VITE_API_GATEWAY_URL || "http://localhost:8080";
+
+// Nếu client truy cập qua IP LAN (ví dụ trên điện thoại mở http://192.168.x.x:5173),
+// tự động thay thế localhost thành IP LAN đó để tránh lỗi kết nối tới localhost của điện thoại.
+if (typeof window !== "undefined" && window.location.hostname && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+  rawGatewayUrl = rawGatewayUrl.replace("localhost", window.location.hostname).replace("127.0.0.1", window.location.hostname);
+}
+
+const gatewayUrl = rawGatewayUrl;
 const identityPath = import.meta.env.VITE_IDENTITY_SERVICE_PATH || "/api/identity";
 const normalizedGatewayUrl = gatewayUrl.replace(/\/$/, "");
 const normalizedIdentityPath = identityPath.startsWith("/") ? identityPath : `/${identityPath}`;

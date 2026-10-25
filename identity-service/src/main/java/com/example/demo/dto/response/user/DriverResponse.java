@@ -6,6 +6,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -17,9 +18,14 @@ public class DriverResponse {
     String cccd;
     String cccdImageFront;
     String cccdImageBack;
+    String portraitImage;
     String gplx;
+    LocalDate gplxIssueDate;
     LocalDate gplxExpiryDate;
-    String gplxImage;
+    String gplxIssuePlace;
+    String gplxImageFront;
+    String gplxImageBack;
+    List<String> gplxClasses;
     Double driverRating;
     Integer totalDriverRides;
     DriverStatus status;
@@ -31,6 +37,7 @@ public class DriverResponse {
     LocalDateTime updatedAt;
     Boolean isFaceEnrolled;
     LocalDateTime lastFaceVerifiedAt;
+    Double faceMatchScore;
     
     // User info
     String userId;
@@ -39,11 +46,18 @@ public class DriverResponse {
     String phoneNumber;
     String avatarUrl;
 
-//    Vehicle infor
-    String vehicleImage;
+//    Vehicle info
+    String vehicleId;
+    String plateNumber;
     String vehicleBrand;
     String vehicleModel;
-    String vehicleId;
+    String vehicleColor;
+    Integer vehicleYear;
+    Integer seatCapacity;
+    String vehicleType;
+    String vehicleImage;
+    String registrationImage;
+    String insuranceImage;
 
 
     public DriverResponse(

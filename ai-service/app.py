@@ -482,7 +482,138 @@ async def compare_faces(req: CompareFacesRequest):
         )
 
 
+# ==============================================================================
+# 5. ENDPOINT OCR ĐỌC SỐ CĂN CƯỚC CÔNG DÂN TỪ ẢNH CHỤP
+# ==============================================================================
+class OcrIdCardRequest(BaseModel):
+    image_base64: str = Field(..., description="Ảnh thẻ CCCD định dạng Base64")
+
+
+class OcrIdCardResponse(BaseModel):
+    status: str
+    id_number: Optional[str] = None
+    full_name: Optional[str] = None
+    dob: Optional[str] = None
+    all_texts: List[str] = []
+    message: str
+
+
+ocr_reader = None
+
+
+def get_ocr_reader():
+    global ocr_reader
+    if ocr_reader is None:
+        try:
+            import easyocr
+
+            logger.info("Đang khởi tạo EasyOCR reader (Vietnamese & English)...")
+            ocr_reader = easyocr.Reader(["vi", "en"], gpu=torch.cuda.is_available())
+            logger.info("Khởi tạo EasyOCR thành công!")
+        except Exception as e:
+            logger.error(f"Lỗi khởi tạo EasyOCR: {e}")
+    return ocr_reader
+
+
+@app.post("/api/ai/ocr-id-card", response_model=OcrIdCardResponse)
+async def ocr_id_card(req: OcrIdCardRequest):
+    """
+    Trích xuất số Căn cước công dân (12 chữ số), họ tên và ngày sinh từ ảnh chụp thẻ CCCD.
+    """
+    try:
+        img_np = decode_base64_image(req.image_base64)
+        reader = get_ocr_reader()
+        if reader is None:
+            raise HTTPException(status_code=500, detail="Mô hình OCR chưa sẵn sàng")
+
+        # Chạy nhận diện chữ từ ảnh
+        results = reader.readtext(img_np)
+        extracted_texts = [res[1].strip() for res in results if res[1].strip()]
+        logger.info(f"Kết quả OCR nhận diện được {len(extracted_texts)} đoạn text: {extracted_texts}")
+
+        import re
+
+        found_id = None
+        found_name = None
+        found_dob = None
+
+        # 1. Tìm số CCCD (12 số)
+        for text in extracted_texts:
+            digits = re.sub(r"\D", "", text)
+            if len(digits) == 12:
+                found_id = digits
+                break
+
+        if not found_id:
+            combined_digits = re.sub(r"\D", "", " ".join(extracted_texts))
+            match = re.search(r"\d{12}", combined_digits)
+            if match:
+                found_id = match.group(0)
+
+        # 2. Tìm Họ và tên & Ngày sinh theo keyword
+        for i, text in enumerate(extracted_texts):
+            lower_txt = text.lower()
+            # Tìm ngày sinh DD/MM/YYYY
+            date_match = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", text)
+            if date_match and not found_dob:
+                found_dob = date_match.group(1)
+
+            # Tìm Họ và tên (dòng kế tiếp sau "Họ và tên" / "Full name" hoặc chữ in hoa dài)
+            if ("họ và tên" in lower_txt or "họ tên" in lower_txt or "full name" in lower_txt) and i + 1 < len(extracted_texts):
+                candidate_name = extracted_texts[i + 1].strip()
+                # Thường họ tên in hoa và không chứa số
+                if not re.search(r"\d", candidate_name) and len(candidate_name.split()) >= 2:
+                    found_name = candidate_name.upper()
+
+        # Nếu chưa tìm thấy họ tên bằng nhãn, tìm dòng chữ IN HOA không có số có từ 2-4 từ
+        if not found_name:
+            for text in extracted_texts:
+                clean_t = text.strip()
+                if (
+                    clean_t.isupper()
+                    and not re.search(r"\d", clean_t)
+                    and len(clean_t.split()) in (2, 3, 4, 5)
+                    and "CỘNG HÒA" not in clean_t
+                    and "VIỆT NAM" not in clean_t
+                    and "ĐỘC LẬP" not in clean_t
+                    and "CĂN CƯỚC" not in clean_t
+                    and "CÔNG DÂN" not in clean_t
+                ):
+                    found_name = clean_t
+                    break
+
+        if found_id or found_name:
+            return OcrIdCardResponse(
+                status="success",
+                id_number=found_id,
+                full_name=found_name,
+                dob=found_dob,
+                all_texts=extracted_texts,
+                message="Trích xuất thông tin CCCD thành công",
+            )
+        else:
+            return OcrIdCardResponse(
+                status="not_found",
+                id_number=None,
+                full_name=None,
+                dob=None,
+                all_texts=extracted_texts,
+                message="Không tìm thấy thông tin trên thẻ CCCD",
+            )
+    except Exception as e:
+        logger.error(f"Lỗi OCR đọc CCCD: {e}")
+        return OcrIdCardResponse(
+            status="error",
+            id_number=None,
+            full_name=None,
+            dob=None,
+            all_texts=[],
+            message=f"Lỗi xử lý OCR: {str(e)}",
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("app:app", host=HOST, port=PORT, reload=False)
+

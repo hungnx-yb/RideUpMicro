@@ -12,7 +12,10 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import java.net.URLEncoder;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
+import java.util.Enumeration;
 
 @Service
 @RequiredArgsConstructor
@@ -22,7 +25,7 @@ public class MailService {
     JavaMailSender mailSender;
 
     @NonFinal
-    @Value("${app.frontend-base-url:http://localhost:5173}")
+    @Value("${app.frontend-base-url:}")
     String frontendBaseUrl;
 
     public void sendVerificationEmail(String to, String token, String username) throws Exception {
@@ -39,12 +42,44 @@ public class MailService {
         mailSender.send(message);
     }
 
+    private String resolveBaseUrl() {
+        if (frontendBaseUrl != null && !frontendBaseUrl.isBlank() && !frontendBaseUrl.contains("localhost")) {
+            return frontendBaseUrl.endsWith("/")
+                    ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
+                    : frontendBaseUrl;
+        }
+
+        String lanIp = getLanIpAddress();
+        return "http://" + lanIp + ":5173";
+    }
+
+    private String getLanIpAddress() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (iface.isLoopback() || !iface.isUp()) {
+                    continue;
+                }
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    if (!addr.isLoopbackAddress() && addr.isSiteLocalAddress() && addr.getHostAddress().contains(".")) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (Exception e) {
+            log.warn("Could not determine local LAN IP, fallback to localhost: {}", e.getMessage());
+            return "localhost";
+        }
+    }
+
     private String buildVerificationUrl(String token) {
-        String normalizedBaseUrl = frontendBaseUrl.endsWith("/")
-                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
-                : frontendBaseUrl;
+        String baseUrl = resolveBaseUrl();
         String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
-        return normalizedBaseUrl + "/auth/verify?token=" + encodedToken;
+        return baseUrl + "/auth/verify?token=" + encodedToken;
     }
 
     public void sendOtpChangePasswordEmail(String email, String otp, String username) {

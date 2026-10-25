@@ -20,8 +20,8 @@ Tài liệu này hướng dẫn chi tiết các bước chuẩn bị môi trư�
 | **chat_service** | Spring Boot / WebSocket | `8087` | Nhắn tin thời gian thực giữa Tài xế & Khách |
 | **review-service** | Spring Boot / MySQL | `8089` | Đánh giá & Xếp hạng chuyến đi |
 | **rideUpMicroUi** | React / Vite / TailwindCSS | `5173` | Giao diện Web Quản trị Admin & Khách hàng |
-| **rideup-driver-app** | React Native / Expo | Metro (`8081`) | Ứng dụng Di động dành cho Tài xế (Android/iOS) |
-| **rideup-customer-app** | React Native / Expo | Metro (`8081`) | Ứng dụng Di động dành cho Khách hàng (Android/iOS) |
+| **rideup-driver-app** | React Native / Expo | Metro (`19002`) | Ứng dụng Di động dành cho Tài xế (Android/iOS) |
+| **rideup-customer-app** | React Native / Expo | Metro (`19001`) | Ứng dụng Di động dành cho Khách hàng (Android/iOS) |
 
 ---
 
@@ -130,9 +130,10 @@ Mở Terminal:
 ```powershell
 cd d:\do_an\RideUpMicro\rideup-driver-app
 npm install
-npx expo start
+npm start
 ```
 * Nhấn `a` để mở Android Emulator hoặc quét mã QR bằng ứng dụng **Expo Go** trên điện thoại.
+* *(Ghi chú: Lệnh `npm start` sẽ tự động chạy cổng `19002` để không bị đụng cổng `8081` của Identity Service).*
 
 ---
 
@@ -141,8 +142,9 @@ Mở Terminal:
 ```powershell
 cd d:\do_an\RideUpMicro\rideup-customer-app
 npm install
-npx expo start
+npm start
 ```
+* *(Ghi chú: Lệnh `npm start` sẽ tự động chạy cổng `19001` để không bị đụng cổng).*
 
 ---
 

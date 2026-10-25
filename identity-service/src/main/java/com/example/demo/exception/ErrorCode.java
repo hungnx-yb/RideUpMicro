@@ -33,6 +33,7 @@ public enum ErrorCode {
     FACE_VERIFICATION_FAILED(2010, "Face verification failed. Face does not match registered driver profile.", HttpStatus.BAD_REQUEST),
     FACE_SPOOF_DETECTED(2011, "Spoofed or fake face detected. Please use live camera.", HttpStatus.BAD_REQUEST),
     AI_SERVICE_ERROR(2012, "AI face verification service is unavailable or encountered an error.", HttpStatus.SERVICE_UNAVAILABLE),
+    FACE_NOT_MATCH_ID_CARD(2013, "Khuôn mặt quét eKYC không khớp với ảnh chân dung trên thẻ CCCD. Vui lòng quét khuôn mặt chính chủ.", HttpStatus.BAD_REQUEST),
     
     // Vehicle related errors
     VEHICLE_ALREADY_REGISTERED(3001, "You already have a vehicle registered", HttpStatus.BAD_REQUEST),

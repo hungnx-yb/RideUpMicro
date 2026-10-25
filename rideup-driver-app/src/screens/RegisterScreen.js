@@ -23,6 +23,7 @@ const SIZES = { font: 14, medium: 16 };
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,14 +31,24 @@ const RegisterScreen = ({ navigation }) => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
-      setErrorMsg('Vui lòng nhập đầy đủ Họ tên, Email và Mật khẩu.');
+    if (!name || !phoneNumber || !email || !password) {
+      setErrorMsg('Vui lòng nhập đầy đủ Họ tên, Số điện thoại, Email và Mật khẩu.');
+      return;
+    }
+    if (phoneNumber.trim().length < 9) {
+      setErrorMsg('Số điện thoại không hợp lệ.');
       return;
     }
     setErrorMsg('');
     setLoading(true);
     try {
-      const response = await apiService.register({ name, email, password });
+      const response = await apiService.register({
+        fullName: name.trim(),
+        phoneNumber: phoneNumber.trim(),
+        email: email.trim(),
+        password,
+        role: 'DRIVER'
+      });
       if (response.data.code === 1000) {
         Alert.alert('Thành công!', 'Đăng ký thành công! Vui lòng kiểm tra email để xác thực.', [
           { text: 'Đăng nhập ngay', onPress: () => navigation.goBack() }
@@ -74,6 +85,18 @@ const RegisterScreen = ({ navigation }) => {
               placeholderTextColor={COLORS.textMuted}
               value={name}
               onChangeText={setName}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Số điện thoại</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0912345678"
+              placeholderTextColor={COLORS.textMuted}
+              value={phoneNumber}
+              onChangeText={(text) => setPhoneNumber(text.replace(/[^0-9]/g, ''))}
+              keyboardType="phone-pad"
             />
           </View>
 

@@ -26,9 +26,16 @@ public class DriverProfile {
     String cccd;
     String cccdImageFront;
     String cccdImageBack;
+    String portraitImage;
     String gplx;
+    LocalDate gplxIssueDate;
     LocalDate gplxExpiryDate;
-    String gplxImage;
+    String gplxIssuePlace;
+    String gplxImageFront;
+    String gplxImageBack;
+
+    @Column(name = "gplx_class")
+    String gplxClasses;
     Double driverRating;
     Integer totalDriverRides;
     @Enumerated(EnumType.STRING)
@@ -61,6 +68,9 @@ public class DriverProfile {
     @Column(name = "last_face_verified_at")
     LocalDateTime lastFaceVerifiedAt;
 
+    @Column(name = "face_match_score")
+    Double faceMatchScore;
+
     // User liên kết (1-1)
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
@@ -70,5 +80,19 @@ public class DriverProfile {
     @OneToOne(mappedBy = "driver", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     Vehicle vehicle;
 
+    public LocalDate getGplxIssueDate() {
+        return gplxIssueDate;
+    }
 
+    public void setGplxIssueDate(LocalDate gplxIssueDate) {
+        this.gplxIssueDate = gplxIssueDate;
+    }
+
+    public String getGplxIssuePlace() {
+        return gplxIssuePlace;
+    }
+
+    public void setGplxIssuePlace(String gplxIssuePlace) {
+        this.gplxIssuePlace = gplxIssuePlace;
+    }
 }

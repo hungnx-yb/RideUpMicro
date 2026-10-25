@@ -6,6 +6,7 @@ import com.example.demo.dto.response.user.DriverResponse;
 import com.example.demo.dto.response.user.DriverStatusResponse;
 import com.example.demo.entity.DriverProfile;
 import com.example.demo.entity.User;
+import com.example.demo.entity.Vehicle;
 import com.example.demo.enums.DriverStatus;
 import com.example.demo.enums.Role;
 import com.example.demo.exception.AppException;
@@ -30,9 +31,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -42,6 +45,7 @@ import java.util.List;
 public class DriverService {
     DriverProfileRepository driverProfileRepository;
     UserRepository userRepository;
+    com.example.demo.repository.VehicleRepository vehicleRepository;
     UserService userService;
     ModelMapper modelMapper;
     FileService fileService;
@@ -51,41 +55,103 @@ public class DriverService {
     @Transactional
     public DriverResponse registerDriver(DriverRegisterRequest request) {
         User currentUser = userService.getCurrentUser();
-        if (driverProfileRepository.existsByUser(currentUser)) {
-            throw new AppException(ErrorCode.DRIVER_ALREADY_REGISTERED);
+        DriverProfile existingProfile = driverProfileRepository.findByUser(currentUser).orElse(null);
+        if (existingProfile != null && existingProfile.getCccd() != null && !existingProfile.getCccd().isBlank()) {
+            if (existingProfile.getStatus() != DriverStatus.REJECTED) {
+                throw new AppException(ErrorCode.DRIVER_ALREADY_REGISTERED);
+            }
         }
         
-        if (driverProfileRepository.existsByCccd(request.getCccd())) {
-            throw new AppException(ErrorCode.CCCD_ALREADY_USED);
+        if (existingProfile == null || !request.getCccd().equals(existingProfile.getCccd())) {
+            if (driverProfileRepository.existsByCccd(request.getCccd())) {
+                throw new AppException(ErrorCode.CCCD_ALREADY_USED);
+            }
         }
         
-        if (driverProfileRepository.existsByGplx(request.getGplx())) {
-            throw new AppException(ErrorCode.GPLX_ALREADY_USED);
+        if (existingProfile == null || !request.getGplx().equals(existingProfile.getGplx())) {
+            if (driverProfileRepository.existsByGplx(request.getGplx())) {
+                throw new AppException(ErrorCode.GPLX_ALREADY_USED);
+            }
         }
         
-        if (request.getGplxExpiryDate().isBefore(LocalDate.now())) {
+        if (request.getGplxExpiryDate() != null && request.getGplxExpiryDate().isBefore(LocalDate.now())) {
             throw new AppException(ErrorCode.GPLX_EXPIRED);
         }
         String cccdImageFrontUrl = fileService.upload(request.getCccdImageFront(), "drivers/documents");
         String cccdImageBackUrl = fileService.upload(request.getCccdImageBack(), "drivers/documents");
-        String gplxImageUrl = fileService.upload(request.getGplxImage(), "drivers/documents");
-        DriverProfile driverProfile = DriverProfile.builder()
+        String portraitImageUrl = request.getPortraitImage() != null 
+                ? fileService.upload(request.getPortraitImage(), "drivers/documents") 
+                : null;
+        String gplxImageFrontUrl = request.getGplxImageFront() != null 
+                ? fileService.upload(request.getGplxImageFront(), "drivers/documents")
+                : null;
+        String gplxImageBackUrl = request.getGplxImageBack() != null 
+                ? fileService.upload(request.getGplxImageBack(), "drivers/documents")
+                : null;
+
+        DriverProfile driverProfile = existingProfile != null ? existingProfile : DriverProfile.builder()
                 .user(currentUser)
-                .cccd(request.getCccd())
-                .cccdImageFront(cccdImageFrontUrl)
-                .cccdImageBack(cccdImageBackUrl)
-                .gplx(request.getGplx())
-                .gplxExpiryDate(request.getGplxExpiryDate())
-                .gplxImage(gplxImageUrl)
-                .status(DriverStatus.PENDING)
                 .driverRating(5.0)
                 .totalDriverRides(0)
                 .build();
+
+        driverProfile.setCccd(request.getCccd());
+        driverProfile.setCccdImageFront(cccdImageFrontUrl);
+        driverProfile.setCccdImageBack(cccdImageBackUrl);
+        if (portraitImageUrl != null) {
+            driverProfile.setPortraitImage(portraitImageUrl);
+            if (currentUser.getAvatarUrl() == null || currentUser.getAvatarUrl().isBlank()) {
+                currentUser.setAvatarUrl(portraitImageUrl);
+            }
+        }
+        driverProfile.setGplx(request.getGplx());
+        driverProfile.setGplxIssueDate(request.getGplxIssueDate());
+        driverProfile.setGplxExpiryDate(request.getGplxExpiryDate());
+        driverProfile.setGplxIssuePlace(request.getGplxIssuePlace());
+        driverProfile.setGplxImageFront(gplxImageFrontUrl);
+        driverProfile.setGplxImageBack(gplxImageBackUrl);
+        if (request.getGplxClasses() != null && !request.getGplxClasses().isEmpty()) {
+            driverProfile.setGplxClasses(String.join(", ", request.getGplxClasses()));
+        }
+        driverProfile.setStatus(DriverStatus.PENDING);
+        driverProfile.setRejectedAt(null);
+        driverProfile.setRejectionReason(null);
+        driverProfile.setApprovedAt(null);
+        driverProfile.setApprovedBy(null);
         
         driverProfile = driverProfileRepository.save(driverProfile);
         currentUser.getRoles().add(Role.DRIVER);
         userRepository.save(currentUser);
-        return modelMapper.map(driverProfile, DriverResponse.class);
+
+        // Lưu thông tin xe của tài xế nếu có gửi lên cùng
+        if (request.getPlateNumber() != null && !request.getPlateNumber().isBlank()) {
+            String vehImg = request.getVehicleImage() != null ? fileService.upload(request.getVehicleImage(), "vehicles/images") : gplxImageFrontUrl;
+            
+            MultipartFile regFrontFile = request.getRegistrationImageFront() != null ? request.getRegistrationImageFront() : request.getRegistrationImage();
+            String regImg = regFrontFile != null ? fileService.upload(regFrontFile, "vehicles/documents") : gplxImageFrontUrl;
+            
+            MultipartFile regBackFile = request.getRegistrationImageBack() != null ? request.getRegistrationImageBack() : request.getInsuranceImage();
+            String insImg = regBackFile != null ? fileService.upload(regBackFile, "vehicles/documents") : null;
+            Vehicle vehicle = driverProfile.getVehicle() != null ? driverProfile.getVehicle() : new Vehicle();
+            vehicle.setDriver(driverProfile);
+            vehicle.setPlateNumber(request.getPlateNumber());
+            vehicle.setVehicleBrand(request.getVehicleBrand());
+            vehicle.setVehicleModel(request.getVehicleModel());
+            vehicle.setVehicleColor(request.getVehicleColor());
+            vehicle.setVehicleYear(request.getVehicleYear() != null ? request.getVehicleYear() : 2022);
+            vehicle.setSeatCapacity(request.getSeatCapacity() != null ? request.getSeatCapacity() : 2);
+            vehicle.setVehicleType(request.getVehicleType() != null ? request.getVehicleType() : com.example.demo.enums.VehicleType.CAR_4_SEAT);
+            vehicle.setVehicleImage(vehImg);
+            vehicle.setRegistrationImage(regImg);
+            vehicle.setInsuranceImage(insImg);
+            vehicle.setIsVerified(false);
+            vehicle.setRejectedAt(null);
+            vehicle.setRejectionReason(null);
+            vehicleRepository.save(vehicle);
+            driverProfile.setVehicle(vehicle);
+        }
+
+        return mapToDriverResponse(driverProfile);
     }
 
     public DriverResponse getMyDriverProfile() {
@@ -122,6 +188,12 @@ public class DriverService {
             }
             driverProfile.setGplx(request.getGplx());
         }
+        if (request.getGplxIssueDate() != null) {
+            driverProfile.setGplxIssueDate(request.getGplxIssueDate());
+        }
+        if (request.getGplxIssuePlace() != null) {
+            driverProfile.setGplxIssuePlace(request.getGplxIssuePlace());
+        }
         if (request.getGplxExpiryDate() != null) {
             if (request.getGplxExpiryDate().isBefore(LocalDate.now())) {
                 throw new AppException(ErrorCode.GPLX_EXPIRED);
@@ -129,8 +201,15 @@ public class DriverService {
             driverProfile.setGplxExpiryDate(request.getGplxExpiryDate());
         }
         
-        if (request.getGplxImage() != null) {
-            driverProfile.setGplxImage(fileService.upload(request.getGplxImage(), "drivers/documents"));
+        if (request.getGplxImageFront() != null) {
+            driverProfile.setGplxImageFront(fileService.upload(request.getGplxImageFront(), "drivers/documents"));
+        }
+        if (request.getGplxImageBack() != null) {
+            driverProfile.setGplxImageBack(fileService.upload(request.getGplxImageBack(), "drivers/documents"));
+        }
+        
+        if (request.getGplxClasses() != null) {
+            driverProfile.setGplxClasses(String.join(", ", request.getGplxClasses()));
         }
         
         if (driverProfile.getStatus() == DriverStatus.REJECTED) {
@@ -189,9 +268,8 @@ public class DriverService {
         driverProfile.setStatus(DriverStatus.APPROVED);
         driverProfile.setApprovedAt(LocalDateTime.now());
         driverProfile.setApprovedBy(approver.getEmail());
-        driverProfile.setUser(approver);
         driverProfile = driverProfileRepository.save(driverProfile);
-        return modelMapper.map(driverProfile, DriverResponse.class);
+        return mapToDriverResponse(driverProfile);
     }
 
     @Transactional
@@ -226,6 +304,26 @@ public class DriverService {
             response.setAvatarUrl(driverProfile.getUser().getAvatarUrl());
         }
 
+        if (driverProfile.getVehicle() != null) {
+            Vehicle vehicle = driverProfile.getVehicle();
+            response.setVehicleId(vehicle.getId());
+            response.setPlateNumber(vehicle.getPlateNumber());
+            response.setVehicleBrand(vehicle.getVehicleBrand());
+            response.setVehicleModel(vehicle.getVehicleModel());
+            response.setVehicleColor(vehicle.getVehicleColor());
+            response.setVehicleYear(vehicle.getVehicleYear());
+            response.setSeatCapacity(vehicle.getSeatCapacity());
+            response.setVehicleType(vehicle.getVehicleType() != null ? vehicle.getVehicleType().name() : null);
+            response.setVehicleImage(vehicle.getVehicleImage());
+            response.setRegistrationImage(vehicle.getRegistrationImage());
+            response.setInsuranceImage(vehicle.getInsuranceImage());
+        }
+
+        if (driverProfile.getGplxClasses() != null && !driverProfile.getGplxClasses().isBlank()) {
+            String[] parts = driverProfile.getGplxClasses().split("[,\\s]+");
+            response.setGplxClasses(java.util.Arrays.stream(parts).filter(s -> !s.isBlank()).toList());
+        }
+
         return response;
     }
 
@@ -254,7 +352,17 @@ public class DriverService {
     public DriverResponse enrollFace(DriverFaceEnrollRequest request) {
         User currentUser = userService.getCurrentUser();
         DriverProfile driverProfile = driverProfileRepository.findByUser(currentUser)
-                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+                .orElseGet(() -> {
+                    // Nếu tài xế quét eKYC ở Bước 1 trước khi gửi form thông tin -> tự động tạo hồ sơ nháp
+                    DriverProfile draft = DriverProfile.builder()
+                            .user(currentUser)
+                            .status(DriverStatus.PENDING)
+                            .driverRating(5.0)
+                            .totalDriverRides(0)
+                            .isFaceEnrolled(false)
+                            .build();
+                    return driverProfileRepository.save(draft);
+                });
 
         AiExtractEmbeddingResponse aiResponse;
         try {
@@ -277,6 +385,43 @@ public class DriverService {
 
         if (aiResponse.getEmbedding() == null || aiResponse.getEmbedding().isEmpty()) {
             throw new AppException(ErrorCode.FACE_VERIFICATION_FAILED);
+        }
+
+        // So sánh khuôn mặt quét eKYC với ảnh chân dung trên thẻ CCCD
+        String cccdBase64 = null;
+        if (request.getCccdImageBase64() != null && !request.getCccdImageBase64().isBlank()) {
+            cccdBase64 = request.getCccdImageBase64();
+        } else if (driverProfile.getCccdImageFront() != null && !driverProfile.getCccdImageFront().isBlank()) {
+            try {
+                cccdBase64 = fileService.downloadAsBase64(driverProfile.getCccdImageFront());
+            } catch (Exception e) {
+                log.warn("Lỗi khi tải ảnh CCCD từ Cloud: {}", e.getMessage());
+            }
+        }
+
+        if (cccdBase64 != null && !cccdBase64.isBlank()) {
+            try {
+                AiCompareFacesResponse compareRes = aiServiceClient.compareFaces(AiCompareFacesRequest.builder()
+                        .image1Base64(cccdBase64)
+                        .image2Base64(request.getImageBase64())
+                        .threshold(0.55)
+                        .checkLiveness(false)
+                        .build());
+
+                if (compareRes != null && Boolean.FALSE.equals(compareRes.getIsMatched())) {
+                    log.warn("Khuôn mặt quét eKYC không trùng khớp với ảnh CCCD. Similarity: {}", compareRes.getSimilarity());
+                    throw new AppException(ErrorCode.FACE_NOT_MATCH_ID_CARD);
+                }
+
+                if (compareRes != null && compareRes.getSimilarity() != null) {
+                    driverProfile.setFaceMatchScore(compareRes.getSimilarity());
+                }
+            } catch (AppException ae) {
+                throw ae;
+            } catch (Exception e) {
+                log.error("Lỗi khi gọi AI so khớp ảnh chân dung CCCD và selfie: {}", e.getMessage());
+                throw new AppException(ErrorCode.AI_SERVICE_ERROR);
+            }
         }
 
         try {

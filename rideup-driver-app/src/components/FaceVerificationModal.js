@@ -33,7 +33,8 @@ const COLORS = {
 export default function FaceVerificationModal({
   visible,
   onClose,
-  mode = 'verify', // 'enroll' (Đăng ký eKYC) hoặc 'verify' (Điểm danh / Bật Online)
+  mode = 'enroll', // 'enroll' (Chụp chân dung eKYC) hoặc 'verify' (Xác minh khuôn mặt)
+  cccdBase64 = null,
   onSuccess,
 }) {
   const [capturedImage, setCapturedImage] = useState(null); // { uri, base64 }
@@ -41,7 +42,7 @@ export default function FaceVerificationModal({
   const [verificationResult, setVerificationResult] = useState(null);
 
   const isEnrollMode = mode === 'enroll';
-  const modalTitle = isEnrollMode ? 'Đăng ký khuôn mặt (eKYC)' : 'Xác minh điểm danh tài xế';
+  const modalTitle = isEnrollMode ? 'Chụp ảnh chân dung' : 'Xác minh khuôn mặt';
 
   const resetState = () => {
     setCapturedImage(null);
@@ -84,34 +85,7 @@ export default function FaceVerificationModal({
     }
   };
 
-  const pickImageFromGallery = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Cấp quyền thư viện', 'Ứng dụng cần quyền chọn ảnh từ thư viện.');
-        return;
-      }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setCapturedImage({
-          uri: asset.uri,
-          base64: asset.base64,
-        });
-        setVerificationResult(null);
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Lỗi', 'Không thể mở thư viện ảnh.');
-    }
-  };
 
   const submitFaceVerification = async () => {
     if (!capturedImage || !capturedImage.base64) {
@@ -125,7 +99,7 @@ export default function FaceVerificationModal({
     try {
       let res;
       if (isEnrollMode) {
-        res = await apiService.enrollDriverFace(capturedImage.base64);
+        res = await apiService.enrollDriverFace(capturedImage.base64, cccdBase64);
       } else {
         res = await apiService.verifyDriverFace(capturedImage.base64);
       }
@@ -133,10 +107,14 @@ export default function FaceVerificationModal({
       const resultData = res?.data?.result;
 
       if (isEnrollMode) {
+        const similarityPercent = resultData?.faceMatchScore ? Math.round(resultData.faceMatchScore * 100) : null;
         setVerificationResult({
           success: true,
           title: 'Đăng ký thành công',
-          message: 'Khuôn mặt đã được quét và mã hóa an toàn vào hệ thống eKYC.',
+          similarity: similarityPercent,
+          message: similarityPercent 
+            ? `Độ trùng khớp với CCCD: ${similarityPercent}%. Khuôn mặt đã được xác thực an toàn.`
+            : 'Khuôn mặt đã được quét và mã hóa an toàn vào hệ thống eKYC.',
         });
       } else {
         setVerificationResult({
@@ -149,7 +127,7 @@ export default function FaceVerificationModal({
       }
 
       if (onSuccess) {
-        onSuccess(resultData);
+        onSuccess(resultData, capturedImage);
       }
     } catch (error) {
       console.error('Face verification error:', error?.response?.data || error.message);
@@ -174,22 +152,7 @@ export default function FaceVerificationModal({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={[styles.modeBadge, isEnrollMode ? styles.enrollBadge : styles.verifyBadge]}>
-                <Ionicons
-                  name={isEnrollMode ? 'shield-checkmark' : 'scan'}
-                  size={16}
-                  color={isEnrollMode ? COLORS.success : COLORS.primary}
-                />
-                <Text
-                  style={[
-                    styles.modeBadgeText,
-                    { color: isEnrollMode ? COLORS.success : COLORS.primary },
-                  ]}
-                >
-                  {isEnrollMode ? 'eKYC AI' : 'Điểm danh 1:1'}
-                </Text>
-              </View>
-              <Text style={styles.modalTitle}>{modalTitle}</Text>
+              <Text style={styles.modalTitle}>Chụp ảnh chân dung</Text>
             </View>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={22} color={COLORS.textMuted} />
@@ -212,7 +175,6 @@ export default function FaceVerificationModal({
                   <View style={[styles.corner, styles.cornerBR]} />
                 </View>
 
-                <Text style={styles.instructionsTitle}>Hướng dẫn quét khuôn mặt:</Text>
                 <View style={styles.tipsList}>
                   <View style={styles.tipRow}>
                     <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
@@ -222,21 +184,12 @@ export default function FaceVerificationModal({
                     <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
                     <Text style={styles.tipText}>Không đeo kính râm, khẩu trang hoặc mũ trùm.</Text>
                   </View>
-                  <View style={styles.tipRow}>
-                    <Ionicons name="shield-outline" size={16} color={COLORS.warning} />
-                    <Text style={styles.tipText}>Hệ thống AI sẽ tự động chống ảnh in hoặc ảnh màn hình.</Text>
-                  </View>
                 </View>
 
                 <View style={styles.captureActions}>
                   <TouchableOpacity style={styles.primaryCaptureBtn} onPress={takePhotoWithCamera}>
                     <Ionicons name="camera" size={20} color="#FFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.primaryCaptureBtnText}>Mở Camera Chụp Live</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.secondaryPickBtn} onPress={pickImageFromGallery}>
-                    <Ionicons name="images-outline" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
-                    <Text style={styles.secondaryPickBtnText}>Chọn ảnh từ thư viện</Text>
+                    <Text style={styles.primaryCaptureBtnText}>Chụp ảnh</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -313,9 +266,7 @@ export default function FaceVerificationModal({
                       ) : (
                         <>
                           <Ionicons name="checkmark-done" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                          <Text style={styles.btnConfirmText}>
-                            {isEnrollMode ? 'Xác nhận Đăng ký' : 'Xác thực Điểm danh'}
-                          </Text>
+                              <Text style={styles.btnConfirmText}>Xác nhận ảnh chụp</Text>
                         </>
                       )}
                     </TouchableOpacity>

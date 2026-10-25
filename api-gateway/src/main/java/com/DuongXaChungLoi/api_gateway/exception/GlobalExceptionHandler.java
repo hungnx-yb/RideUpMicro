@@ -3,11 +3,13 @@ package com.DuongXaChungLoi.api_gateway.exception;
 import com.DuongXaChungLoi.api_gateway.dto.ApiResponse;
 import jakarta.validation.ConstraintViolation;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.util.Objects;
@@ -25,8 +27,14 @@ public class GlobalExceptionHandler {
         log.error("Unhandled Exception: ", exception);
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setCode(ErrorCode.UNCATEGOEIZED_EXCEPTION.getCode());
-        apiResponse.setMessage(ErrorCode.UNAUTHENTICATED.getMessage());
-        return ResponseEntity.badRequest().body(apiResponse);
+        apiResponse.setMessage(exception.getMessage());
+
+        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+        if (exception instanceof ResponseStatusException responseStatusException) {
+            status = HttpStatus.valueOf(responseStatusException.getStatusCode().value());
+        }
+
+        return ResponseEntity.status(status).body(apiResponse);
     }
 
     @ExceptionHandler(value = AppException.class)

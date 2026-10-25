@@ -34,6 +34,12 @@
           }
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Ứng dụng cần quyền sử dụng máy ảnh để chụp giấy tờ tùy thân và xác thực khuôn mặt tài xế."
+        }
+      ],
       "@react-native-community/datetimepicker",
       [
         "@stripe/stripe-react-native",

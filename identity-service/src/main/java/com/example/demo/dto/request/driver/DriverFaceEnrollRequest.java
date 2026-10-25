@@ -8,8 +8,9 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class DriverFaceEnrollRequest {
     @NotBlank(message = "Image base64 cannot be empty")
     String imageBase64;
+
+    String cccdImageBase64;
 }
