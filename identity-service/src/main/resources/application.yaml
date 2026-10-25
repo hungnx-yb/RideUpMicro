@@ -58,8 +58,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: tuankutehy@gmail.com
-    password: wjebostfrtluzgkq
+    username: hungabc2307@gmail.com
+    password: kblwzwaamhqyokjc
     properties:
       mail:
         smtp:
@@ -122,7 +122,7 @@ management:
       application: ${spring.application.name}
 
 app:
-  frontend-base-url: http://192.168.42.100:5173
+  frontend-base-url: http://localhost:5173
 
   kafka:
     topics:
