@@ -136,7 +136,20 @@ public class TripService {
         }
 
         trip.setStatus(request.getStatus());
-        return modelMapper.map(tripRepository.save(trip), TripResponse.class);
+        Trip saved = tripRepository.save(trip);
+
+        if (request.getStatus() == TripStatus.COMPLETED) {
+            com.rideup.trip_service.dto.event.TripCompletedEvent completedEvent = com.rideup.trip_service.dto.event.TripCompletedEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .correlationId(UUID.randomUUID().toString())
+                    .tripId(saved.getId())
+                    .driverId(saved.getDriverId())
+                    .completedAt(LocalDateTime.now())
+                    .build();
+            tripServicePublisher.publishTripCompleted(completedEvent);
+        }
+
+        return modelMapper.map(saved, TripResponse.class);
     }
 
     public TripResponse getDetail(String id) {

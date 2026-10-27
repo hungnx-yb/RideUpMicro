@@ -75,7 +75,8 @@ public class BookingService {
         // Chặn đặt trùng: kiểm tra khách đã có vé đang hoạt động cho chuyến này chưa
         checkDuplicateBooking(request.getTripId());
 
-        BigDecimal tripPricePerSeat = getTripPriceAndValidateSeats(request.getTripId(), request.getSeatCount());
+        TripResponse trip = validateAndGetTrip(request.getTripId(), request.getSeatCount());
+        BigDecimal tripPricePerSeat = trip.getPriceVnd();
         LocalDateTime now = LocalDateTime.now();
         String correlationId = UUID.randomUUID().toString();
         Booking booking = modelMapper.map(request, Booking.class);
@@ -97,7 +98,22 @@ public class BookingService {
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
         booking.setReservedAt(now);
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
-        booking.setExpiresAt(now.plusSeconds(expirySeconds)); // Áp dụng cho cả Cash và Stripe
+
+        // Đặt TTL (thời gian hết hạn):
+        // - WAITING_DRIVER_APPROVAL: Hết hạn trước khi chuyến khởi hành 1 tiếng
+        // - PENDING_PAYMENT: Hết hạn sau thời gian timeout thanh toán (hoặc trước khởi hành 1 tiếng nếu cận giờ)
+        if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL) {
+            booking.setExpiresAt(trip.getDepartureTime() != null
+                    ? trip.getDepartureTime().minusHours(1)
+                    : now.plusSeconds(expirySeconds));
+        } else {
+            LocalDateTime paymentDeadline = now.plusSeconds(expirySeconds);
+            if (trip.getDepartureTime() != null && trip.getDepartureTime().minusHours(1).isBefore(paymentDeadline)) {
+                booking.setExpiresAt(trip.getDepartureTime().minusHours(1));
+            } else {
+                booking.setExpiresAt(paymentDeadline);
+            }
+        }
         Booking saved = bookingRepository.save(booking);
         publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId, request.getPaymentIntentId());
 
@@ -191,6 +207,14 @@ public class BookingService {
         Booking booking = bookingRepository.findById(bookingId).orElse(null);
         if (booking != null && booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
             booking.setStatus(BookingStatus.WAITING_DRIVER_APPROVAL);
+            try {
+                var tripResponse = tripServiceClient.getTripById(booking.getTripId());
+                if (tripResponse != null && tripResponse.getResult() != null && tripResponse.getResult().getDepartureTime() != null) {
+                    booking.setExpiresAt(tripResponse.getResult().getDepartureTime().minusHours(1));
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch trip departureTime in markBookingWaitingApproval: {}", e.getMessage());
+            }
             bookingRepository.save(booking);
 
             com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent waitEvent = com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent.builder()
@@ -263,13 +287,22 @@ public class BookingService {
             throw new AppException(ErrorCode.BOOKING_NOT_FOUND); 
         }
 
-        // Kiểm tra trạng thái chuyến đi: không thể duyệt khi xe đã khởi hành hoặc đã huỷ/hoàn thành
+        // Chặn duyệt nếu yêu cầu đã hết hạn
+        if (booking.getExpiresAt() != null && LocalDateTime.now().isAfter(booking.getExpiresAt())) {
+            throw new AppException(ErrorCode.BOOKING_EXPIRED);
+        }
+
+        // Kiểm tra trạng thái chuyến đi: không thể duyệt khi xe đã khởi hành hoặc đã huỷ/hoàn thành hoặc vào khung 1 tiếng trước giờ chạy
         try {
             var tripResponse = tripServiceClient.getTripById(booking.getTripId());
             if (tripResponse != null && tripResponse.getResult() != null) {
-                var tripStatus = tripResponse.getResult().getStatus();
+                var trip = tripResponse.getResult();
+                var tripStatus = trip.getStatus();
                 if (tripStatus != null && !"OPEN".equalsIgnoreCase(tripStatus) && !"FULL".equalsIgnoreCase(tripStatus)) {
                     throw new AppException(ErrorCode.TRIP_ALREADY_STARTED);
+                }
+                if (trip.getDepartureTime() != null && LocalDateTime.now().isAfter(trip.getDepartureTime().minusHours(1))) {
+                    throw new AppException(ErrorCode.BOOKING_EXPIRED);
                 }
             }
         } catch (AppException e) {
@@ -494,7 +527,9 @@ public class BookingService {
                 BookingStatus oldStatus = booking.getStatus();
                 booking.setPaymentStatus(PaymentStatus.FAILED);
                 booking.setCancelledAt(now);
-                booking.setCancelReason(oldStatus == BookingStatus.PENDING_PAYMENT ? "Payment timeout" : "Driver approval timeout");
+                booking.setCancelReason(oldStatus == BookingStatus.PENDING_PAYMENT 
+                        ? "Payment timeout" 
+                        : "Tự động hủy: Đã tới giới hạn 1 tiếng trước khi chuyến khởi hành mà tài xế chưa duyệt");
                 booking.setStatus(BookingStatus.EXPIRED);
                 booking.setExpiresAt(null);
                 
@@ -519,7 +554,7 @@ public class BookingService {
         return expiredCount;
     }
 
-    private BigDecimal getTripPriceAndValidateSeats(String tripId, Integer seatCount) {
+    private TripResponse validateAndGetTrip(String tripId, Integer seatCount) {
         try {
             ApiResponse<TripResponse> response = tripServiceClient.getTripById(tripId);
             if (response == null || response.getResult() == null) {
@@ -536,7 +571,10 @@ public class BookingService {
             if (priceVnd == null || priceVnd.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
             }
-            return priceVnd;
+            if (trip.getDepartureTime() != null && trip.getDepartureTime().minusHours(1).isBefore(LocalDateTime.now())) {
+                throw new AppException(ErrorCode.TRIP_DEPARTURE_TOO_SOON);
+            }
+            return trip;
         } catch (FeignException ex) {
             if (ex.status() == 404) {
                 throw new AppException(ErrorCode.TRIP_NOT_FOUND);
@@ -614,6 +652,47 @@ public class BookingService {
 
         bookingRepository.saveAll(bookingsToCancel);
         log.info("Successfully cancelled {} bookings and triggered refunds for tripId={}", bookingsToCancel.size(), tripId);
+    }
+
+    @Transactional
+    public void handleTripCompleted(String tripId) {
+        log.info("Handling trip completed event for tripId={}", tripId);
+        List<Booking> bookings = bookingRepository.findByTripIdOrderByCreatedAtDesc(tripId);
+        if (bookings.isEmpty()) {
+            log.info("No bookings found for completed tripId={}", tripId);
+            return;
+        }
+
+        for (Booking booking : bookings) {
+            if (booking.getStatus() == BookingStatus.CONFIRMED) {
+                try {
+                    completeBooking(booking.getId());
+                    log.info("Auto-completed bookingId={} for tripId={}", booking.getId(), tripId);
+                } catch (Exception ex) {
+                    log.error("Failed to auto-complete bookingId={} for tripId={}: {}", booking.getId(), tripId, ex.getMessage());
+                }
+            } else if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL || booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+                try {
+                    BookingStatus oldStatus = booking.getStatus();
+                    booking.setStatus(BookingStatus.EXPIRED);
+                    booking.setCancelledAt(LocalDateTime.now());
+                    booking.setCancelReason("Chuyến đi đã hoàn thành");
+                    booking.setExpiresAt(null);
+                    bookingRepository.save(booking);
+
+                    if (oldStatus == BookingStatus.WAITING_DRIVER_APPROVAL) {
+                        com.rideUp.booking_service.dto.event.BookingRejectedEvent rejectedEvent = com.rideUp.booking_service.dto.event.BookingRejectedEvent.builder()
+                                .eventId(UUID.randomUUID().toString())
+                                .correlationId(UUID.randomUUID().toString())
+                                .bookingId(booking.getId())
+                                .build();
+                        bookingServicePublisher.publishBookingRejected(rejectedEvent);
+                    }
+                } catch (Exception ex) {
+                    log.error("Failed to expire pending bookingId={} on trip completion: {}", booking.getId(), ex.getMessage());
+                }
+            }
+        }
     }
 
     private void ensureCancelableStatus(Booking booking) {

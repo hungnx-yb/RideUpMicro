@@ -16,4 +16,5 @@ public class TripResponse {
     Integer seatTotal;
     Integer seatAvailable;
     java.math.BigDecimal priceVnd;
+    java.time.LocalDateTime departureTime;
 }

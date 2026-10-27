@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput,
@@ -17,6 +17,7 @@ const COLORS = {
 
 const SEAT_OPTIONS = ['1', '2', '3', '4', '7'];
 const PRICE_OPTIONS = ['100000', '150000', '200000', '250000', '300000'];
+const DURATION_PRESETS = ['1.5', '2', '2.5', '3', '3.5', '4', '5', '6'];
 
 const formatMoney = (val) => {
   if (!val) return '0 đ';
@@ -231,6 +232,7 @@ export default function CreateTripScreen({ navigation }) {
     pickups: [{ id: 'p1', wardId: '' }],
     dropoffs: [{ id: 'd1', wardId: '' }],
     departureTime: new Date(Date.now() + 86400000),
+    estimatedDurationHours: '3',
     seatTotal: '4', priceVnd: '150000'
   });
 
@@ -241,6 +243,19 @@ export default function CreateTripScreen({ navigation }) {
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [vehicle, setVehicle] = useState(null);
 
+  // Tính thời gian đến dự kiến dựa trên giờ xuất phát + số giờ chạy
+  const estimatedArrivalTime = useMemo(() => {
+    const hours = parseFloat(form.estimatedDurationHours) || 0;
+    if (hours <= 0 || !form.departureTime) return null;
+    return new Date(form.departureTime.getTime() + hours * 3600 * 1000);
+  }, [form.departureTime, form.estimatedDurationHours]);
+
+  const adjustDuration = (delta) => {
+    const current = parseFloat(form.estimatedDurationHours) || 3;
+    const next = Math.max(0.5, Math.min(24, Math.round((current + delta) * 10) / 10));
+    updateForm('estimatedDurationHours', String(next));
+  };
+
   const resetForm = () => {
     const defaultSeat = vehicle?.seatCapacity ? String(Math.min(4, Number(vehicle.seatCapacity))) : '4';
     setForm({
@@ -248,6 +263,7 @@ export default function CreateTripScreen({ navigation }) {
       pickups: [{ id: Date.now().toString(), wardId: '' }],
       dropoffs: [{ id: (Date.now() + 1).toString(), wardId: '' }],
       departureTime: new Date(Date.now() + 86400000),
+      estimatedDurationHours: '3',
       seatTotal: defaultSeat, priceVnd: '150000'
     });
     setStartWards([]);
@@ -413,12 +429,18 @@ export default function CreateTripScreen({ navigation }) {
       const tzOffset = new Date().getTimezoneOffset() * 60000;
       const localISOTime = new Date(form.departureTime.getTime() - tzOffset).toISOString().slice(0, -1);
 
+      let localEstimatedArrivalTime = null;
+      if (estimatedArrivalTime) {
+        localEstimatedArrivalTime = new Date(estimatedArrivalTime.getTime() - tzOffset).toISOString().slice(0, -1);
+      }
+
       await apiService.createTrip({
         startProvinceId: form.startProvinceId,
         endProvinceId: form.endProvinceId,
         startAddressText: startProvName,
         endAddressText: endProvName,
         departureTime: localISOTime,
+        estimatedArrivalTime: localEstimatedArrivalTime,
         seatTotal: Number(form.seatTotal), priceVnd: Number(form.priceVnd),
         stops
       });
@@ -535,13 +557,13 @@ export default function CreateTripScreen({ navigation }) {
             </View>
           </View>
 
-          {/* === THỜI GIAN KHỞI HÀNH === */}
+          {/* === THỜI GIAN KHỞI HÀNH & ĐẾN === */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconWrap}>
                 <Ionicons name="time" size={18} color={COLORS.primary} />
               </View>
-              <Text style={styles.cardTitle}>THỜI GIAN KHỞI HÀNH</Text>
+              <Text style={styles.cardTitle}>THỜI GIAN LỘ TRÌNH</Text>
             </View>
 
             {/* Date/Time pickers */}
@@ -596,6 +618,70 @@ export default function CreateTripScreen({ navigation }) {
                 <TouchableOpacity style={styles.pickerDoneBtn} onPress={() => setShowTimePicker(false)}>
                   <Text style={styles.pickerDoneText}>Xong</Text>
                 </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={styles.divider} />
+
+            {/* Thời gian di chuyển ước tính */}
+            <View style={{ marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>Thời gian di chuyển ước tính</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.primary }}>
+                  {form.estimatedDurationHours || '0'} giờ
+                </Text>
+              </View>
+
+              {/* Stepper + Input */}
+              <View style={styles.stepperRow}>
+                <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustDuration(-0.5)} activeOpacity={0.7}>
+                  <Ionicons name="remove" size={18} color={COLORS.primary} />
+                </TouchableOpacity>
+                <View style={styles.seatValueBox}>
+                  <TextInput
+                    style={styles.seatInput}
+                    keyboardType="numeric"
+                    value={form.estimatedDurationHours}
+                    onChangeText={(t) => updateForm('estimatedDurationHours', t.replace(/[^0-9.]/g, ''))}
+                  />
+                  <Text style={styles.seatUnit}>giờ</Text>
+                </View>
+                <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustDuration(0.5)} activeOpacity={0.7}>
+                  <Ionicons name="add" size={18} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Chips gợi ý nhanh */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4 }}>
+                {DURATION_PRESETS.map((dur) => (
+                  <TouchableOpacity
+                    key={dur}
+                    style={[styles.chip, form.estimatedDurationHours === dur && styles.chipActive]}
+                    onPress={() => updateForm('estimatedDurationHours', dur)}
+                  >
+                    <Text style={[styles.chipText, form.estimatedDurationHours === dur && styles.chipTextActive]}>
+                      {dur}h
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Hộp xem trước thời gian đến dự kiến */}
+            {estimatedArrivalTime && (
+              <View style={styles.arrivalPreviewBox}>
+                <View style={styles.arrivalIconWrap}>
+                  <Ionicons name="flag" size={16} color={COLORS.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.arrivalPreviewLabel}>DỰ KIẾN ĐẾN NƠI</Text>
+                  <Text style={styles.arrivalPreviewTime}>
+                    {estimatedArrivalTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {estimatedArrivalTime.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </Text>
+                  <Text style={styles.arrivalPreviewNote}>
+                    ⏱ Chuyến sẽ tự động hoàn thành sau 30 phút kể từ giờ đến nếu bạn chưa kết thúc.
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -839,5 +925,44 @@ const styles = StyleSheet.create({
   successBtnText: { color: COLORS.surface, fontSize: 15, fontWeight: '600' },
 
   vehicleCapacityBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 4 },
-  vehicleCapacityText: { color: COLORS.primary, fontSize: 12, fontWeight: '700' }
+  vehicleCapacityText: { color: COLORS.primary, fontSize: 12, fontWeight: '700' },
+
+  arrivalPreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
+    gap: 10,
+  },
+  arrivalIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#DCFCE7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  arrivalPreviewLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.success,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  arrivalPreviewTime: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  arrivalPreviewNote: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 15,
+  }
 });

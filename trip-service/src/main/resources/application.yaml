@@ -7,6 +7,9 @@ spring:
     username: root
     password: 123456789
     driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
   jpa:
     hibernate:
       ddl-auto: update
@@ -53,6 +56,8 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        max.block.ms: 3000
     listener:
       ack-mode: manual_immediate
       observation-enabled: true
@@ -121,6 +126,7 @@ app:
       booking-confirmed: ${KAFKA_TOPIC_BOOKING_CONFIRMED:booking.confirmed}
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
       trip-cancelled: ${KAFKA_TOPIC_TRIP_CANCELLED:trip.cancelled}
+      trip-completed: ${KAFKA_TOPIC_TRIP_COMPLETED:trip.completed}
       booking-marketplace-created: ${KAFKA_TOPIC_BOOKING_MARKETPLACE_CREATED:booking-marketplace-created}
       marketplace-invitation-accepted: ${KAFKA_TOPIC_MARKETPLACE_ACCEPTED:marketplace-invitation-accepted}
       trip-request-created: ${KAFKA_TOPIC_TRIP_REQUEST_CREATED:trip-request-created}

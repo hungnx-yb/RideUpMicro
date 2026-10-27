@@ -30,6 +30,7 @@ public enum ErrorCode {
     VERSION_CONFLICT(5004, "Trip was updated, please retry", HttpStatus.CONFLICT),
     TRIP_SERVICE_UNAVAILABLE(5005, "Trip service is currently unavailable", HttpStatus.SERVICE_UNAVAILABLE),
     TRIP_ALREADY_STARTED(5006, "Trip has already started. Cannot approve new bookings.", HttpStatus.BAD_REQUEST),
+    TRIP_DEPARTURE_TOO_SOON(5007, "Chuyến xe sắp khởi hành (dưới 1 tiếng), không thể đặt chỗ mới.", HttpStatus.BAD_REQUEST),
 
     // Payment related errors
     PAYMENT_SERVICE_ERROR(7001, "Payment service error occurred", HttpStatus.SERVICE_UNAVAILABLE),

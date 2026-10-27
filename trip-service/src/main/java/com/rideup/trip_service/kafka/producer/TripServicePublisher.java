@@ -25,6 +25,10 @@ public class TripServicePublisher {
     @Value("${app.kafka.topics.trip-cancelled:trip.cancelled}")
     String tripCancelledTopic;
 
+    @NonFinal
+    @Value("${app.kafka.topics.trip-completed:trip.completed}")
+    String tripCompletedTopic;
+
     public void publishTripCancelled(TripCancelledEvent event) {
         try {
             String payload = objectMapper.writeValueAsString(event);
@@ -34,6 +38,18 @@ public class TripServicePublisher {
         } catch (JsonProcessingException ex) {
             log.error("Failed to serialize TripCancelledEvent for tripId={}", event.getTripId(), ex);
             throw new IllegalStateException("Failed to serialize TripCancelledEvent", ex);
+        }
+    }
+
+    public void publishTripCompleted(com.rideup.trip_service.dto.event.TripCompletedEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(tripCompletedTopic, event.getTripId(), payload);
+            log.info("Published TripCompletedEvent eventId={}, tripId={}, driverId={}",
+                    event.getEventId(), event.getTripId(), event.getDriverId());
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to serialize TripCompletedEvent for tripId={}", event.getTripId(), ex);
+            throw new IllegalStateException("Failed to serialize TripCompletedEvent", ex);
         }
     }
 }

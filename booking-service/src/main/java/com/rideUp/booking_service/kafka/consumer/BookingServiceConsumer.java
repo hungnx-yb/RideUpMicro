@@ -98,6 +98,21 @@ public class BookingServiceConsumer {
         ack.acknowledge();
     }
 
+    @RetryableTopic(exclude = {JsonProcessingException.class})
+    @KafkaListener(
+            topics = "${app.kafka.topics.trip-completed:trip.completed}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onTripCompleted(String payload, Acknowledgment ack) throws Exception {
+        com.rideUp.booking_service.dto.event.TripCompletedEvent event = objectMapper.readValue(payload, com.rideUp.booking_service.dto.event.TripCompletedEvent.class);
+        log.info("[TripCompletedEvent] eventId={}, tripId={}, driverId={}",
+                event.getEventId(), event.getTripId(), event.getDriverId());
+
+        bookingService.handleTripCompleted(event.getTripId());
+
+        ack.acknowledge();
+    }
+
     @DltHandler
     public void handleDlt(ConsumerRecord<String, String> record, Exception ex) {
         log.error("[DLT][booking-service] Message permanently failed after all retries. " +
