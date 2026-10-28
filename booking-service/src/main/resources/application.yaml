@@ -121,7 +121,6 @@ app:
       booking-cancelled: ${KAFKA_TOPIC_BOOKING_CANCELLED:booking.cancelled}
       booking-cancell-request: ${KAFKA_TOPIC_BOOKING_CANCELL_REQUEST:booking.cancell.request}
       booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}
-      booking-approved: ${KAFKA_TOPIC_BOOKING_APPROVED:booking.approved}
       booking-rejected: ${KAFKA_TOPIC_BOOKING_REJECTED:booking.rejected}
       booking-waiting-approval: ${KAFKA_TOPIC_BOOKING_WAITING_APPROVAL:booking.waiting.approval}
       trip-cancelled: ${KAFKA_TOPIC_TRIP_CANCELLED:trip.cancelled}

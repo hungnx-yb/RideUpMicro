@@ -321,13 +321,6 @@ public class BookingService {
         String correlationId = UUID.randomUUID().toString();
         publishBookingConfirmed(saved, correlationId);
 
-        com.rideUp.booking_service.dto.event.BookingApprovedEvent event = com.rideUp.booking_service.dto.event.BookingApprovedEvent.builder()
-                .eventId(UUID.randomUUID().toString())
-                .correlationId(correlationId)
-                .bookingId(saved.getId())
-                .build();
-        bookingServicePublisher.publishBookingApproved(event);
-
         return modelMapper.map(saved, BookingResponse.class);
     }
 

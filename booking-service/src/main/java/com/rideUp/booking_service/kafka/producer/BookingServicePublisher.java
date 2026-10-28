@@ -90,10 +90,6 @@ public class BookingServicePublisher {
     }
 
     @NonFinal
-    @Value("${app.kafka.topics.booking-approved}")
-    String bookingApprovedTopic;
-
-    @NonFinal
     @Value("${app.kafka.topics.booking-rejected}")
     String bookingRejectedTopic;
 
@@ -120,17 +116,6 @@ public class BookingServicePublisher {
                     event.getEventId(), event.getBookingId(), event.getCorrelationId());
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize BookingCompletedEvent", ex);
-        }
-    }
-
-    public void publishBookingApproved(com.rideUp.booking_service.dto.event.BookingApprovedEvent event) {
-        try {
-            String payload = objectMapper.writeValueAsString(event);
-            kafkaTemplate.send(bookingApprovedTopic, event.getBookingId(), payload);
-            log.info("Published BookingApprovedEvent eventId={}, bookingId={}, correlationId={}",
-                    event.getEventId(), event.getBookingId(), event.getCorrelationId());
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Failed to serialize BookingApprovedEvent", ex);
         }
     }
 

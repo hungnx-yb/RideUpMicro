@@ -116,18 +116,6 @@ public class PaymentServiceConsumer {
 
     @RetryableTopic(exclude = {JsonProcessingException.class})
     @KafkaListener(
-            topics = "${app.kafka.topics.booking-approved}",
-            groupId = "${spring.kafka.consumer.group-id}"
-    )
-    public void onBookingApproved(String payload, Acknowledgment ack) throws Exception {
-        com.rideUp.payment_service.dto.event.BookingApprovedEvent event = objectMapper.readValue(payload, com.rideUp.payment_service.dto.event.BookingApprovedEvent.class);
-        log.info("[BookingApprovedEvent] eventId={}, bookingId={}. Payment remains in HOLDING state until trip is completed.", event.getEventId(), event.getBookingId());
-        // Không capture tiền lúc duyệt - tiền vẫn giữ an toàn trên thẻ của khách
-        ack.acknowledge();
-    }
-
-    @RetryableTopic(exclude = {JsonProcessingException.class})
-    @KafkaListener(
             topics = "${app.kafka.topics.booking-completed}",
             groupId = "${spring.kafka.consumer.group-id}"
     )

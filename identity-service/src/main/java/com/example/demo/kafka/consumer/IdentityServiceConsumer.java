@@ -29,6 +29,7 @@ public class IdentityServiceConsumer {
     DriverProfileRepository driverProfileRepository;
     ObjectMapper objectMapper;
     UserRepository userRepository;
+    com.example.demo.service.CommissionService commissionService;
 
     @RetryableTopic(
             exclude = {JsonProcessingException.class, IllegalArgumentException.class}
@@ -43,10 +44,21 @@ public class IdentityServiceConsumer {
         try {
             DriverRatingUpdatedEvent event = objectMapper.readValue(payload, DriverRatingUpdatedEvent.class);
             User user = userRepository.findById(event.getDriverId()).orElseThrow(()->new AppException(ErrorCode.USER_NOT_EXISTED));
-            DriverProfile driverProfile = user.getDriverProfile() ;
+            DriverProfile driverProfile = user.getDriverProfile();
 
             if (driverProfile != null) {
                 driverProfile.setDriverRating(event.getAverageRating());
+
+                // Thưởng +1 điểm uy tín nếu đánh giá đạt 5 sao (tối đa 100)
+                if (event.getAverageRating() >= 5.0) {
+                    int currentRep = driverProfile.getReputationScore();
+                    if (currentRep < 100) {
+                        driverProfile.setReputationScore(currentRep + 1);
+                        log.info("[Kafka][Reputation] Rewarded +1 reputation for 5-star rating to driver {}. New score: {}",
+                                event.getDriverId(), driverProfile.getReputationScore());
+                    }
+                }
+
                 driverProfileRepository.save(driverProfile);
                 log.info("[Kafka] Updated driver rating to {} for driverId: {}",
                         event.getAverageRating(), event.getDriverId());
@@ -76,16 +88,33 @@ public class IdentityServiceConsumer {
         try {
             com.example.demo.dto.event.BookingCompletedEvent event = objectMapper.readValue(payload, com.example.demo.dto.event.BookingCompletedEvent.class);
             if (event.getDriverId() != null && event.getTotalAmount() != null) {
-                // Calculate 20% commission
-                java.math.BigDecimal commission = event.getTotalAmount().multiply(new java.math.BigDecimal("0.20"));
-                
                 User user = userRepository.findById(event.getDriverId()).orElse(null);
                 if (user != null && user.getDriverProfile() != null) {
                     DriverProfile driverProfile = user.getDriverProfile();
+
+                    // 1. Tính hoa hồng cá nhân hóa theo thời gian thực (12% - 25%)
+                    java.math.BigDecimal dynamicRate = commissionService.calculateCommissionRate(driverProfile);
+                    java.math.BigDecimal commission = event.getTotalAmount().multiply(dynamicRate)
+                            .setScale(2, java.math.RoundingMode.HALF_UP);
+
+                    // 2. Cộng công nợ hoa hồng cho tài xế
                     java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
                     driverProfile.setSystemDebt(currentDebt.add(commission));
+
+                    // 3. Tăng tổng số chuyến hoàn thành của tài xế
+                    int currentRides = driverProfile.getTotalDriverRides() != null ? driverProfile.getTotalDriverRides() : 0;
+                    driverProfile.setTotalDriverRides(currentRides + 1);
+
+                    // 4. Thưởng +1 điểm uy tín khi hoàn thành chuyến đi (tối đa 100)
+                    int currentRep = driverProfile.getReputationScore();
+                    if (currentRep < 100) {
+                        driverProfile.setReputationScore(currentRep + 1);
+                    }
+
                     driverProfileRepository.save(driverProfile);
-                    log.info("[Kafka] Added commission {} to driver {}. Total debt: {}", commission, event.getDriverId(), driverProfile.getSystemDebt());
+                    log.info("[Kafka][Commission] Applied dynamic rate {} (commission: {}) to driver {}. Total debt: {}, total rides: {}, reputation: {}",
+                            dynamicRate, commission, event.getDriverId(), driverProfile.getSystemDebt(),
+                            driverProfile.getTotalDriverRides(), driverProfile.getReputationScore());
                 } else {
                     log.warn("[Kafka] DriverProfile not found for driverId: {}", event.getDriverId());
                 }

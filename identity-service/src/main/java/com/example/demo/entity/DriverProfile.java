@@ -40,6 +40,9 @@ public class DriverProfile {
     String gplxClasses;
     Double driverRating;
     Integer totalDriverRides;
+    @Column(name = "reputation_score")
+    @Builder.Default
+    Integer reputationScore = 80;
     @Enumerated(EnumType.STRING)
     DriverStatus status;
     LocalDateTime approvedAt;
@@ -101,5 +104,9 @@ public class DriverProfile {
 
     public void setGplxIssuePlace(String gplxIssuePlace) {
         this.gplxIssuePlace = gplxIssuePlace;
+    }
+
+    public Integer getReputationScore() {
+        return reputationScore != null ? reputationScore : 80;
     }
 }

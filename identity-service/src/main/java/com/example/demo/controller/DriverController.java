@@ -18,6 +18,10 @@ import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import com.example.demo.dto.response.driver.DriverCommissionRateResponse;
+import com.example.demo.dto.response.driver.DriverReputationResponse;
+import com.example.demo.service.CommissionService;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +34,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class DriverController {
     DriverService driverService;
+    CommissionService commissionService;
 
     @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<DriverResponse> registerDriver( @ModelAttribute DriverRegisterRequest request) {
@@ -179,6 +184,31 @@ public class DriverController {
         return ApiResponse.<List<DriverResponse>>builder()
                 .result(driverService.getDriversByOperatingProvinces(startProvinceId, endProvinceId))
                 .message("Drivers retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/{driverId}/commission-rate")
+    public ApiResponse<DriverCommissionRateResponse> getCommissionRate(@PathVariable String driverId) {
+        return ApiResponse.<DriverCommissionRateResponse>builder()
+                .result(commissionService.getDriverCommissionDetails(driverId))
+                .message("Driver commission rate retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/internal/{driverId}/commission-rate")
+    public ApiResponse<DriverCommissionRateResponse> getCommissionRateInternal(@PathVariable String driverId) {
+        return ApiResponse.<DriverCommissionRateResponse>builder()
+                .result(commissionService.getDriverCommissionDetails(driverId))
+                .message("Driver commission rate retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/me/reputation")
+    public ApiResponse<DriverReputationResponse> getMyReputation() {
+        String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+        return ApiResponse.<DriverReputationResponse>builder()
+                .result(commissionService.getDriverReputation(userId))
+                .message("Driver reputation retrieved successfully")
                 .build();
     }
 }
