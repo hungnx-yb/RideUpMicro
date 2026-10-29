@@ -19,8 +19,12 @@ public enum ErrorCode {
     INVALID_PAYMENT_AMOUNT(7008, "Invalid payment amount", HttpStatus.BAD_REQUEST),
     PAYMENT_URL_NOT_FOUND(7009, "Payment URL not found", HttpStatus.NOT_FOUND),
     PAYMENT_URL_WAIT_INTERRUPTED(7010, "Interrupted while waiting for payment URL", HttpStatus.INTERNAL_SERVER_ERROR),
-    PAYMENT_ALREADY_REFUNDED(7011, "Payment already refunded" , HttpStatus.BAD_REQUEST ),
-    REFUND_FAILED(7012, "Failed to refund" , HttpStatus.BAD_REQUEST ),;
+    PAYMENT_ALREADY_REFUNDED(7011, "Payment already refunded", HttpStatus.BAD_REQUEST),
+    REFUND_FAILED(7012, "Failed to refund", HttpStatus.BAD_REQUEST),
+    DRIVER_STRIPE_NOT_ONBOARDED(7013, "Driver has not onboarded Stripe Connect or payouts are disabled", HttpStatus.BAD_REQUEST),
+    STRIPE_CONNECT_ERROR(7014, "Error communicating with Stripe Connect API", HttpStatus.BAD_GATEWAY),
+    STRIPE_WEBHOOK_INVALID(7015, "Invalid Stripe webhook signature or payload", HttpStatus.BAD_REQUEST),
+    PAYOUT_TRANSACTION_FAILED(7016, "Failed to process driver payout transaction", HttpStatus.INTERNAL_SERVER_ERROR);
     private Integer code;
     private String message;
     private HttpStatus httpStatus;

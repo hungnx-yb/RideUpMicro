@@ -283,4 +283,41 @@ public class TripService {
         Page<Trip> page = tripRepository.searchDriveTrip(request);
         return page.map(trip -> modelMapper.map(trip, TripResponse.class));
     }
+
+    public TripPaymentOptionsResponse getPaymentOptions(String tripId) {
+        Trip trip = tripRepository.findById(tripId).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
+
+        if (trip.getDriverId() == null || trip.getDriverId().isBlank()) {
+            return TripPaymentOptionsResponse.builder()
+                    .tripId(tripId)
+                    .driverId(null)
+                    .stripeEnabled(false)
+                    .cashEnabled(true)
+                    .message("Chuyến đi chỉ hỗ trợ thanh toán tiền mặt")
+                    .build();
+        }
+
+        boolean stripeEnabled = false;
+        try {
+            var profileRes = identityServiceClient.getDriverFinancialProfile(trip.getDriverId());
+            if (profileRes != null && profileRes.getResult() != null) {
+                var profile = profileRes.getResult();
+                boolean isActive = "ACTIVE".equalsIgnoreCase(profile.getStripeAccountStatus())
+                        || (profile.getStripeAccountStatus() != null && profile.getStripeAccountStatus().contains("ACTIVE"));
+                stripeEnabled = isActive && Boolean.TRUE.equals(profile.getStripePayoutsEnabled());
+            }
+        } catch (Exception e) {
+            log.warn("[TripService] Failed to check Stripe profile for driver {}: {}", trip.getDriverId(), e.getMessage());
+        }
+
+        return TripPaymentOptionsResponse.builder()
+                .tripId(tripId)
+                .driverId(trip.getDriverId())
+                .stripeEnabled(stripeEnabled)
+                .cashEnabled(true)
+                .message(stripeEnabled
+                        ? "Chuyến đi hỗ trợ thanh toán thẻ Stripe và tiền mặt"
+                        : "Tài xế chưa kích hoạt cổng Stripe, chuyến đi chỉ nhận tiền mặt")
+                .build();
+    }
 }

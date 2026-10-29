@@ -97,9 +97,12 @@ public class IdentityServiceConsumer {
                     java.math.BigDecimal commission = event.getTotalAmount().multiply(dynamicRate)
                             .setScale(2, java.math.RoundingMode.HALF_UP);
 
-                    // 2. Cộng công nợ hoa hồng cho tài xế
-                    java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
-                    driverProfile.setSystemDebt(currentDebt.add(commission));
+                    // 2. Với cuốc tiền mặt (CASH), cộng công nợ hoa hồng cho tài xế. Với STRIPE, sàn đã tự trích giữ hoa hồng tại nguồn.
+                    boolean isCash = event.getPaymentMethod() == null || "CASH".equalsIgnoreCase(event.getPaymentMethod());
+                    if (isCash) {
+                        java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
+                        driverProfile.setSystemDebt(currentDebt.add(commission));
+                    }
 
                     // 3. Tăng tổng số chuyến hoàn thành của tài xế
                     int currentRides = driverProfile.getTotalDriverRides() != null ? driverProfile.getTotalDriverRides() : 0;

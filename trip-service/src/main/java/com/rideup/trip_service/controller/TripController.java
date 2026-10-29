@@ -5,6 +5,7 @@ import com.rideup.trip_service.dto.response.ApiResponse;
 import com.rideup.trip_service.dto.response.PageResponse;
 import com.rideup.trip_service.dto.response.SeatResponse;
 import com.rideup.trip_service.dto.response.TripResponse;
+import com.rideup.trip_service.dto.response.TripPaymentOptionsResponse;
 import com.rideup.trip_service.service.TripService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -68,6 +69,14 @@ public class TripController {
         return ApiResponse.<TripResponse>builder()
                 .result(tripService.getDetail(id))
                 .message("Trip retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/{id}/payment-options")
+    public ApiResponse<TripPaymentOptionsResponse> getPaymentOptions(@PathVariable String id) {
+        return ApiResponse.<TripPaymentOptionsResponse>builder()
+                .result(tripService.getPaymentOptions(id))
+                .message("Trip payment options retrieved successfully")
                 .build();
     }
 

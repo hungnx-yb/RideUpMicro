@@ -39,7 +39,8 @@ public enum ErrorCode {
 
     // Wallet / Debt errors
     ACCOUNT_BLOCKED_DUE_TO_DEBT(8001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN),
-    DUPLICATE_BOOKING(6011, "Bạn đã có vé đang hoạt động cho chuyến xe này. Không thể đặt thêm.", HttpStatus.BAD_REQUEST);
+    DUPLICATE_BOOKING(6011, "Bạn đã có vé đang hoạt động cho chuyến xe này. Không thể đặt thêm.", HttpStatus.BAD_REQUEST),
+    DRIVER_STRIPE_NOT_ONBOARDED(6012, "Tài xế chưa kích hoạt cổng thanh toán Stripe Connect để nhận tiền trực tuyến", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

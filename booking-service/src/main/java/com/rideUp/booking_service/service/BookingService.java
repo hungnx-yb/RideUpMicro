@@ -76,6 +76,25 @@ public class BookingService {
         checkDuplicateBooking(request.getTripId());
 
         TripResponse trip = validateAndGetTrip(request.getTripId(), request.getSeatCount());
+
+        if (request.getPaymentMethod() == PaymentMethod.STRIPE && trip.getDriverId() != null) {
+            try {
+                var profileRes = identityServiceClient.getDriverFinancialProfile(trip.getDriverId());
+                if (profileRes != null && profileRes.getResult() != null) {
+                    var profile = profileRes.getResult();
+                    boolean isActive = "ACTIVE".equalsIgnoreCase(profile.getStripeAccountStatus())
+                            || (profile.getStripeAccountStatus() != null && profile.getStripeAccountStatus().contains("ACTIVE"));
+                    if (!isActive || !Boolean.TRUE.equals(profile.getStripePayoutsEnabled())) {
+                        throw new AppException(ErrorCode.DRIVER_STRIPE_NOT_ONBOARDED);
+                    }
+                }
+            } catch (AppException e) {
+                throw e;
+            } catch (Exception e) {
+                log.warn("Could not verify driver Stripe profile for driverId={}: {}", trip.getDriverId(), e.getMessage());
+            }
+        }
+
         BigDecimal tripPricePerSeat = trip.getPriceVnd();
         LocalDateTime now = LocalDateTime.now();
         String correlationId = UUID.randomUUID().toString();
@@ -489,6 +508,9 @@ public class BookingService {
             log.warn("Failed to get driverId for trip: {}", saved.getTripId());
         }
         
+        PaymentMethod pm = resolvePaymentMethod(saved);
+        String paymentMethodStr = pm != null ? pm.name() : "CASH";
+
         com.rideUp.booking_service.dto.event.BookingCompletedEvent event = com.rideUp.booking_service.dto.event.BookingCompletedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .correlationId(correlationId)
@@ -497,6 +519,7 @@ public class BookingService {
                 .driverId(driverId)
                 .tripId(saved.getTripId())
                 .totalAmount(saved.getTotalAmount())
+                .paymentMethod(paymentMethodStr)
                 .completedAt(LocalDateTime.now())
                 .build();
                 

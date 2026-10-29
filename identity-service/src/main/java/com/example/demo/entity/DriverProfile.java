@@ -57,6 +57,18 @@ public class DriverProfile {
     @Builder.Default
     java.math.BigDecimal systemDebt = java.math.BigDecimal.ZERO;
 
+    @Column(name = "stripe_account_id", unique = true)
+    String stripeAccountId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "stripe_account_status")
+    @Builder.Default
+    com.example.demo.enums.StripeAccountStatus stripeAccountStatus = com.example.demo.enums.StripeAccountStatus.NOT_CONNECTED;
+
+    @Column(name = "stripe_payouts_enabled")
+    @Builder.Default
+    Boolean stripePayoutsEnabled = false;
+
     @UpdateTimestamp
     @Column(name = "updated_at")
     LocalDateTime updatedAt;
@@ -108,5 +120,13 @@ public class DriverProfile {
 
     public Integer getReputationScore() {
         return reputationScore != null ? reputationScore : 80;
+    }
+
+    public com.example.demo.enums.StripeAccountStatus getStripeAccountStatus() {
+        return stripeAccountStatus != null ? stripeAccountStatus : com.example.demo.enums.StripeAccountStatus.NOT_CONNECTED;
+    }
+
+    public Boolean getStripePayoutsEnabled() {
+        return stripePayoutsEnabled != null ? stripePayoutsEnabled : false;
     }
 }

@@ -33,6 +33,8 @@ public class PaymentServiceConsumer {
     PaymentService paymentService;
     ObjectMapper objectMapper;
     RefundService refundService;
+    com.rideUp.payment_service.service.PayoutService payoutService;
+    com.rideUp.payment_service.repository.PaymentRepository paymentRepository;
 
     @RetryableTopic(exclude = {JsonProcessingException.class})
     @KafkaListener(
@@ -121,12 +123,16 @@ public class PaymentServiceConsumer {
     )
     public void onBookingCompleted(String payload, Acknowledgment ack) throws Exception {
         com.rideUp.payment_service.dto.event.BookingCompletedEvent event = objectMapper.readValue(payload, com.rideUp.payment_service.dto.event.BookingCompletedEvent.class);
-        log.info("[BookingCompletedEvent] eventId={}, bookingId={}. Trip completed, capturing payment into wallet now.", event.getEventId(), event.getBookingId());
+        log.info("[BookingCompletedEvent] eventId={}, bookingId={}, method={}", event.getEventId(), event.getBookingId(), event.getPaymentMethod());
         try {
-            // Chỉ khi tài xế hoàn thành chuyến/trả khách thì tiền mới chính thức vào ví/tài khoản
-            paymentService.capturePayment(event.getBookingId());
+            com.rideUp.payment_service.entity.Payment payment = paymentRepository.findByBookingId(event.getBookingId()).orElse(null);
+            if (payment != null && payment.getMethod() == PaymentMethod.STRIPE) {
+                payoutService.processStripeBookingCompleted(event, payment);
+            } else {
+                paymentService.capturePayment(event.getBookingId());
+            }
         } catch (Exception ex) {
-            log.error("Failed to capture payment on booking completion for bookingId={}", event.getBookingId(), ex);
+            log.error("Failed to process payment/payout on booking completion for bookingId={}", event.getBookingId(), ex);
             throw ex;
         }
         ack.acknowledge();

@@ -1,12 +1,15 @@
 package com.rideUp.payment_service.feignClient;
 
 import com.rideUp.payment_service.config.FeignClientConfig;
+import com.rideUp.payment_service.dto.request.UpdateDriverStripeStatusRequest;
 import com.rideUp.payment_service.dto.response.ApiResponse;
+import com.rideUp.payment_service.dto.response.DriverCommissionRateResponse;
+import com.rideUp.payment_service.dto.response.DriverFinancialProfileResponse;
+import com.rideUp.payment_service.dto.response.UserResponse;
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
 
 @FeignClient(
         name = "identity-service",
@@ -16,11 +19,23 @@ import org.springframework.web.bind.annotation.RequestParam;
 public interface IdentityServiceClient {
 
     @GetMapping("/drivers/me/wallet")
-    ApiResponse<java.math.BigDecimal> getMyWallet();
+    ApiResponse<BigDecimal> getMyWallet();
 
     @GetMapping("/users/me")
-    ApiResponse<com.rideUp.payment_service.dto.response.UserResponse> getUserInfo();
+    ApiResponse<UserResponse> getUserInfo();
 
     @PostMapping("/drivers/internal/{driverId}/add-debt")
-    ApiResponse<Void> addDebtInternal(@PathVariable("driverId") String driverId, @RequestParam("amount") java.math.BigDecimal amount);
+    ApiResponse<Void> addDebtInternal(@PathVariable("driverId") String driverId, @RequestParam("amount") BigDecimal amount);
+
+    @GetMapping("/drivers/internal/{driverId}/financial-profile")
+    ApiResponse<DriverFinancialProfileResponse> getDriverFinancialProfile(@PathVariable("driverId") String driverId);
+
+    @PutMapping("/drivers/internal/{driverId}/stripe-status")
+    ApiResponse<Void> updateDriverStripeStatus(@PathVariable("driverId") String driverId, @RequestBody UpdateDriverStripeStatusRequest request);
+
+    @PostMapping("/drivers/internal/{driverId}/deduct-debt")
+    ApiResponse<Void> deductDebtInternal(@PathVariable("driverId") String driverId, @RequestParam("amount") BigDecimal amount);
+
+    @GetMapping("/drivers/internal/{driverId}/commission-rate")
+    ApiResponse<DriverCommissionRateResponse> getCommissionRateInternal(@PathVariable("driverId") String driverId);
 }

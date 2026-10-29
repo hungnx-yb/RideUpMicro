@@ -18,5 +18,6 @@ public class BookingCompletedEvent {
     String driverId;
     String tripId;
     java.math.BigDecimal totalAmount;
+    String paymentMethod;
     LocalDateTime completedAt;
 }

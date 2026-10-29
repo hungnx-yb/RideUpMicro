@@ -22,9 +22,12 @@ import com.example.demo.dto.response.driver.DriverCommissionRateResponse;
 import com.example.demo.dto.response.driver.DriverReputationResponse;
 import com.example.demo.service.CommissionService;
 import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.demo.dto.request.driver.UpdateDriverStripeStatusRequest;
+import com.example.demo.dto.response.driver.DriverFinancialProfileResponse;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.math.BigDecimal;
 
 import java.util.List;
 
@@ -209,6 +212,43 @@ public class DriverController {
         return ApiResponse.<DriverReputationResponse>builder()
                 .result(commissionService.getDriverReputation(userId))
                 .message("Driver reputation retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/internal/{driverId}/financial-profile")
+    public ApiResponse<DriverFinancialProfileResponse> getFinancialProfileInternal(@PathVariable String driverId) {
+        return ApiResponse.<DriverFinancialProfileResponse>builder()
+                .result(driverService.getDriverFinancialProfile(driverId))
+                .message("Driver financial profile retrieved successfully")
+                .build();
+    }
+
+    @PutMapping("/internal/{driverId}/stripe-status")
+    public ApiResponse<Void> updateDriverStripeStatusInternal(
+            @PathVariable String driverId,
+            @Valid @RequestBody UpdateDriverStripeStatusRequest request) {
+        driverService.updateDriverStripeStatus(driverId, request);
+        return ApiResponse.<Void>builder()
+                .message("Driver Stripe status updated successfully")
+                .build();
+    }
+
+    @PostMapping("/internal/{driverId}/deduct-debt")
+    public ApiResponse<Void> deductDebtInternal(
+            @PathVariable String driverId,
+            @RequestParam BigDecimal amount) {
+        driverService.deductDriverDebt(driverId, amount);
+        return ApiResponse.<Void>builder()
+                .message("Driver debt deducted successfully")
+                .build();
+    }
+
+    @GetMapping("/me/stripe-status")
+    public ApiResponse<DriverFinancialProfileResponse> getMyStripeStatus() {
+        String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+        return ApiResponse.<DriverFinancialProfileResponse>builder()
+                .result(driverService.getDriverFinancialProfile(userId))
+                .message("Driver Stripe financial profile retrieved successfully")
                 .build();
     }
 }

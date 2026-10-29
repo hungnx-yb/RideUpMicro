@@ -14,13 +14,15 @@ import com.example.demo.exception.AppException;
 import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.DriverProfileRepository;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.client.ai.*;
+import com.example.demo.dto.request.driver.UpdateDriverStripeStatusRequest;
+import com.example.demo.dto.response.driver.DriverFinancialProfileResponse;
 import com.example.demo.dto.request.driver.DriverFaceCompareRequest;
 import com.example.demo.dto.request.driver.DriverFaceEnrollRequest;
 import com.example.demo.dto.request.driver.DriverFaceVerifyRequest;
 import com.example.demo.dto.response.driver.DriverFaceCompareResponse;
 import com.example.demo.dto.response.driver.DriverFaceStatusResponse;
 import com.example.demo.dto.response.driver.DriverFaceVerifyResponse;
+import com.example.demo.client.ai.*;
 import java.time.temporal.ChronoUnit;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -335,18 +337,73 @@ public class DriverService {
 
     public java.math.BigDecimal getDriverDebt(String driverId) {
         DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .or(() -> driverProfileRepository.findByUserId(driverId))
                 .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
-        return driverProfile.getSystemDebt();
+        return driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
     }
 
     @Transactional
     public void addDriverDebt(String driverId, java.math.BigDecimal amount) {
         DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .or(() -> driverProfileRepository.findByUserId(driverId))
                 .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
         
         java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
         driverProfile.setSystemDebt(currentDebt.add(amount));
         driverProfileRepository.save(driverProfile);
+    }
+
+    @Transactional
+    public void deductDriverDebt(String driverId, java.math.BigDecimal amount) {
+        DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .or(() -> driverProfileRepository.findByUserId(driverId))
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal newDebt = currentDebt.subtract(amount);
+        if (newDebt.compareTo(java.math.BigDecimal.ZERO) < 0) {
+            newDebt = java.math.BigDecimal.ZERO;
+        }
+        driverProfile.setSystemDebt(newDebt);
+        driverProfileRepository.save(driverProfile);
+        log.info("[DriverService] Deducted debt {} for driver {}. Old debt: {}, New debt: {}",
+                amount, driverId, currentDebt, newDebt);
+    }
+
+    public DriverFinancialProfileResponse getDriverFinancialProfile(String driverId) {
+        DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .or(() -> driverProfileRepository.findByUserId(driverId))
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        String resolvedUserId = driverProfile.getUser() != null ? driverProfile.getUser().getId() : driverProfile.getId();
+
+        return DriverFinancialProfileResponse.builder()
+                .driverId(resolvedUserId)
+                .stripeAccountId(driverProfile.getStripeAccountId())
+                .stripeAccountStatus(driverProfile.getStripeAccountStatus())
+                .stripePayoutsEnabled(driverProfile.getStripePayoutsEnabled())
+                .systemDebt(driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO)
+                .build();
+    }
+
+    @Transactional
+    public void updateDriverStripeStatus(String driverId, UpdateDriverStripeStatusRequest request) {
+        DriverProfile driverProfile = driverProfileRepository.findById(driverId)
+                .or(() -> driverProfileRepository.findByUserId(driverId))
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        if (request.getStripeAccountId() != null && !request.getStripeAccountId().isBlank()) {
+            driverProfile.setStripeAccountId(request.getStripeAccountId());
+        }
+        if (request.getStripeAccountStatus() != null) {
+            driverProfile.setStripeAccountStatus(request.getStripeAccountStatus());
+        }
+        if (request.getStripePayoutsEnabled() != null) {
+            driverProfile.setStripePayoutsEnabled(request.getStripePayoutsEnabled());
+        }
+        driverProfileRepository.save(driverProfile);
+        log.info("[DriverService] Updated Stripe status for driver {}: status={}, payoutsEnabled={}",
+                driverId, driverProfile.getStripeAccountStatus(), driverProfile.getStripePayoutsEnabled());
     }
 
     @Transactional
