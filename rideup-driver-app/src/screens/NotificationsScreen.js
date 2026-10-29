@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { NotificationContext } from '../context/NotificationContext';
 import { 
   View, 
   Text, 
@@ -23,7 +24,7 @@ const COLORS = {
 const SIZES = { small: 12, font: 14, medium: 16, large: 20, title: 28 };
 
 const NotificationItem = ({ item, onPress }) => {
-  const isRead = item.isRead;
+  const isRead = item.status === 'READ' || item.isRead === true;
   const cardBorderColor = isRead ? 'transparent' : COLORS.primary;
   const cardBgColor = isRead ? COLORS.surface : `${COLORS.primary}05`;
 
@@ -108,6 +109,7 @@ const NotificationItem = ({ item, onPress }) => {
 };
 
 const NotificationsScreen = ({ navigation }) => {
+  const { decrementUnreadCount, clearUnreadCount, fetchUnreadCount } = useContext(NotificationContext) || {};
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -131,10 +133,23 @@ const NotificationsScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       fetchNotifications();
-    }, [fetchNotifications])
+      if (fetchUnreadCount) fetchUnreadCount();
+    }, [fetchNotifications, fetchUnreadCount])
   );
 
   const handlePress = async (item) => {
+    const isRead = item.status === 'READ' || item.isRead === true;
+
+    // 1. Chuyển trạng thái đã đọc nếu chưa đọc
+    if (!isRead) {
+      setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, status: 'READ', isRead: true } : n));
+      if (decrementUnreadCount) decrementUnreadCount();
+      apiService.markNotificationRead(item.id).catch(error => {
+        console.log('Mark read error', error);
+      });
+    }
+
+    // 2. Phân tích metadata và điều hướng tới màn tương ứng
     let metadata = {};
     try {
       metadata = typeof item.metadata === 'string' ? JSON.parse(item.metadata) : (item.metadata || {});
@@ -142,37 +157,53 @@ const NotificationsScreen = ({ navigation }) => {
       console.log('Error parsing notification metadata', e);
     }
 
-    // Nếu thông báo liên quan đến Chợ Khách (Trip Request) -> Điều hướng thẳng sang Marketplace
-    const targetRequestId = metadata.tripRequestId || metadata.requestId || metadata.id;
-    if (targetRequestId || metadata.type === 'TRIP_REQUEST_CREATED') {
+    const notiType = metadata.type || item.type;
+    const titleLower = (item.title || '').toLowerCase();
+    const targetRequestId = metadata.tripRequestId || metadata.requestId;
+
+    // A. Chợ khách (Trip Request, lời mời, từ chối, chấp nhận lời mời)
+    if (
+      notiType === 'TRIP_REQUEST_CREATED' || 
+      notiType === 'TRIP_REQUEST_INVITATION_REJECTED' || 
+      notiType === 'MARKETPLACE_INVITATION_ACCEPTED' || 
+      targetRequestId
+    ) {
       navigation.navigate('Marketplace', { 
-        targetRequestId: targetRequestId,
+        targetRequestId: targetRequestId || metadata.id,
         startProvinceId: metadata.startProvinceId,
         endProvinceId: metadata.endProvinceId,
       });
-    } else {
-      // Chuyển hướng tới màn hình Dashboard để xử lý cuốc xe (Approve/Reject)
-      const titleLower = (item.title || '').toLowerCase();
-      if (titleLower.includes('đặt') || titleLower.includes('booking') || titleLower.includes('chờ duyệt')) {
-        navigation.navigate('Dashboard');
-      }
+      return;
     }
 
-    if (item.isRead) return;
-    
-    // Optimistic update
-    setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
-    try {
-      await apiService.markNotificationRead(item.id);
-    } catch (error) {
-      console.log('Mark read error', error);
-      // Revert if failed
-      setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: false } : n));
+    // B. Yêu cầu đặt chỗ mới chờ duyệt -> Màn hình Dashboard (nơi có danh sách duyệt cuốc xe)
+    if (notiType === 'BOOKING_WAITING_APPROVAL' || titleLower.includes('yêu cầu đặt xe') || titleLower.includes('chờ duyệt')) {
+      navigation.navigate('Dashboard');
+      return;
     }
+
+    // C. Đặt chỗ xác nhận, hoàn thành, hủy -> Màn Quản lý chuyến xe (DriverTrips)
+    if (
+      notiType === 'BOOKING_CONFIRMED' || 
+      notiType === 'BOOKING_CANCELLED' || 
+      notiType === 'BOOKING_COMPLETED' || 
+      titleLower.includes('đặt') || 
+      titleLower.includes('chuyến đi') || 
+      metadata.tripId
+    ) {
+      navigation.navigate('DriverTrips', {
+        tripId: metadata.tripId,
+      });
+      return;
+    }
+
+    // Fallback: Dashboard
+    navigation.navigate('Dashboard');
   };
 
   const handleMarkAllRead = async () => {
-    if (notifications.every(n => n.isRead)) return;
+    const unreadExists = notifications.some(n => n.status !== 'READ' && !n.isRead);
+    if (!unreadExists) return;
     
     Alert.alert("Đánh dấu đã đọc", "Đánh dấu tất cả thông báo là đã đọc?", [
       { text: "Hủy", style: "cancel" },
@@ -180,7 +211,8 @@ const NotificationsScreen = ({ navigation }) => {
         text: "Đồng ý", 
         onPress: async () => {
           const old = [...notifications];
-          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+          setNotifications(prev => prev.map(n => ({ ...n, status: 'READ', isRead: true })));
+          if (clearUnreadCount) clearUnreadCount();
           try {
             await apiService.markAllNotificationsRead();
           } catch (error) {

@@ -25,7 +25,7 @@ const COLORS = {
 const SIZES = { small: 12, font: 14, medium: 16, large: 20, title: 28 };
 
 const NotificationItem = ({ item, onPress }) => {
-  const isRead = item.isRead;
+  const isRead = item.status === 'READ' || item.isRead === true;
 
   // Pick icon based on some keywords or type if available
   let iconName = 'notifications';
@@ -86,7 +86,7 @@ const NotificationItem = ({ item, onPress }) => {
   );
 };
 
-const NotificationsScreen = () => {
+const NotificationsScreen = ({ navigation }) => {
   const { decrementUnreadCount, clearUnreadCount, fetchUnreadCount } = useContext(NotificationContext);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -129,23 +129,74 @@ const NotificationsScreen = () => {
   );
 
   const handlePress = async (item) => {
-    if (item.isRead) return;
-    
-    // Optimistic update
-    setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: true } : n));
-    decrementUnreadCount();
+    const isRead = item.status === 'READ' || item.isRead === true;
 
-    try {
-      await apiService.markNotificationRead(item.id);
-    } catch (error) {
-      console.log('Mark read error', error);
-      // Revert if failed
-      setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, isRead: false } : n));
+    // 1. Chuyển trạng thái đã đọc nếu chưa đọc
+    if (!isRead) {
+      setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, status: 'READ', isRead: true } : n));
+      decrementUnreadCount();
+      apiService.markNotificationRead(item.id).catch(error => {
+        console.log('Mark read error', error);
+      });
     }
+
+    // 2. Phân tích metadata và điều hướng tới màn tương ứng
+    let metadata = {};
+    try {
+      metadata = typeof item.metadata === 'string' ? JSON.parse(item.metadata) : (item.metadata || {});
+    } catch (e) {
+      console.log('Error parsing notification metadata', e);
+    }
+
+    const notiType = metadata.type || item.type;
+    const titleLower = (item.title || '').toLowerCase();
+    const bookingId = metadata.bookingId || metadata.id;
+
+    // A. Chuyến đi hoàn thành -> Màn đánh giá (Rating) hoặc MyTrips
+    if (notiType === 'BOOKING_COMPLETED' || titleLower.includes('hoàn thành') || titleLower.includes('đánh giá')) {
+      if (bookingId) {
+        navigation.navigate('Rating', { 
+          bookingId: bookingId, 
+          tripId: metadata.tripId,
+          driverName: metadata.driverName || 'Tài xế' 
+        });
+      } else {
+        navigation.navigate('MyTrips');
+      }
+      return;
+    }
+
+    // B. Đặt chỗ xác nhận, hủy, thanh toán -> Màn chi tiết chuyến đi (BookingDetail)
+    if (
+      notiType === 'BOOKING_CONFIRMED' || 
+      notiType === 'BOOKING_CANCELLED' || 
+      notiType === 'PAYMENT_SUCCESS' || 
+      notiType === 'PAYMENT_FAILED' || 
+      titleLower.includes('đặt chỗ') || 
+      titleLower.includes('hủy') ||
+      bookingId
+    ) {
+      if (bookingId) {
+        navigation.navigate('BookingDetail', { booking: { id: bookingId } });
+      } else {
+        navigation.navigate('MyTrips');
+      }
+      return;
+    }
+
+    // C. Có lời mời chuyến đi mới -> Màn Yêu cầu của tôi (MyTrips tab REQUESTS)
+    if (notiType === 'TRIP_REQUEST_INVITED' || titleLower.includes('lời mời')) {
+      navigation.navigate('MyTrips', { initialTab: 'REQUESTS' });
+      return;
+    }
+
+    // Fallback: Dashboard
+    navigation.navigate('Dashboard');
   };
 
   const handleMarkAllRead = async () => {
-    if (notifications.every(n => n.isRead)) return;
+    const unreadExists = notifications.some(n => n.status !== 'READ' && !n.isRead);
+    if (!unreadExists) return;
     
     Alert.alert("Đánh dấu đã đọc", "Đánh dấu tất cả thông báo là đã đọc?", [
       { text: "Hủy", style: "cancel" },
@@ -153,7 +204,7 @@ const NotificationsScreen = () => {
         text: "Đồng ý", 
         onPress: async () => {
           const old = [...notifications];
-          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+          setNotifications(prev => prev.map(n => ({ ...n, status: 'READ', isRead: true })));
           clearUnreadCount();
           
           try {
