@@ -162,6 +162,23 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
             """);
         }
 
+        if (filter.getStatus() != null && !filter.getStatus().isBlank() && !"ALL".equalsIgnoreCase(filter.getStatus())) {
+            if ("OPEN".equalsIgnoreCase(filter.getStatus())) {
+                baseQuery.append("""
+                    AND t.status IN ('OPEN', 'FULL')
+                """);
+            } else if ("CANCELLED".equalsIgnoreCase(filter.getStatus()) || "CANCELED".equalsIgnoreCase(filter.getStatus())) {
+                baseQuery.append("""
+                    AND t.status IN ('CANCELLED', 'CANCELED')
+                """);
+            } else {
+                params.put("status", filter.getStatus().toUpperCase());
+                baseQuery.append("""
+                    AND t.status = :status
+                """);
+            }
+        }
+
         LocalDate startDate = filter.getStartDate();
         LocalDate endDate = filter.getEndDate();
 

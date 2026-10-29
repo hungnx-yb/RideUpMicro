@@ -90,11 +90,16 @@ public class TripController {
 
 
     @GetMapping("/driver")
-    public ApiResponse<List<TripResponse>> searchAllDriveTrip(@ModelAttribute SearchTripDriveRequest request){
+    public ApiResponse<List<TripResponse>> searchAllDriveTrip(
+            @ModelAttribute SearchTripDriveRequest request,
+            @org.springframework.data.web.PageableDefault(page = 0, size = 10) Pageable pageable) {
+        if (request.getPageable() == null) {
+            request.setPageable(pageable);
+        }
         Page<TripResponse> tripResponses = tripService.searchDriveTrip(request);
-       return ApiResponse.<List<TripResponse>>builder()
-               .count(tripResponses.getTotalElements())
-               .result(tripResponses.getContent())
-               .build();
+        return ApiResponse.<List<TripResponse>>builder()
+                .count(tripResponses.getTotalElements())
+                .result(tripResponses.getContent())
+                .build();
     }
 }
