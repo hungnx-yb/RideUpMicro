@@ -317,8 +317,8 @@ export default function DriverDashboardScreen() {
               <Text style={styles.revenueLabel}>DOANH THU HÔM NAY</Text>
               <Text style={styles.revenueValue}>{formatMoney(stats.totalRevenue || 450000)}</Text>
             </View>
-            <TouchableOpacity style={styles.walletBtn}>
-              <Text style={styles.walletBtnText}>Rút tiền</Text>
+            <TouchableOpacity style={styles.walletBtn} onPress={() => navigation.navigate('Wallet')}>
+              <Text style={styles.walletBtnText}>Ví & Rút tiền</Text>
               <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
             </TouchableOpacity>
           </View>
@@ -352,7 +352,7 @@ export default function DriverDashboardScreen() {
 
         {/* LƯỚI TÍNH NĂNG NHANH (QUICK ACTIONS) */}
         <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.actionItem}>
+          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Wallet')}>
             <View style={[styles.actionIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
               <Ionicons name="wallet" size={24} color={COLORS.success} />
             </View>

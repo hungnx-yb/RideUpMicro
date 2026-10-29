@@ -127,6 +127,22 @@ export const apiService = {
   confirmDeposit: async (transactionId) => {
     return await apiClient.post(`/api/payment/payments/wallet/confirm?transactionId=${transactionId}`);
   },
+  // Stripe Connect & Reputation (Giai đoạn 2 & 3)
+  getDriverReputation: async () => {
+    return await apiClient.get('/api/identity/drivers/me/reputation');
+  },
+  getStripeAccountStatus: async () => {
+    return await apiClient.get('/api/payment/payments/stripe/driver/account-status');
+  },
+  createStripeOnboardLink: async () => {
+    return await apiClient.post('/api/payment/payments/stripe/driver/onboard-link');
+  },
+  createStripeDashboardLink: async () => {
+    return await apiClient.post('/api/payment/payments/stripe/driver/dashboard-link');
+  },
+  getDriverPayouts: async () => {
+    return await apiClient.get('/api/payment/payments/stripe/driver/payouts');
+  },
 
   // Trip Service
   getAllTrips: async (params) => {

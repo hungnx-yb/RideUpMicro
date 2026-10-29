@@ -326,7 +326,7 @@ export default function DriverProfileScreen({ navigation }) {
             />
             <View style={styles.divider} />
             <MenuItem 
-              icon="card" title="Ví & Hoa hồng" subtitle="Thanh toán chiết khấu"
+              icon="card" title="Ví & Dòng tiền Stripe" subtitle="Điểm uy tín, liên kết Stripe & bù trừ nợ"
               onPress={() => navigation.navigate('Wallet')} 
             />
           </View>

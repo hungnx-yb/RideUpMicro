@@ -87,6 +87,9 @@ export const apiService = {
   getTripDetail: async (tripId) => {
     return await apiClient.get(`/api/trip/trip/${tripId}`);
   },
+  getTripPaymentOptions: async (tripId) => {
+    return await apiClient.get(`/api/trip/trip/${tripId}/payment-options`);
+  },
   getBookingDetail: async (bookingId) => {
     return await apiClient.get(`/api/booking/bookings/${bookingId}`);
   },

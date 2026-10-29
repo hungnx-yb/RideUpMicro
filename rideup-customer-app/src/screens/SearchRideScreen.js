@@ -301,6 +301,9 @@ export default function SearchRideScreen({ navigation, route }) {
   const [bookingNote, setBookingNote] = useState('');
   const [bookingIdempotencyKey, setBookingIdempotencyKey] = useState('');
   const [acceptedInvitationId, setAcceptedInvitationId] = useState(null);
+  const [isStripeAllowed, setIsStripeAllowed] = useState(true);
+  const [stripeDisabledReason, setStripeDisabledReason] = useState('');
+  const [checkingPaymentOptions, setCheckingPaymentOptions] = useState(false);
 
   // Success Modal State
   const [successBooking, setSuccessBooking] = useState(null);
@@ -554,7 +557,7 @@ export default function SearchRideScreen({ navigation, route }) {
     });
   };
 
-  const handleOpenBooking = (trip) => {
+  const handleOpenBooking = async (trip) => {
     setSelectedTrip(trip);
     const pickups = trip.stops?.filter(s => s.stopType === 'PICKUP') || [];
     const dropoffs = trip.stops?.filter(s => s.stopType === 'DROPOFF') || [];
@@ -567,10 +570,34 @@ export default function SearchRideScreen({ navigation, route }) {
     setBookingNote('');
     setBookingIdempotencyKey(generateUuid());
     setAcceptedInvitationId(null); // Reset when manually booking
+
+    // Check Stripe Connect eligibility of driver
+    setIsStripeAllowed(true);
+    setStripeDisabledReason('');
+    setCheckingPaymentOptions(true);
+    try {
+      const res = await apiService.getTripPaymentOptions(trip.id);
+      if (res && res.data && res.data.result) {
+        const { stripeEnabled, message } = res.data.result;
+        setIsStripeAllowed(stripeEnabled);
+        if (!stripeEnabled) {
+          setStripeDisabledReason(message || 'Tài xế chưa kích hoạt thanh toán thẻ Stripe');
+          setPaymentMethod('CASH');
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi kiểm tra phương thức thanh toán trip:', err);
+    } finally {
+      setCheckingPaymentOptions(false);
+    }
   };
 
   const confirmBooking = async () => {
     if (!selectedTrip) return;
+    if (paymentMethod === 'STRIPE' && !isStripeAllowed) {
+      Alert.alert('Phương thức không khả dụng', 'Tài xế chuyến này chưa kích hoạt nhận thanh toán thẻ Stripe. Vui lòng chọn Tiền mặt.');
+      return;
+    }
     const pickupAddr = pickupLocation.addressText?.trim();
     const dropoffAddr = dropoffLocation.addressText?.trim();
     if (!pickupWardId || !pickupAddr || !pickupAddr.length) {
@@ -1180,16 +1207,90 @@ export default function SearchRideScreen({ navigation, route }) {
                 </View>
               </View>
 
-              <View style={styles.selectionRow}>
-                <Text style={styles.selectionLabel}>Thanh toán:</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity style={[styles.payBtn, paymentMethod === 'CASH' && styles.payBtnActive]} onPress={() => setPaymentMethod('CASH')}>
-                    <Text style={[styles.payBtnText, paymentMethod === 'CASH' && { color: COLORS.background }]}>Tiền mặt</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.payBtn, paymentMethod === 'STRIPE' && styles.payBtnActive]} onPress={() => setPaymentMethod('STRIPE')}>
-                    <Text style={[styles.payBtnText, paymentMethod === 'STRIPE' && { color: COLORS.background }]}>Stripe (Thẻ)</Text>
-                  </TouchableOpacity>
+              {/* PHƯƠNG THỨC THANH TOÁN (Clean Radio Cards) */}
+              <View style={{ marginTop: 6, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={styles.selectionLabel}>Phương thức thanh toán:</Text>
+                  {checkingPaymentOptions && (
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                  )}
                 </View>
+
+                {/* Card 1: Tiền mặt */}
+                <TouchableOpacity
+                  style={[
+                    styles.paymentRadioCard,
+                    paymentMethod === 'CASH' && styles.paymentRadioCardActive,
+                  ]}
+                  onPress={() => setPaymentMethod('CASH')}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.paymentRadioIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                    <Ionicons name="cash-outline" size={22} color="#10B981" />
+                  </View>
+                  <View style={styles.paymentRadioContent}>
+                    <Text style={styles.paymentRadioTitle}>Tiền mặt trực tiếp</Text>
+                    <Text style={styles.paymentRadioSub}>Thanh toán cho tài xế sau khi chuyến đi hoàn tất</Text>
+                  </View>
+                  <View style={[styles.paymentRadioCircle, paymentMethod === 'CASH' && styles.paymentRadioCircleActive]}>
+                    {paymentMethod === 'CASH' && <View style={styles.paymentRadioDot} />}
+                  </View>
+                </TouchableOpacity>
+
+                {/* Card 2: Stripe Connect Thẻ */}
+                <TouchableOpacity
+                  style={[
+                    styles.paymentRadioCard,
+                    paymentMethod === 'STRIPE' && styles.paymentRadioCardActive,
+                    !isStripeAllowed && styles.paymentRadioCardDisabled,
+                  ]}
+                  onPress={() => {
+                    if (isStripeAllowed) {
+                      setPaymentMethod('STRIPE');
+                    } else {
+                      Alert.alert(
+                        'Cổng thẻ tạm khoá',
+                        stripeDisabledReason || 'Tài xế chuyến xe này chưa liên kết tài khoản Stripe Connect để nhận tiền tự động. Vui lòng chọn Tiền mặt.'
+                      );
+                    }
+                  }}
+                  activeOpacity={isStripeAllowed ? 0.8 : 1}
+                >
+                  <View style={[styles.paymentRadioIconCircle, { backgroundColor: isStripeAllowed ? '#E0F2FE' : '#F1F5F9' }]}>
+                    <Ionicons 
+                      name={isStripeAllowed ? "card-outline" : "lock-closed-outline"} 
+                      size={22} 
+                      color={isStripeAllowed ? COLORS.primary : COLORS.textMuted} 
+                    />
+                  </View>
+                  <View style={styles.paymentRadioContent}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <Text style={[styles.paymentRadioTitle, !isStripeAllowed && { color: COLORS.textMuted }]}>
+                        Thẻ ATM / Visa / Mastercard
+                      </Text>
+                      <View style={styles.escrowBadge}>
+                        <Text style={styles.escrowBadgeText}>🛡️ Stripe Escrow</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.paymentRadioSub}>
+                      {isStripeAllowed 
+                        ? 'Hệ thống giữ tiền an toàn, hoàn tiền 100% nếu tài xế hủy'
+                        : (stripeDisabledReason || 'Tài xế chưa kích hoạt Stripe. Vui lòng thanh toán tiền mặt.')}
+                    </Text>
+                    <View style={styles.paymentBadgesRow}>
+                      <View style={styles.cardBrandBadge}><Text style={styles.cardBrandText}>VISA</Text></View>
+                      <View style={styles.cardBrandBadge}><Text style={styles.cardBrandText}>MC</Text></View>
+                      <View style={styles.cardBrandBadge}><Text style={styles.cardBrandText}>NAPAS</Text></View>
+                    </View>
+                  </View>
+                  <View style={[
+                    styles.paymentRadioCircle, 
+                    paymentMethod === 'STRIPE' && styles.paymentRadioCircleActive,
+                    !isStripeAllowed && { borderColor: '#CBD5E1' }
+                  ]}>
+                    {paymentMethod === 'STRIPE' && <View style={styles.paymentRadioDot} />}
+                  </View>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.modalPriceBox}>
@@ -1759,6 +1860,99 @@ const styles = StyleSheet.create({
   counterBtn: { paddingHorizontal: 16, paddingVertical: 8 },
   counterText: { color: COLORS.primary, fontSize: SIZES.large, fontWeight: 'bold' },
   counterValue: { color: COLORS.text, fontSize: SIZES.medium, fontWeight: 'bold', marginHorizontal: 8 },
+  // Payment Radio Cards
+  paymentRadioCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  paymentRadioCardActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: '#F0F9FF',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  paymentRadioCardDisabled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.65,
+  },
+  paymentRadioIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  paymentRadioContent: {
+    flex: 1,
+  },
+  paymentRadioTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  paymentRadioSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 15,
+  },
+  escrowBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  escrowBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  paymentBadgesRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 4,
+  },
+  cardBrandBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  cardBrandText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  paymentRadioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  paymentRadioCircleActive: {
+    borderColor: COLORS.primary,
+  },
+  paymentRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+  },
   payBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: COLORS.primary, backgroundColor: COLORS.surface },
   payBtnActive: { backgroundColor: COLORS.primary },
   payBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 13 },
