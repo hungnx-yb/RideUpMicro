@@ -239,7 +239,7 @@ export default function DriverTripsScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchTrips(0);
+      fetchTrips(0, activeTab);
     }, [filters])
   );
 
@@ -252,10 +252,22 @@ export default function DriverTripsScreen({ navigation }) {
     }
   };
 
-  const fetchTrips = async (targetPage = 0) => {
+  const handleTabChange = (newTab) => {
+    if (newTab === activeTab) return;
+    setActiveTab(newTab);
+    setPage(0);
+    setTrips([]);
+    fetchTrips(0, newTab);
+  };
+
+  const fetchTrips = async (targetPage = 0, targetStatus) => {
     try {
       setLoading(true);
+      const currentStatus = targetStatus !== undefined ? targetStatus : activeTab;
       const params = { size: 10, page: targetPage };
+      if (currentStatus && currentStatus !== 'ALL') {
+        params.status = currentStatus;
+      }
       if (filters.startProvinceId) params.startProvinceId = filters.startProvinceId;
       if (filters.endProvinceId) params.endProvinceId = filters.endProvinceId;
       if (filters.startDate) params.startDate = filters.startDate.toISOString().split('T')[0];
@@ -312,7 +324,7 @@ export default function DriverTripsScreen({ navigation }) {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchTrips(0);
+    fetchTrips(0, activeTab);
   };
 
   const handleTripPress = async (trip) => {
@@ -622,22 +634,8 @@ export default function DriverTripsScreen({ navigation }) {
     return count;
   }, [filters]);
 
-  // Lọc chuyến theo tab trạng thái
-  const displayTrips = useMemo(() => {
-    return trips.filter(t => {
-      const s = (t.status || '').toUpperCase();
-      if (activeTab === 'OPEN') {
-        return ['OPEN', 'FULL'].includes(s);
-      } else if (activeTab === 'STARTED') {
-        return s === 'STARTED';
-      } else if (activeTab === 'COMPLETED') {
-        return s === 'COMPLETED';
-      } else if (activeTab === 'CANCELLED') {
-        return ['CANCELLED', 'CANCELED'].includes(s);
-      }
-      return true; // Tab ALL hiển thị tất cả
-    }).sort((a, b) => new Date(b.departureTime) - new Date(a.departureTime));
-  }, [trips, activeTab]);
+  // Danh sách chuyến xe đã được phân trang và lọc trạng thái chính xác từ Backend
+  const displayTrips = trips;
 
   const renderTripItem = ({ item }) => {
     const seatsBooked = Math.max((item.seatTotal || 0) - (item.seatAvailable || 0), 0);
@@ -1003,7 +1001,7 @@ export default function DriverTripsScreen({ navigation }) {
               <TouchableOpacity
                 key={tab.key}
                 style={[styles.statusTabBtn, isActive && styles.statusTabBtnActive]}
-                onPress={() => setActiveTab(tab.key)}
+                onPress={() => handleTabChange(tab.key)}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.statusTabText, isActive && styles.statusTabTextActive]}>
@@ -1055,7 +1053,7 @@ export default function DriverTripsScreen({ navigation }) {
                 <TouchableOpacity
                   style={[styles.pageBtn, page === 0 && styles.pageBtnDisabled]}
                   disabled={page === 0 || loading}
-                  onPress={() => fetchTrips(page - 1)}
+                  onPress={() => fetchTrips(page - 1, activeTab)}
                 >
                   <Ionicons name="chevron-back" size={16} color={page === 0 ? COLORS.textMuted : COLORS.primary} />
                   <Text style={[styles.pageBtnText, page === 0 && styles.pageBtnTextDisabled]}>Trước</Text>
@@ -1068,7 +1066,7 @@ export default function DriverTripsScreen({ navigation }) {
                 <TouchableOpacity
                   style={[styles.pageBtn, page >= Math.ceil(totalTripsCount / 10) - 1 && styles.pageBtnDisabled]}
                   disabled={page >= Math.ceil(totalTripsCount / 10) - 1 || loading}
-                  onPress={() => fetchTrips(page + 1)}
+                  onPress={() => fetchTrips(page + 1, activeTab)}
                 >
                   <Text style={[styles.pageBtnText, page >= Math.ceil(totalTripsCount / 10) - 1 && styles.pageBtnTextDisabled]}>Sau</Text>
                   <Ionicons name="chevron-forward" size={16} color={page >= Math.ceil(totalTripsCount / 10) - 1 ? COLORS.textMuted : COLORS.primary} />

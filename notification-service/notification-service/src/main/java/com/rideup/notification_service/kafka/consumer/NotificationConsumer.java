@@ -60,27 +60,27 @@ public class NotificationConsumer {
 		TripResponse trip = tripId == null ? null : resolveTrip(tripId);
 
 		String title = "Đặt chỗ thành công";
-		String message = String.format("Dat cho %s da duoc xac nhan.",
+		String message = String.format("Đặt chỗ %s của bạn đã được xác nhận.",
 				booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode());
 		notificationService.createNotification(
 				booking.getCustomerId(),
 				title,
 				message,
 				NotificationType.BOOKING_CONFIRMED,
-				buildMetadata("bookingId", event.getBookingId(), "tripId", tripId)
+				buildMetadata("bookingId", event.getBookingId(), "tripId", tripId, "type", "BOOKING_CONFIRMED")
 		);
 
 		String driverId = trip == null ? null : trip.getDriverId();
 		if (driverId != null && !driverId.equals(booking.getCustomerId())) {
-			String driverTitle = "Co dat cho moi";
-			String driverMessage = String.format("Dat cho %s vua duoc xac nhan.",
+			String driverTitle = "Có đặt chỗ mới";
+			String driverMessage = String.format("Đặt chỗ %s vừa được xác nhận cho chuyến đi của bạn.",
 					booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode());
 			notificationService.createNotification(
 					driverId,
 					driverTitle,
 					driverMessage,
 					NotificationType.BOOKING_CONFIRMED,
-					buildMetadata("bookingId", event.getBookingId(), "tripId", tripId)
+					buildMetadata("bookingId", event.getBookingId(), "tripId", tripId, "type", "BOOKING_CONFIRMED")
 			);
 		}
 		ack.acknowledge();
@@ -97,9 +97,9 @@ public class NotificationConsumer {
 			return;
 		}
 
-		String title = "Dat cho bi huy";
-		String reason = event.getReason() == null ? "" : (" Ly do: " + event.getReason());
-		String message = String.format("Dat cho %s da bi huy.%s",
+		String title = "Đặt chỗ đã bị hủy";
+		String reason = event.getReason() == null ? "" : (" Lý do: " + event.getReason());
+		String message = String.format("Đặt chỗ %s đã bị hủy.%s",
 				booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode(),
 				reason);
 		notificationService.createNotification(
@@ -107,7 +107,7 @@ public class NotificationConsumer {
 				title,
 				message,
 				NotificationType.BOOKING_CANCELLED,
-				buildMetadata("bookingId", event.getBookingId(), "tripId", booking.getTripId())
+				buildMetadata("bookingId", event.getBookingId(), "tripId", booking.getTripId(), "type", "BOOKING_CANCELLED")
 		);
 		ack.acknowledge();
 	}
@@ -124,7 +124,7 @@ public class NotificationConsumer {
 				title,
 				message,
 				NotificationType.BOOKING_COMPLETED,
-				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId())
+				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId(), "type", "BOOKING_COMPLETED")
 		);
 		ack.acknowledge();
 	}
@@ -141,7 +141,7 @@ public class NotificationConsumer {
 		}
 
 		String driverId = trip.getDriverId();
-		String title = "CÓ YÊU CẦU ĐẶT XE MỚI";
+		String title = "Có yêu cầu đặt xe mới";
 		String message = String.format("Bạn có một yêu cầu đặt xe mới (%s ghế, %s đ). Hệ thống sẽ tự động hủy sau 15 phút nếu bạn không nhận chuyến.",
 				event.getSeatCount(), event.getTotalAmount());
 				
@@ -150,7 +150,7 @@ public class NotificationConsumer {
 				title,
 				message,
 				NotificationType.SYSTEM,
-				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId())
+				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId(), "type", "BOOKING_WAITING_APPROVAL")
 		);
 		ack.acknowledge();
 	}
@@ -176,7 +176,7 @@ public class NotificationConsumer {
                 String departureStr = event.getDepartureTime() != null
                         ? event.getDepartureTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM"))
                         : "";
-                String message = String.format("Có khách đang tìm xe %s chỗ lúc %s. Vào Marketplace gửi lời mời ngay!",
+                String message = String.format("Có khách đang tìm xe %s chỗ lúc %s. Vào Chợ Khách gửi lời mời ngay!",
                         event.getSeatTotal() != null ? event.getSeatTotal() : 1, departureStr);
 
                 for (DriverResponse driver : matchingDrivers) {
@@ -223,7 +223,11 @@ public class NotificationConsumer {
                 title,
                 message,
                 NotificationType.SYSTEM,
-                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+                buildMetadata(
+                        "tripRequestId", event.get("tripRequestId"),
+                        "invitationId", event.get("invitationId"),
+                        "type", "TRIP_REQUEST_INVITED"
+                )
         );
         ack.acknowledge();
     }
@@ -243,7 +247,11 @@ public class NotificationConsumer {
                 title,
                 message,
                 NotificationType.SYSTEM,
-                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+                buildMetadata(
+                        "tripRequestId", event.get("tripRequestId"),
+                        "invitationId", event.get("invitationId"),
+                        "type", "TRIP_REQUEST_INVITATION_REJECTED"
+                )
         );
         ack.acknowledge();
     }
@@ -263,7 +271,11 @@ public class NotificationConsumer {
                 title,
                 message,
                 NotificationType.SYSTEM,
-                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+                buildMetadata(
+                        "tripRequestId", event.get("tripRequestId"),
+                        "invitationId", event.get("invitationId"),
+                        "type", "MARKETPLACE_INVITATION_ACCEPTED"
+                )
         );
         ack.acknowledge();
     }
