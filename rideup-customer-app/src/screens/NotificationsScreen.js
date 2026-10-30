@@ -166,13 +166,16 @@ const NotificationsScreen = ({ navigation }) => {
       return;
     }
 
-    // B. Đặt chỗ xác nhận, hủy, thanh toán -> Màn chi tiết chuyến đi (BookingDetail)
+    // B. Đặt chỗ xác nhận, hủy, thanh toán, đổi lộ trình -> Màn chi tiết chuyến đi (BookingDetail)
     if (
       notiType === 'BOOKING_CONFIRMED' || 
       notiType === 'BOOKING_CANCELLED' || 
+      notiType === 'BOOKING_MODIFICATION_RESOLVED' || 
       notiType === 'PAYMENT_SUCCESS' || 
       notiType === 'PAYMENT_FAILED' || 
       titleLower.includes('đặt chỗ') || 
+      titleLower.includes('thay đổi') || 
+      titleLower.includes('đổi điểm đón') || 
       titleLower.includes('hủy') ||
       bookingId
     ) {

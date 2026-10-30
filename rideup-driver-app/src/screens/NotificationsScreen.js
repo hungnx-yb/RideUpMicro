@@ -176,8 +176,15 @@ const NotificationsScreen = ({ navigation }) => {
       return;
     }
 
-    // B. Yêu cầu đặt chỗ mới chờ duyệt -> Màn hình Dashboard (nơi có danh sách duyệt cuốc xe)
-    if (notiType === 'BOOKING_WAITING_APPROVAL' || titleLower.includes('yêu cầu đặt xe') || titleLower.includes('chờ duyệt')) {
+    // B. Yêu cầu đặt chỗ mới hoặc đổi lộ trình chờ duyệt -> Màn hình Dashboard
+    if (
+      notiType === 'BOOKING_WAITING_APPROVAL' || 
+      notiType === 'BOOKING_MODIFICATION_REQUESTED' || 
+      titleLower.includes('yêu cầu đặt xe') || 
+      titleLower.includes('chờ duyệt') ||
+      titleLower.includes('đổi điểm đón') ||
+      titleLower.includes('lộ trình')
+    ) {
       navigation.navigate('Dashboard');
       return;
     }

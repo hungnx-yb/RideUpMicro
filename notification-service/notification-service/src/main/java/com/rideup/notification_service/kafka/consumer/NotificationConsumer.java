@@ -298,7 +298,12 @@ public class NotificationConsumer {
 					title,
 					message,
 					NotificationType.BOOKING_MODIFICATION_REQUESTED,
-					buildMetadata("modificationId", event.getModificationId(), "bookingId", event.getBookingId(), "tripId", event.getTripId())
+					buildMetadata(
+							"modificationId", event.getModificationId(),
+							"bookingId", event.getBookingId(),
+							"tripId", event.getTripId(),
+							"type", "BOOKING_MODIFICATION_REQUESTED"
+					)
 			);
 		}
 		ack.acknowledge();
@@ -333,7 +338,13 @@ public class NotificationConsumer {
 					title,
 					message,
 					NotificationType.BOOKING_MODIFICATION_RESOLVED,
-					buildMetadata("modificationId", event.getModificationId(), "bookingId", event.getBookingId(), "tripId", event.getTripId(), "status", event.getStatus())
+					buildMetadata(
+							"modificationId", event.getModificationId(),
+							"bookingId", event.getBookingId(),
+							"tripId", event.getTripId(),
+							"status", event.getStatus(),
+							"type", "BOOKING_MODIFICATION_RESOLVED"
+					)
 			);
 		}
 		ack.acknowledge();
