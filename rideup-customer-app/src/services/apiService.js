@@ -68,6 +68,12 @@ export const apiService = {
   rateTrip: async (bookingId, payload) => {
     return await apiClient.post(`/api/booking/bookings/${bookingId}/rate`, payload);
   },
+  requestBookingModification: async (bookingId, payload) => {
+    return await apiClient.post(`/api/booking/bookings/${bookingId}/modify`, payload);
+  },
+  getBookingModifications: async (bookingId) => {
+    return await apiClient.get(`/api/booking/bookings/${bookingId}/modifications`);
+  },
 
   // Payment Service
   createPaymentIntent: async (payload) => {

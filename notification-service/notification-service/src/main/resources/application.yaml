@@ -144,5 +144,7 @@ app:
       trip-request-invited: ${KAFKA_TOPIC_TRIP_REQUEST_INVITED:trip-request-invited}
       trip-request-invitation-rejected: ${KAFKA_TOPIC_TRIP_REQUEST_REJECTED:trip-request-invitation-rejected}
       marketplace-invitation-accepted: ${KAFKA_TOPIC_MARKETPLACE_ACCEPTED:marketplace-invitation-accepted}
+      booking-modification-requested: ${KAFKA_TOPIC_BOOKING_MODIFICATION_REQUESTED:booking.modification.requested}
+      booking-modification-resolved: ${KAFKA_TOPIC_BOOKING_MODIFICATION_RESOLVED:booking.modification.resolved}
 
 

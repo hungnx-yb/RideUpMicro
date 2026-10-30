@@ -116,6 +116,18 @@ export const apiService = {
   completeBooking: async (bookingId) => {
     return await apiClient.post(`/api/booking/bookings/${bookingId}/complete`);
   },
+  getPendingModificationsByTrip: async (tripId) => {
+    return await apiClient.get(`/api/booking/bookings/trip/${tripId}/pending-modifications`);
+  },
+  approveBookingModification: async (modificationId) => {
+    return await apiClient.post(`/api/booking/bookings/modifications/${modificationId}/approve`);
+  },
+  rejectBookingModification: async (modificationId, reason) => {
+    return await apiClient.post(`/api/booking/bookings/modifications/${modificationId}/reject`, { reason });
+  },
+  getBookingModifications: async (bookingId) => {
+    return await apiClient.get(`/api/booking/bookings/${bookingId}/modifications`);
+  },
 
   // Payment Service
   getPaymentUrl: async (bookingId) => {

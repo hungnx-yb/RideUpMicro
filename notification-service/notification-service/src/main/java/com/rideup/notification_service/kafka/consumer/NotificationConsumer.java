@@ -17,6 +17,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import com.rideup.notification_service.dto.event.BookingModificationRequestedEvent;
+import com.rideup.notification_service.dto.event.BookingModificationResolvedEvent;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -265,6 +267,65 @@ public class NotificationConsumer {
         );
         ack.acknowledge();
     }
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(topics = "${app.kafka.topics.booking-modification-requested:booking.modification.requested}", groupId = "${spring.kafka.consumer.group-id}")
+	public void onBookingModificationRequested(String payload, Acknowledgment ack) throws Exception {
+		BookingModificationRequestedEvent event = objectMapper.readValue(payload, BookingModificationRequestedEvent.class);
+		String driverId = event.getDriverId();
+		if (driverId == null && event.getTripId() != null) {
+			TripResponse trip = resolveTrip(event.getTripId());
+			driverId = trip != null ? trip.getDriverId() : null;
+		}
+
+		if (driverId != null) {
+			String title = "Yêu cầu đổi điểm đón/trả";
+			String message = "Khách hàng gửi yêu cầu thay đổi lộ trình chuyến đi. Vui lòng xem và phản hồi trong 15 phút.";
+			notificationService.createNotification(
+					driverId,
+					title,
+					message,
+					NotificationType.BOOKING_MODIFICATION_REQUESTED,
+					buildMetadata("modificationId", event.getModificationId(), "bookingId", event.getBookingId(), "tripId", event.getTripId())
+			);
+		}
+		ack.acknowledge();
+	}
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(topics = "${app.kafka.topics.booking-modification-resolved:booking.modification.resolved}", groupId = "${spring.kafka.consumer.group-id}")
+	public void onBookingModificationResolved(String payload, Acknowledgment ack) throws Exception {
+		BookingModificationResolvedEvent event = objectMapper.readValue(payload, BookingModificationResolvedEvent.class);
+		String customerId = event.getCustomerId();
+		if (customerId == null && event.getBookingId() != null) {
+			BookingResponse booking = resolveBooking(event.getBookingId());
+			customerId = booking != null ? booking.getCustomerId() : null;
+		}
+
+		if (customerId != null) {
+			String title;
+			String message;
+			if ("APPROVED".equalsIgnoreCase(event.getStatus())) {
+				title = "Yêu cầu thay đổi được chấp thuận";
+				message = "Tài xế đã đồng ý cập nhật thông tin chuyến đi của bạn.";
+			} else if ("REJECTED".equalsIgnoreCase(event.getStatus())) {
+				title = "Yêu cầu thay đổi bị từ chối";
+				message = "Tài xế từ chối thay đổi" + (event.getReason() != null ? ": " + event.getReason() : ". Thông tin vé cũ được giữ nguyên.");
+			} else {
+				title = "Yêu cầu thay đổi hết hạn";
+				message = "Yêu cầu chỉnh sửa của bạn đã hết hạn do tài xế chưa kịp phản hồi. Lộ trình cũ được giữ nguyên an toàn.";
+			}
+
+			notificationService.createNotification(
+					customerId,
+					title,
+					message,
+					NotificationType.BOOKING_MODIFICATION_RESOLVED,
+					buildMetadata("modificationId", event.getModificationId(), "bookingId", event.getBookingId(), "tripId", event.getTripId(), "status", event.getStatus())
+			);
+		}
+		ack.acknowledge();
+	}
 
 	private String buildMetadata(String... keyValues) {
 		try {

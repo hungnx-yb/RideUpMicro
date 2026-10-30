@@ -144,4 +144,35 @@ public class BookingServicePublisher {
             throw new IllegalStateException("Failed to serialize MarketplaceBookingCreatedEvent", ex);
         }
     }
+
+    @NonFinal
+    @Value("${app.kafka.topics.booking-modification-requested:booking.modification.requested}")
+    String bookingModificationRequestedTopic;
+
+    @NonFinal
+    @Value("${app.kafka.topics.booking-modification-resolved:booking.modification.resolved}")
+    String bookingModificationResolvedTopic;
+
+    public void publishBookingModificationRequested(com.rideUp.booking_service.dto.event.BookingModificationRequestedEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(bookingModificationRequestedTopic, event.getBookingId(), payload);
+            log.info("Published BookingModificationRequestedEvent eventId={}, modId={}, bookingId={}",
+                    event.getEventId(), event.getModificationId(), event.getBookingId());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize BookingModificationRequestedEvent", ex);
+        }
+    }
+
+    public void publishBookingModificationResolved(com.rideUp.booking_service.dto.event.BookingModificationResolvedEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(bookingModificationResolvedTopic, event.getBookingId(), payload);
+            log.info("Published BookingModificationResolvedEvent eventId={}, modId={}, status={}",
+                    event.getEventId(), event.getModificationId(), event.getStatus());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize BookingModificationResolvedEvent", ex);
+        }
+    }
 }
+

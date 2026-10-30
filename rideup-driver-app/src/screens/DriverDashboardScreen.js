@@ -38,7 +38,11 @@ export default function DriverDashboardScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [driverInfo, setDriverInfo] = useState(null);
   const [driverProfile, setDriverProfile] = useState(null);
-  const [resultModal, setResultModal] = useState(null); // { type: 'success'|'reject'|'error'|'debt', bookingId }
+  const [resultModal, setResultModal] = useState(null); // { type: 'success'|'reject'|'error'|'debt'|'mod_approved'|'mod_rejected', bookingId }
+  const [pendingModifications, setPendingModifications] = useState([]);
+  const [showRejectModModal, setShowRejectModModal] = useState(false);
+  const [rejectingMod, setRejectingMod] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   useFocusEffect(
     React.useCallback(() => {
@@ -111,6 +115,15 @@ export default function DriverDashboardScreen() {
                 text: "Xem ngay",
                 onPress: () => handleIncomingBooking(msg)
               }
+            ]
+          );
+        } else if (titleLower.includes('đổi') || titleLower.includes('lộ trình') || titleLower.includes('chỉnh sửa')) {
+          Alert.alert(
+            "🔔 YÊU CẦU ĐỔI LỘ TRÌNH!",
+            "Khách hàng vừa gửi yêu cầu đổi điểm đón/trả. Vui lòng kiểm tra và phản hồi trong 15 phút.",
+            [
+              { text: "Để sau", style: "cancel" },
+              { text: "Xem ngay", onPress: () => fetchDashboardData(true) }
             ]
           );
         } else {
@@ -191,23 +204,37 @@ export default function DriverDashboardScreen() {
       });
       setUpcomingTrip(nextTrip);
 
-      // 2. Gọi song song các request booking cho tất cả chuyến xe đang mở
+      // 2. Gọi song song các request booking và modification cho tất cả chuyến xe đang mở
       const activeTripsList = trips.filter(t => t.status === 'OPEN' || t.status === 'FULL');
       if (activeTripsList.length > 0) {
-        const bookingResponses = await Promise.all(
-          activeTripsList.map(trip =>
-            apiService.getBookingsByTripId(trip.id)
-              .then(bookingRes => {
-                const bookings = bookingRes?.data?.result || [];
-                const waiting = bookings.filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
-                return waiting.map(b => ({ ...b, tripDetails: trip }));
-              })
-              .catch(() => [])
+        const [bookingResponses, modResponses] = await Promise.all([
+          Promise.all(
+            activeTripsList.map(trip =>
+              apiService.getBookingsByTripId(trip.id)
+                .then(bookingRes => {
+                  const bookings = bookingRes?.data?.result || [];
+                  const waiting = bookings.filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
+                  return waiting.map(b => ({ ...b, tripDetails: trip }));
+                })
+                .catch(() => [])
+            )
+          ),
+          Promise.all(
+            activeTripsList.map(trip =>
+              apiService.getPendingModificationsByTrip(trip.id)
+                .then(modRes => {
+                  const mods = modRes?.data?.result || [];
+                  return mods.map(m => ({ ...m, tripDetails: trip }));
+                })
+                .catch(() => [])
+            )
           )
-        );
+        ]);
         setPendingRequests(bookingResponses.flat());
+        setPendingModifications(modResponses.flat());
       } else {
         setPendingRequests([]);
+        setPendingModifications([]);
       }
 
     } catch (error) {
@@ -266,6 +293,51 @@ export default function DriverDashboardScreen() {
       setResultModal({ type: 'reject', bookingId });
     } catch (e) {
       console.log('Reject Error', e);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleApproveModification = async (modId) => {
+    setActionLoading(true);
+    try {
+      await apiService.approveBookingModification(modId);
+      await fetchDashboardData(true);
+      setResultModal({
+        type: 'mod_approved',
+        message: 'Đã chấp thuận đổi lộ trình. Điểm đón/trả của hành khách đã được cập nhật thành công!'
+      });
+    } catch (e) {
+      console.log('Approve Modification Error', e);
+      const errMsg = e.response?.data?.message || 'Không thể phê duyệt đổi lộ trình lúc này.';
+      setResultModal({ type: 'error', message: errMsg });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenRejectModification = (mod) => {
+    setRejectingMod(mod);
+    setRejectReason('Lệch cung đường di chuyển quá xa');
+    setShowRejectModModal(true);
+  };
+
+  const handleConfirmRejectModification = async () => {
+    if (!rejectingMod) return;
+    setActionLoading(true);
+    try {
+      await apiService.rejectBookingModification(rejectingMod.id, rejectReason || 'Không thuận đường di chuyển');
+      setShowRejectModModal(false);
+      setRejectingMod(null);
+      await fetchDashboardData(true);
+      setResultModal({
+        type: 'mod_rejected',
+        message: 'Đã từ chối yêu cầu đổi lộ trình. Khách hàng vẫn áp dụng lộ trình ban đầu.'
+      });
+    } catch (e) {
+      console.log('Reject Modification Error', e);
+      const errMsg = e.response?.data?.message || 'Không thể từ chối yêu cầu lúc này.';
+      setResultModal({ type: 'error', message: errMsg });
     } finally {
       setActionLoading(false);
     }
@@ -437,6 +509,124 @@ export default function DriverDashboardScreen() {
             <Text style={styles.emptyTicketTitle}>Chưa có chuyến đi nào</Text>
             <Text style={styles.emptyTicketSub}>Tạo ngay chuyến đi mới để bắt đầu nhận khách</Text>
           </TouchableOpacity>
+        )}
+
+        {/* CẢNH BÁO YÊU CẦU ĐỔI LỘ TRÌNH TỪ KHÁCH HÀNG */}
+        {pendingModifications.length > 0 && (
+          <View style={[styles.pendingSection, { marginTop: 24 }]}>
+            <View style={styles.modSectionHeaderRow}>
+              <View style={styles.modSectionBadge}>
+                <Ionicons name="swap-horizontal" size={16} color="#B45309" />
+              </View>
+              <Text style={styles.pendingModTitle}>YÊU CẦU ĐỔI LỘ TRÌNH ({pendingModifications.length})</Text>
+            </View>
+
+            {pendingModifications.map(mod => {
+              const expireDate = mod.expiresAt ? new Date(mod.expiresAt) : null;
+              const expireText = expireDate ? expireDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '15 phút';
+
+              return (
+                <View key={mod.id} style={styles.pendingModCard}>
+                  {/* Header */}
+                  <View style={styles.pendingModHeader}>
+                    <View style={styles.modTimerRow}>
+                      <Ionicons name="time" size={14} color="#D97706" />
+                      <Text style={styles.pendingModTimer}>Chờ duyệt (Hết hạn lúc {expireText})</Text>
+                    </View>
+                    <View style={styles.modCodeBadge}>
+                      <Text style={styles.modCodeBadgeText}>MÃ: {(mod.bookingId || '').substring(0, 8).toUpperCase()}</Text>
+                    </View>
+                  </View>
+
+                  {/* Body: Before vs After Comparison */}
+                  <View style={styles.pendingModBody}>
+                    {(mod.newPassengerName || mod.newPassengerPhone) && (
+                      <View style={styles.modPassengerInfo}>
+                        <Ionicons name="person-circle-outline" size={16} color={COLORS.primary} />
+                        <Text style={styles.modPassengerName}>{mod.newPassengerName || 'Hành khách'}</Text>
+                        {!!mod.newPassengerPhone && (
+                          <Text style={styles.modPassengerPhone}> • {mod.newPassengerPhone}</Text>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Diff: Pickup Comparison */}
+                    <View style={styles.diffBox}>
+                      <View style={styles.diffHeaderRow}>
+                        <Ionicons name="location" size={15} color={COLORS.primary} />
+                        <Text style={styles.diffSectionTitle}>ĐIỂM ĐÓN</Text>
+                      </View>
+                      <View style={styles.diffItemOld}>
+                        <Text style={styles.diffLabelOld}>Cũ:</Text>
+                        <Text style={styles.diffTextOld} numberOfLines={2}>
+                          {mod.oldPickupAddressText || 'Địa chỉ cũ'}
+                        </Text>
+                      </View>
+                      <View style={styles.diffItemNew}>
+                        <Ionicons name="arrow-forward" size={14} color={COLORS.success} style={{ marginTop: 2, marginRight: 4 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.diffLabelNew}>Mới đề xuất:</Text>
+                          <Text style={styles.diffTextNew} numberOfLines={2}>
+                            {mod.newPickupAddressText}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Diff: Dropoff Comparison */}
+                    <View style={[styles.diffBox, { marginTop: 10 }]}>
+                      <View style={styles.diffHeaderRow}>
+                        <Ionicons name="flag" size={15} color={COLORS.warning} />
+                        <Text style={[styles.diffSectionTitle, { color: COLORS.warning }]}>ĐIỂM TRẢ</Text>
+                      </View>
+                      <View style={styles.diffItemOld}>
+                        <Text style={styles.diffLabelOld}>Cũ:</Text>
+                        <Text style={styles.diffTextOld} numberOfLines={2}>
+                          {mod.oldDropoffAddressText || 'Địa chỉ cũ'}
+                        </Text>
+                      </View>
+                      <View style={styles.diffItemNew}>
+                        <Ionicons name="arrow-forward" size={14} color={COLORS.success} style={{ marginTop: 2, marginRight: 4 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.diffLabelNew}>Mới đề xuất:</Text>
+                          <Text style={styles.diffTextNew} numberOfLines={2}>
+                            {mod.newDropoffAddressText}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Customer note / reason */}
+                    {!!mod.newNote && (
+                      <View style={styles.modNoteBox}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={14} color="#64748B" />
+                        <Text style={styles.modNoteText}>Khách nhắn: "{mod.newNote}"</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Actions */}
+                  <View style={styles.pendingModActions}>
+                    <TouchableOpacity
+                      style={styles.btnModReject}
+                      onPress={() => handleOpenRejectModification(mod)}
+                      disabled={actionLoading}
+                    >
+                      <Text style={styles.btnModRejectText}>TỪ CHỐI</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.btnModApprove}
+                      onPress={() => handleApproveModification(mod.id)}
+                      disabled={actionLoading}
+                    >
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                      <Text style={styles.btnModApproveText}>ĐỒNG Ý ĐỔI</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         )}
 
         {/* CẢNH BÁO YÊU CẦU CHỜ DUYỆT (DI CHUYỂN XUỐNG DƯỚI) */}
@@ -622,6 +812,34 @@ export default function DriverDashboardScreen() {
                 </View>
               </>
             )}
+            {resultModal?.type === 'mod_approved' && (
+              <>
+                <View style={[styles.resultIconWrap, { backgroundColor: 'rgba(16,185,129,0.12)' }]}>
+                  <Ionicons name="checkmark-circle" size={56} color={COLORS.success} />
+                </View>
+                <Text style={styles.resultTitle}>Cập nhật lộ trình thành công!</Text>
+                <Text style={styles.resultDesc}>{resultModal?.message}</Text>
+                <View style={styles.resultActions}>
+                  <TouchableOpacity style={[styles.resultBtnPrimary, { backgroundColor: COLORS.success }]} onPress={() => setResultModal(null)}>
+                    <Text style={styles.resultBtnPrimaryText}>Đã hiểu</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+            {resultModal?.type === 'mod_rejected' && (
+              <>
+                <View style={[styles.resultIconWrap, { backgroundColor: 'rgba(100,116,139,0.12)' }]}>
+                  <Ionicons name="close-circle" size={56} color={COLORS.textMuted} />
+                </View>
+                <Text style={styles.resultTitle}>Đã từ chối đổi lộ trình</Text>
+                <Text style={styles.resultDesc}>{resultModal?.message}</Text>
+                <View style={styles.resultActions}>
+                  <TouchableOpacity style={[styles.resultBtnPrimary, { backgroundColor: COLORS.textMuted }]} onPress={() => setResultModal(null)}>
+                    <Text style={styles.resultBtnPrimaryText}>Đã hiểu</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
             {resultModal?.type === 'error' && (
               <>
                 <View style={[styles.resultIconWrap, { backgroundColor: 'rgba(239,68,68,0.12)' }]}>
@@ -636,6 +854,65 @@ export default function DriverDashboardScreen() {
                 </View>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL TỪ CHỐI ĐỔI LỘ TRÌNH */}
+      <Modal visible={showRejectModModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.rejectModalContainer}>
+            <View style={styles.rejectModalHeader}>
+              <Text style={styles.rejectModalTitle}>Từ chối đổi lộ trình</Text>
+              <TouchableOpacity onPress={() => setShowRejectModModal(false)}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.rejectModalDesc}>
+              Vui lòng chọn lý do từ chối để thông báo tới khách hàng:
+            </Text>
+
+            {['Lệch cung đường di chuyển quá xa', 'Sắp đến giờ xe khởi hành', 'Khu vực cấm dừng đỗ / đường hẹp', 'Khác'].map((reasonOption) => (
+              <TouchableOpacity
+                key={reasonOption}
+                style={[
+                  styles.reasonChip,
+                  rejectReason === reasonOption && styles.reasonChipActive
+                ]}
+                onPress={() => setRejectReason(reasonOption)}
+              >
+                <Ionicons
+                  name={rejectReason === reasonOption ? "radio-button-on" : "radio-button-off"}
+                  size={16}
+                  color={rejectReason === reasonOption ? COLORS.primary : COLORS.textMuted}
+                />
+                <Text style={[styles.reasonChipText, rejectReason === reasonOption && styles.reasonChipTextActive]}>
+                  {reasonOption}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={styles.rejectActionRow}>
+              <TouchableOpacity
+                style={styles.rejectBtnCancel}
+                onPress={() => setShowRejectModModal(false)}
+                disabled={actionLoading}
+              >
+                <Text style={styles.rejectBtnCancelText}>Quay lại</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.rejectBtnConfirm}
+                onPress={handleConfirmRejectModification}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.rejectBtnConfirmText}>Xác nhận từ chối</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -762,4 +1039,50 @@ const styles = StyleSheet.create({
   resultBtnSecondaryText: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
   resultBtnPrimary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, gap: 6 },
   resultBtnPrimaryText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
+
+  // Pending Route Modifications
+  modSectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  modSectionBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
+  pendingModTitle: { color: '#B45309', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
+  pendingModCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 2, borderColor: '#F59E0B', shadowColor: '#D97706', shadowOpacity: 0.12, shadowRadius: 15, elevation: 5, marginBottom: 16 },
+  pendingModHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modTimerRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  pendingModTimer: { color: '#B45309', fontSize: 13, fontWeight: 'bold' },
+  modCodeBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  modCodeBadgeText: { fontSize: 10, fontWeight: '800', color: '#92400E' },
+  pendingModBody: { marginBottom: 16 },
+  modPassengerInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  modPassengerName: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginLeft: 6 },
+  modPassengerPhone: { fontSize: 13, color: COLORS.textMuted },
+  diffBox: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border },
+  diffHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  diffSectionTitle: { fontSize: 11, fontWeight: '800', color: COLORS.primary, letterSpacing: 0.5 },
+  diffItemOld: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
+  diffLabelOld: { fontSize: 11, color: COLORS.textMuted, fontWeight: '700' },
+  diffTextOld: { fontSize: 12, color: COLORS.textMuted, textDecorationLine: 'line-through', flex: 1 },
+  diffItemNew: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 4, backgroundColor: '#ECFDF5', padding: 6, borderRadius: 6 },
+  diffLabelNew: { fontSize: 11, color: '#047857', fontWeight: '800' },
+  diffTextNew: { fontSize: 13, color: '#065F46', fontWeight: '700', flex: 1, lineHeight: 18, marginTop: 1 },
+  modNoteBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFBEB', padding: 10, borderRadius: 8, gap: 6, marginTop: 10, borderWidth: 1, borderColor: '#FEF3C7' },
+  modNoteText: { color: '#92400E', fontSize: 12, flex: 1, fontStyle: 'italic' },
+  pendingModActions: { flexDirection: 'row', gap: 12 },
+  btnModReject: { flex: 1, backgroundColor: '#F1F5F9', paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  btnModRejectText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '800' },
+  btnModApprove: { flex: 1.5, flexDirection: 'row', backgroundColor: COLORS.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  btnModApproveText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+
+  // Reject Modification Modal
+  rejectModalContainer: { backgroundColor: COLORS.surface, borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 16 },
+  rejectModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  rejectModalTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  rejectModalDesc: { fontSize: 13, color: COLORS.textMuted, marginBottom: 16, lineHeight: 18 },
+  reasonChip: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, marginBottom: 10, backgroundColor: '#F8FAFC' },
+  reasonChipActive: { borderColor: COLORS.primary, backgroundColor: 'rgba(14,165,233,0.06)' },
+  reasonChipText: { fontSize: 14, color: COLORS.textSec, fontWeight: '500' },
+  reasonChipTextActive: { color: COLORS.primary, fontWeight: '700' },
+  rejectActionRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  rejectBtnCancel: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' },
+  rejectBtnCancelText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '700' },
+  rejectBtnConfirm: { flex: 1.5, paddingVertical: 14, borderRadius: 12, backgroundColor: COLORS.error, alignItems: 'center' },
+  rejectBtnConfirmText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
 });

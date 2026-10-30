@@ -40,7 +40,15 @@ public enum ErrorCode {
     // Wallet / Debt errors
     ACCOUNT_BLOCKED_DUE_TO_DEBT(8001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN),
     DUPLICATE_BOOKING(6011, "Bạn đã có vé đang hoạt động cho chuyến xe này. Không thể đặt thêm.", HttpStatus.BAD_REQUEST),
-    DRIVER_STRIPE_NOT_ONBOARDED(6012, "Tài xế chưa kích hoạt cổng thanh toán Stripe Connect để nhận tiền trực tuyến", HttpStatus.BAD_REQUEST);
+    DRIVER_STRIPE_NOT_ONBOARDED(6012, "Tài xế chưa kích hoạt cổng thanh toán Stripe Connect để nhận tiền trực tuyến", HttpStatus.BAD_REQUEST),
+
+    // Booking Modification errors (REQ-P3-01)
+    MODIFICATION_NOT_FOUND(6013, "Yêu cầu chỉnh sửa chuyến đi không tồn tại", HttpStatus.NOT_FOUND),
+    MODIFICATION_ALREADY_PENDING(6014, "Đơn đặt xe đang có yêu cầu chỉnh sửa chờ tài xế duyệt", HttpStatus.BAD_REQUEST),
+    MAX_MODIFICATIONS_EXCEEDED(6015, "Đơn đặt xe đã đạt giới hạn tối đa 2 lần chỉnh sửa thành công", HttpStatus.BAD_REQUEST),
+    MODIFICATION_CUTOFF_EXCEEDED(6016, "Chỉ được phép gửi yêu cầu chỉnh sửa trước giờ khởi hành tối thiểu 2 tiếng", HttpStatus.BAD_REQUEST),
+    MODIFICATION_INVALID_STATUS(6017, "Trạng thái đơn đặt xe không hợp lệ để yêu cầu chỉnh sửa (chỉ hỗ trợ vé Đã xác nhận)", HttpStatus.BAD_REQUEST),
+    MODIFICATION_ALREADY_RESOLVED(6018, "Yêu cầu chỉnh sửa đã được xử lý hoặc đã hết hạn", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;
