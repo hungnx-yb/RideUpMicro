@@ -407,6 +407,22 @@ public class DriverService {
     }
 
     @Transactional
+    public void updateDriverStripeStatusByAccountId(String stripeAccountId, UpdateDriverStripeStatusRequest request) {
+        DriverProfile driverProfile = driverProfileRepository.findByStripeAccountId(stripeAccountId)
+                .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
+
+        if (request.getStripeAccountStatus() != null) {
+            driverProfile.setStripeAccountStatus(request.getStripeAccountStatus());
+        }
+        if (request.getStripePayoutsEnabled() != null) {
+            driverProfile.setStripePayoutsEnabled(request.getStripePayoutsEnabled());
+        }
+        driverProfileRepository.save(driverProfile);
+        log.info("[DriverService] Updated Stripe status by accountId {}: status={}, payoutsEnabled={}",
+                stripeAccountId, driverProfile.getStripeAccountStatus(), driverProfile.getStripePayoutsEnabled());
+    }
+
+    @Transactional
     public DriverResponse updateOperatingProvinces(OperatingProvincesRequest request) {
         User currentUser = userService.getCurrentUser();
         DriverProfile driverProfile = driverProfileRepository.findByUser(currentUser)

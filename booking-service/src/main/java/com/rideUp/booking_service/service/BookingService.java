@@ -284,26 +284,28 @@ public class BookingService {
 
     @Transactional
     public BookingResponse approveBooking(String bookingId) {
-        // Kiểm tra nợ của tài xế
-        try {
-            var debtResponse = identityServiceClient.getMyWallet();
-            if (debtResponse != null && debtResponse.getResult() != null) {
-                java.math.BigDecimal currentDebt = debtResponse.getResult();
-                if (currentDebt.compareTo(new java.math.BigDecimal("500000")) >= 0) {
-                    throw new AppException(ErrorCode.ACCOUNT_BLOCKED_DUE_TO_DEBT);
-                }
-            }
-        } catch (AppException e) {
-            throw e;
-        } catch (Exception e) {
-            log.warn("Failed to check wallet debt during approveBooking: {}", e.getMessage());
-        }
-
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (booking.getStatus() != BookingStatus.WAITING_DRIVER_APPROVAL) {
             throw new AppException(ErrorCode.BOOKING_NOT_FOUND); 
+        }
+
+        // REQ-P3-06: Đơn CASH chặn duyệt nếu tài xế nợ >= 500k. Đơn STRIPE vẫn cho duyệt để cấn trừ nợ.
+        if (resolvePaymentMethod(booking) == PaymentMethod.CASH) {
+            try {
+                var debtResponse = identityServiceClient.getMyWallet();
+                if (debtResponse != null && debtResponse.getResult() != null) {
+                    java.math.BigDecimal currentDebt = debtResponse.getResult();
+                    if (currentDebt.compareTo(new java.math.BigDecimal("500000")) >= 0) {
+                        throw new AppException(ErrorCode.ACCOUNT_BLOCKED_DUE_TO_DEBT);
+                    }
+                }
+            } catch (AppException e) {
+                throw e;
+            } catch (Exception e) {
+                log.warn("Failed to check wallet debt during approveBooking: {}", e.getMessage());
+            }
         }
 
         // Chặn duyệt nếu yêu cầu đã hết hạn

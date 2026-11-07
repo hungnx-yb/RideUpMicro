@@ -199,6 +199,9 @@ export const apiService = {
   getWardById: async (wardId) => {
     return await apiClient.get(`/api/location/ward/${wardId}`);
   },
+  getMaxDistanceConfig: async (provinceId) => {
+    return await apiClient.get('/api/location/config/max-distance', { params: provinceId ? { provinceId } : undefined });
+  },
 
   // Notification Service
   getMyNotifications: async () => {

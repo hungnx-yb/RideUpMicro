@@ -26,3 +26,29 @@ export async function getWardById(wardId) {
   const res = await axiosClient.get(`${locationBaseUrl}/ward/${wardId}`);
   return res.data.result;
 }
+
+export async function getMaxDistanceConfigApi(provinceId) {
+  const params = provinceId ? { provinceId } : {};
+  const res = await axiosClient.get(`${locationBaseUrl}/config/max-distance`, { params });
+  return res.data.result;
+}
+
+export async function getLocationDistanceConfigsApi() {
+  const res = await axiosClient.get(`${locationBaseUrl}/admin/distance-configs`);
+  return res.data.result;
+}
+
+export async function createLocationDistanceConfigApi(payload) {
+  const res = await axiosClient.post(`${locationBaseUrl}/admin/distance-configs`, payload);
+  return res.data.result;
+}
+
+export async function updateLocationDistanceConfigApi(id, payload) {
+  const res = await axiosClient.put(`${locationBaseUrl}/admin/distance-configs/${id}`, payload);
+  return res.data.result;
+}
+
+export async function deleteLocationDistanceConfigApi(id) {
+  const res = await axiosClient.delete(`${locationBaseUrl}/admin/distance-configs/${id}`);
+  return res.data.result;
+}

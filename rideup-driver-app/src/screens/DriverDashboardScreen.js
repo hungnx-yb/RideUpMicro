@@ -38,6 +38,8 @@ export default function DriverDashboardScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [driverInfo, setDriverInfo] = useState(null);
   const [driverProfile, setDriverProfile] = useState(null);
+  const [walletDebt, setWalletDebt] = useState(0);
+  const [stripeStatus, setStripeStatus] = useState(null);
   const [resultModal, setResultModal] = useState(null); // { type: 'success'|'reject'|'error'|'debt'|'mod_approved'|'mod_rejected', bookingId }
   const [pendingModifications, setPendingModifications] = useState([]);
   const [showRejectModModal, setShowRejectModModal] = useState(false);
@@ -141,12 +143,20 @@ export default function DriverDashboardScreen() {
     else setLoading(true);
 
     try {
-      // 1. Gọi song song thông tin người dùng, hồ sơ sinh trắc học và danh sách chuyến đi
-      const [userRes, driverRes, res] = await Promise.all([
+      // 1. Gọi song song thông tin người dùng, hồ sơ sinh trắc học, chuyến đi và dữ liệu tài chính
+      const [userRes, driverRes, res, walletRes, stripeRes] = await Promise.all([
         apiService.getMyUserInfo().catch(() => null),
         apiService.getMyDriverProfile().catch(() => null),
         apiService.getDriverTrips({ size: 100, page: 0 }).catch(() => null),
+        apiService.getMyWallet().catch(() => null),
+        apiService.getStripeAccountStatus().catch(() => null),
       ]);
+      if (walletRes?.data?.result !== undefined) {
+        setWalletDebt(Number(walletRes.data.result) || 0);
+      }
+      if (stripeRes?.data?.result) {
+        setStripeStatus(stripeRes.data.result);
+      }
       if (userRes?.data?.result) {
         setDriverInfo(userRes.data.result);
       }
@@ -379,6 +389,51 @@ export default function DriverDashboardScreen() {
           </View>
           <Text style={styles.statusText}>Bạn đang trực tuyến và sẵn sàng nhận chuyến</Text>
         </View>
+
+        {/* SMART FINANCIAL ALERT BANNERS (REQ-P3-04 & REQ-P3-06) */}
+        {stripeStatus && stripeStatus.status !== 'ACTIVE' && (
+          <TouchableOpacity
+            style={styles.smartAlertBannerWarning}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Wallet')}
+          >
+            <View style={styles.smartAlertIconCircle}>
+              <Ionicons name="card-outline" size={20} color="#6366F1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.smartAlertTitle}>Liên kết tài khoản Stripe Express</Text>
+              <Text style={styles.smartAlertDesc}>
+                Khách hàng hiện chưa thể trả thẻ trên xe của bạn. Bấm để liên kết ngay trong 1 phút!
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6366F1" />
+          </TouchableOpacity>
+        )}
+
+        {walletDebt >= 400000 && (
+          <TouchableOpacity
+            style={walletDebt >= 500000 ? styles.smartAlertBannerDanger : styles.smartAlertBannerAmber}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Wallet')}
+          >
+            <View style={[styles.smartAlertIconCircle, { backgroundColor: walletDebt >= 500000 ? '#FEE2E2' : '#FEF3C7' }]}>
+              <Ionicons
+                name={walletDebt >= 500000 ? 'lock-closed' : 'warning'}
+                size={20}
+                color={walletDebt >= 500000 ? '#EF4444' : '#F59E0B'}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.smartAlertTitle, { color: walletDebt >= 500000 ? '#B91C1C' : '#92400E' }]}>
+                {walletDebt >= 500000 ? 'Tài khoản bị tạm khóa nhận chuyến' : 'Dư nợ sắp chạm hạn mức 500k'}
+              </Text>
+              <Text style={[styles.smartAlertDesc, { color: walletDebt >= 500000 ? '#991B1B' : '#78350F' }]}>
+                Dư nợ hiện tại: {Number(walletDebt).toLocaleString('vi-VN')} đ. Bấm để thanh toán nợ ngay.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={walletDebt >= 500000 ? '#EF4444' : '#F59E0B'} />
+          </TouchableOpacity>
+        )}
 
 
 
@@ -1085,4 +1140,12 @@ const styles = StyleSheet.create({
   rejectBtnCancelText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '700' },
   rejectBtnConfirm: { flex: 1.5, paddingVertical: 14, borderRadius: 12, backgroundColor: COLORS.error, alignItems: 'center' },
   rejectBtnConfirmText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+
+  // Smart Alert Banners
+  smartAlertBannerWarning: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE', borderRadius: 16, padding: 14, marginBottom: 16, gap: 12 },
+  smartAlertBannerAmber: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 16, padding: 14, marginBottom: 16, gap: 12 },
+  smartAlertBannerDanger: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', borderRadius: 16, padding: 14, marginBottom: 16, gap: 12 },
+  smartAlertIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E0E7FF', alignItems: 'center', justifyContent: 'center' },
+  smartAlertTitle: { fontSize: 14, fontWeight: '800', color: '#4338CA', marginBottom: 2 },
+  smartAlertDesc: { fontSize: 12, color: '#4B5563', lineHeight: 16 },
 });

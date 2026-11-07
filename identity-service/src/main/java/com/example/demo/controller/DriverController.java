@@ -233,6 +233,16 @@ public class DriverController {
                 .build();
     }
 
+    @PutMapping("/internal/stripe-account/{stripeAccountId}/status")
+    public ApiResponse<Void> updateDriverStripeStatusByAccountIdInternal(
+            @PathVariable String stripeAccountId,
+            @Valid @RequestBody UpdateDriverStripeStatusRequest request) {
+        driverService.updateDriverStripeStatusByAccountId(stripeAccountId, request);
+        return ApiResponse.<Void>builder()
+                .message("Driver Stripe status updated successfully by stripeAccountId")
+                .build();
+    }
+
     @PostMapping("/internal/{driverId}/deduct-debt")
     public ApiResponse<Void> deductDebtInternal(
             @PathVariable String driverId,

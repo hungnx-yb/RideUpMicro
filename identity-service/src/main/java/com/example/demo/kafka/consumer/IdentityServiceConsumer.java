@@ -88,9 +88,11 @@ public class IdentityServiceConsumer {
         try {
             com.example.demo.dto.event.BookingCompletedEvent event = objectMapper.readValue(payload, com.example.demo.dto.event.BookingCompletedEvent.class);
             if (event.getDriverId() != null && event.getTotalAmount() != null) {
-                User user = userRepository.findById(event.getDriverId()).orElse(null);
-                if (user != null && user.getDriverProfile() != null) {
-                    DriverProfile driverProfile = user.getDriverProfile();
+                DriverProfile driverProfile = driverProfileRepository.findById(event.getDriverId())
+                        .or(() -> driverProfileRepository.findByUserId(event.getDriverId()))
+                        .orElse(null);
+
+                if (driverProfile != null) {
 
                     // 1. Tính hoa hồng cá nhân hóa theo thời gian thực (12% - 25%)
                     java.math.BigDecimal dynamicRate = commissionService.calculateCommissionRate(driverProfile);

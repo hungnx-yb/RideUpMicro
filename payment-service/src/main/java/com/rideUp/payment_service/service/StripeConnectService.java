@@ -25,6 +25,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -52,19 +57,7 @@ public class StripeConnectService {
 
         try {
             if (stripeAccountId == null || stripeAccountId.isBlank()) {
-                AccountCreateParams params = AccountCreateParams.builder()
-                        .setType(AccountCreateParams.Type.EXPRESS)
-                        .setCountry("VN")
-                        .setCapabilities(AccountCreateParams.Capabilities.builder()
-                                .setTransfers(AccountCreateParams.Capabilities.Transfers.builder()
-                                        .setRequested(true)
-                                        .build())
-                                .build())
-                        .putMetadata("driverId", driverId)
-                        .build();
-
-                Account account = Account.create(params);
-                stripeAccountId = account.getId();
+                stripeAccountId = createConnectedAccount(driverId);
                 log.info("[StripeConnect] Created Stripe Express account {} for driverId={}", stripeAccountId, driverId);
 
                 identityServiceClient.updateDriverStripeStatus(driverId, UpdateDriverStripeStatusRequest.builder()
@@ -212,17 +205,26 @@ public class StripeConnectService {
                 log.info("[StripeConnect][Webhook] account.updated: acct={}, driverId={}, payoutsEnabled={}, detailsSubmitted={}",
                         stripeAccountId, driverId, payoutsEnabled, detailsSubmitted);
 
-                if (driverId != null && !driverId.isBlank()) {
-                    StripeAccountStatus status = (payoutsEnabled && detailsSubmitted)
-                            ? StripeAccountStatus.ACTIVE
-                            : StripeAccountStatus.PENDING_VERIFICATION;
+                StripeAccountStatus status = (payoutsEnabled && detailsSubmitted)
+                        ? StripeAccountStatus.ACTIVE
+                        : StripeAccountStatus.PENDING_VERIFICATION;
 
-                    identityServiceClient.updateDriverStripeStatus(driverId, UpdateDriverStripeStatusRequest.builder()
-                            .stripeAccountId(stripeAccountId)
-                            .stripeAccountStatus(status)
-                            .stripePayoutsEnabled(payoutsEnabled)
-                            .build());
+                UpdateDriverStripeStatusRequest updateRequest = UpdateDriverStripeStatusRequest.builder()
+                        .stripeAccountId(stripeAccountId)
+                        .stripeAccountStatus(status)
+                        .stripePayoutsEnabled(payoutsEnabled)
+                        .build();
+
+                if (driverId != null && !driverId.isBlank()) {
+                    identityServiceClient.updateDriverStripeStatus(driverId, updateRequest);
                     log.info("[StripeConnect][Webhook] Updated driver {} Stripe status to {} via webhook", driverId, status);
+                } else {
+                    try {
+                        identityServiceClient.updateDriverStripeStatusByAccountId(stripeAccountId, updateRequest);
+                        log.info("[StripeConnect][Webhook] Updated driver Stripe status by accountId {} to {} via webhook", stripeAccountId, status);
+                    } catch (Exception ex) {
+                        log.warn("[StripeConnect][Webhook] Could not update driver by accountId {}: {}", stripeAccountId, ex.getMessage());
+                    }
                 }
             }
         } catch (AppException e) {
@@ -231,6 +233,74 @@ public class StripeConnectService {
             log.error("[StripeConnect][Webhook] Failed to parse Stripe webhook payload: {}", e.getMessage(), e);
             throw new AppException(ErrorCode.STRIPE_WEBHOOK_INVALID);
         }
+    }
+
+    private String createConnectedAccount(String driverId) throws StripeException {
+        try {
+            String url = "https://api.stripe.com/v2/core/accounts";
+            String contactEmail = "driver_" + driverId + "@rideup.vn";
+            Map<String, Object> body = Map.of(
+                    "contact_email", contactEmail,
+                    "identity", Map.of("country", "US"),
+                    "dashboard", "express",
+                    "defaults", Map.of(
+                            "responsibilities", Map.of(
+                                    "fees_collector", "application",
+                                    "losses_collector", "application"
+                            )
+                    ),
+                    "configuration", Map.of(
+                            "recipient", Map.of(
+                                    "capabilities", Map.of(
+                                            "stripe_balance", Map.of(
+                                                    "stripe_transfers", Map.of("requested", true)
+                                            )
+                                    )
+                            )
+                    ),
+                    "metadata", Map.of("driverId", driverId)
+            );
+
+            String jsonPayload = objectMapper.writeValueAsString(body);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", "Bearer " + com.stripe.Stripe.apiKey)
+                    .header("Stripe-Version", "2026-10-28.endive")
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                    .build();
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                JsonNode root = objectMapper.readTree(response.body());
+                String acctId = root.path("id").asText();
+                if (acctId != null && !acctId.isBlank()) {
+                    log.info("[StripeConnect] Successfully created Connected Account {} via Accounts v2 for driver {}", acctId, driverId);
+                    return acctId;
+                }
+            } else {
+                log.warn("[StripeConnect] Accounts v2 API responded with code {}: {}. Attempting fallback to v1...",
+                        response.statusCode(), response.body());
+            }
+        } catch (Exception e) {
+            log.warn("[StripeConnect] Exception during Accounts v2 creation: {}. Attempting fallback to v1...", e.getMessage());
+        }
+
+        // Fallback to v1
+        AccountCreateParams params = AccountCreateParams.builder()
+                .setType(AccountCreateParams.Type.EXPRESS)
+                .setCountry("US")
+                .setCapabilities(AccountCreateParams.Capabilities.builder()
+                        .setTransfers(AccountCreateParams.Capabilities.Transfers.builder()
+                                .setRequested(true)
+                                .build())
+                        .build())
+                .putMetadata("driverId", driverId)
+                .build();
+        Account account = Account.create(params);
+        return account.getId();
     }
 
     private DriverFinancialProfileResponse getDriverFinancialProfileSafely(String driverId) {

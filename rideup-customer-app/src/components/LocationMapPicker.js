@@ -10,7 +10,7 @@ import { apiService } from '../services/apiService';
 // ── Constants ──────────────────────────────────────────────────────────────
 const DEFAULT_COORD = { latitude: 16.047079, longitude: 108.20623 };
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/reverse';
-const MAX_DISTANCE_METERS = 20000;
+const DEFAULT_MAX_DISTANCE_METERS = 20000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function haversine(lat1, lng1, lat2, lng2) {
@@ -32,7 +32,38 @@ function isValid(lat, lng) {
   );
 }
 
-async function reverseGeocode(lat, lng) {
+/**
+ * Thuật toán bóc tách địa chỉ chi tiết sạch (REQ-P3-07):
+ * Loại bỏ phường/quận/tỉnh và mã bưu điện, chỉ giữ số nhà, ngõ, tên đường hoặc mốc
+ */
+function extractCleanGranularAddress(raw, wardName = '') {
+  if (!raw) return '';
+  const tokens = raw.split(',').map(t => t.trim()).filter(Boolean);
+  const cleanTokens = [];
+
+  const lowerWard = wardName ? wardName.toLowerCase().replace(/^(phường|xã|thị trấn)\s+/i, '').trim() : '';
+
+  for (const token of tokens) {
+    const lower = token.toLowerCase();
+    if (/^\d{5,6}$/.test(token) || lower === 'việt nam' || lower === 'vietnam') {
+      continue;
+    }
+    if (
+      (lowerWard && (lower === lowerWard || lower.includes(lowerWard))) ||
+      /\b(phường|xã|thị trấn|quận|huyện|thị xã|tỉnh|thành phố)\b/i.test(token)
+    ) {
+      break;
+    }
+    cleanTokens.push(token);
+  }
+
+  if (cleanTokens.length > 0) {
+    return cleanTokens.join(', ');
+  }
+  return tokens.slice(0, 2).join(', ');
+}
+
+async function reverseGeocode(lat, lng, wardName = '') {
   try {
     // Thử API mới: Photon (Dữ liệu từ OpenStreetMap nhưng KHÔNG chặn IP/User-Agent như Nominatim)
     const photonRes = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
@@ -40,9 +71,16 @@ async function reverseGeocode(lat, lng) {
       const data = await photonRes.json();
       const props = data.features?.[0]?.properties;
       if (props) {
-        // Gom các thành phần địa chỉ lại: Tên đường, Quận, Thành phố, Quốc gia
-        const parts = [props.name, props.street, props.district, props.city, props.country].filter(Boolean);
-        if (parts.length > 0) return [...new Set(parts)].join(', ');
+        // Nếu có số nhà và tên đường
+        const directParts = [props.name, props.housenumber, props.street].filter(Boolean);
+        if (directParts.length > 0) {
+          return [...new Set(directParts)].join(', ');
+        }
+        const parts = [props.name, props.street, props.district, props.city].filter(Boolean);
+        if (parts.length > 0) {
+          const raw = [...new Set(parts)].join(', ');
+          return extractCleanGranularAddress(raw, wardName);
+        }
       }
     }
   } catch (err) {
@@ -56,9 +94,9 @@ async function reverseGeocode(lat, lng) {
     );
     if (fallbackRes.ok) {
       const data = await fallbackRes.json();
-      const parts = [data.locality, data.city, data.principalSubdivision, data.countryName].filter(Boolean);
-      // Lọc các giá trị trùng lặp
-      return [...new Set(parts)].join(', ');
+      const parts = [data.locality, data.city, data.principalSubdivision].filter(Boolean);
+      const raw = [...new Set(parts)].join(', ');
+      return extractCleanGranularAddress(raw, wardName);
     }
   } catch (err) {
     console.log('Fallback Geocode failed', err.message);
@@ -92,6 +130,8 @@ export default function LocationMapPicker({
 }) {
   const mapRef = useRef(null);
   const [wardCenter, setWardCenter] = useState(null);
+  const [maxDistanceMeters, setMaxDistanceMeters] = useState(DEFAULT_MAX_DISTANCE_METERS);
+  const [maxDistanceKm, setMaxDistanceKm] = useState(20);
   const [loadingWard, setLoadingWard] = useState(false);
   const [resolvingAddress, setResolvingAddress] = useState(false);
   const [localError, setLocalError] = useState('');
@@ -103,9 +143,14 @@ export default function LocationMapPicker({
 
   const selectedWardName = wardOptions.find(w => w.id === wardId)?.name || '';
 
-  // Load tâm phường/xã khi wardId thay đổi
+  // Load tâm phường/xã và bán kính cấu hình khi wardId thay đổi
   useEffect(() => {
-    if (!wardId) { setWardCenter(null); return; }
+    if (!wardId) { 
+      setWardCenter(null); 
+      setMaxDistanceMeters(DEFAULT_MAX_DISTANCE_METERS);
+      setMaxDistanceKm(20);
+      return; 
+    }
     let cancelled = false;
     setLoadingWard(true);
     apiService.getWardById(wardId)
@@ -115,6 +160,17 @@ export default function LocationMapPicker({
         const wLng = Number(ward?.lng);
         if (!cancelled) {
           setWardCenter(isValid(wLat, wLng) ? { latitude: wLat, longitude: wLng } : null);
+          const provId = ward?.provinceId || ward?.province?.id;
+          if (provId) {
+            apiService.getMaxDistanceConfig(provId)
+              .then(distRes => {
+                if (!cancelled && distRes?.data?.result?.maxDistanceMeters) {
+                  setMaxDistanceMeters(distRes.data.result.maxDistanceMeters);
+                  setMaxDistanceKm(distRes.data.result.maxDistanceKm);
+                }
+              })
+              .catch(() => {});
+          }
         }
       })
       .catch(() => { if (!cancelled) setWardCenter(null); })
@@ -126,11 +182,11 @@ export default function LocationMapPicker({
   useEffect(() => {
     if (!hasCoord || !wardCenter) return;
     const dist = haversine(lat, lng, wardCenter.latitude, wardCenter.longitude);
-    if (dist > MAX_DISTANCE_METERS) {
+    if (dist > maxDistanceMeters) {
       onChange({ lat: NaN, lng: NaN, addressText: value?.addressText || '' });
-      setLocalError(`Vị trí nằm ngoài bán kính ${MAX_DISTANCE_METERS / 1000}km từ phường/xã đã chọn.`);
+      setLocalError(`Vị trí nằm ngoài bán kính ${maxDistanceKm}km cho phép từ phường/xã đã chọn.`);
     }
-  }, [hasCoord, lat, lng, wardCenter]);
+  }, [hasCoord, lat, lng, wardCenter, maxDistanceMeters, maxDistanceKm]);
 
   const updateFromCoord = useCallback(async (nextLat, nextLng) => {
     setLocalError('');
@@ -140,22 +196,22 @@ export default function LocationMapPicker({
     }
     if (wardCenter) {
       const dist = haversine(nextLat, nextLng, wardCenter.latitude, wardCenter.longitude);
-      if (dist > MAX_DISTANCE_METERS) {
-        setLocalError(`Điểm chọn nằm ngoài ${MAX_DISTANCE_METERS / 1000}km từ phường/xã. Vui lòng chọn điểm khác.`);
+      if (dist > maxDistanceMeters) {
+        setLocalError(`Điểm chọn cách tâm ${(dist / 1000).toFixed(1)}km, vượt quá ${maxDistanceKm}km cho phép.`);
         return;
       }
     }
     onChange({ lat: nextLat, lng: nextLng, addressText: value?.addressText || '' });
     try {
       setResolvingAddress(true);
-      const address = await reverseGeocode(nextLat, nextLng);
+      const address = await reverseGeocode(nextLat, nextLng, selectedWardName);
       if (address) onChange({ lat: nextLat, lng: nextLng, addressText: address });
     } catch {
       setLocalError('Không lấy được địa chỉ tự động. Bạn có thể tự nhập bên dưới.');
     } finally {
       setResolvingAddress(false);
     }
-  }, [wardCenter, value, onChange]);
+  }, [wardCenter, value, onChange, maxDistanceMeters, maxDistanceKm, selectedWardName]);
 
   const useCurrentLocation = async () => {
     setLocalError('');
@@ -268,7 +324,7 @@ export default function LocationMapPicker({
               {wardCenter && (
                 <Circle
                   center={wardCenter}
-                  radius={MAX_DISTANCE_METERS}
+                  radius={maxDistanceMeters}
                   strokeColor={accentColor}
                   strokeWidth={2}
                   fillColor={`${accentColor}18`}
@@ -280,9 +336,9 @@ export default function LocationMapPicker({
             </MapView>
           </View>
 
-          {distance !== null && distance > MAX_DISTANCE_METERS * 0.8 && (
+          {distance !== null && distance > maxDistanceMeters * 0.8 && (
             <Text style={styles.distText}>
-              Cách tâm phường/xã: {(distance / 1000).toFixed(2)} km (tối đa {MAX_DISTANCE_METERS / 1000} km)
+              Cách tâm phường/xã: {(distance / 1000).toFixed(2)} km (tối đa {maxDistanceKm} km)
             </Text>
           )}
 

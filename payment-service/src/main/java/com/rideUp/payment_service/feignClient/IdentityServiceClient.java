@@ -33,6 +33,9 @@ public interface IdentityServiceClient {
     @PutMapping("/drivers/internal/{driverId}/stripe-status")
     ApiResponse<Void> updateDriverStripeStatus(@PathVariable("driverId") String driverId, @RequestBody UpdateDriverStripeStatusRequest request);
 
+    @PutMapping("/drivers/internal/stripe-account/{stripeAccountId}/status")
+    ApiResponse<Void> updateDriverStripeStatusByAccountId(@PathVariable("stripeAccountId") String stripeAccountId, @RequestBody UpdateDriverStripeStatusRequest request);
+
     @PostMapping("/drivers/internal/{driverId}/deduct-debt")
     ApiResponse<Void> deductDebtInternal(@PathVariable("driverId") String driverId, @RequestParam("amount") BigDecimal amount);
 

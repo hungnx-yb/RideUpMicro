@@ -1,7 +1,9 @@
 package com.rideup.locationservice.service;
 
+import com.rideup.locationservice.entity.LocationDistanceConfig;
 import com.rideup.locationservice.entity.Province;
 import com.rideup.locationservice.entity.Ward;
+import com.rideup.locationservice.repository.LocationDistanceConfigRepository;
 import com.rideup.locationservice.repository.ProvinceRepository;
 import com.rideup.locationservice.repository.WardRepository;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,7 @@ public class LocationDataSeeder {
 
     private final ProvinceRepository provinceRepository;
     private final WardRepository wardRepository;
+    private final LocationDistanceConfigRepository distanceConfigRepository;
     private final RestTemplateBuilder restTemplateBuilder;
 
     @Value("${location.seeding.enabled:true}")
@@ -53,6 +56,49 @@ public class LocationDataSeeder {
     @Value("${location.seeding.initial-backoff-ms:1500}")
     private long initialBackoffMs;
 
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void seedDistanceConfigs() {
+        try {
+            seedDistanceConfigsIfEmpty();
+        } catch (Exception ex) {
+            log.error("[LocationSeeder] Seeding distance configs failed: {}", ex.getMessage(), ex);
+        }
+    }
+
+    private void seedDistanceConfigsIfEmpty() {
+        if (distanceConfigRepository.findByProvinceIdIsNullAndIsActiveTrue().isEmpty()) {
+            LocationDistanceConfig global = LocationDistanceConfig.builder()
+                    .provinceId(null)
+                    .maxDistanceKm(20.0)
+                    .description("Cấu hình bán kính mặc định toàn quốc (Global Default)")
+                    .isActive(true)
+                    .build();
+            distanceConfigRepository.save(global);
+            log.info("[LocationSeeder] Seeded Global Default distance config (20 km)");
+        }
+
+        // Cấu hình ghi đè mẫu theo tài liệu: Hà Nội (10km), TP.HCM (10km), Lào Cai (35km)
+        seedProvinceOverrideIfMatches("Hà Nội", 10.0, "Khu vực đô thị đặc biệt Hà Nội - siết bán kính 10km");
+        seedProvinceOverrideIfMatches("Hồ Chí Minh", 10.0, "Khu vực đô thị đặc biệt TP.HCM - siết bán kính 10km");
+        seedProvinceOverrideIfMatches("Lào Cai", 35.0, "Tỉnh miền núi Lào Cai - mở rộng bán kính đón trả 35km");
+    }
+
+    private void seedProvinceOverrideIfMatches(String provinceKeyword, double maxKm, String description) {
+        List<Province> matched = provinceRepository.getAllProvinces(provinceKeyword);
+        for (Province p : matched) {
+            if (!distanceConfigRepository.existsByProvinceId(p.getId())) {
+                LocationDistanceConfig cfg = LocationDistanceConfig.builder()
+                        .provinceId(p.getId())
+                        .maxDistanceKm(maxKm)
+                        .description(description)
+                        .isActive(true)
+                        .build();
+                distanceConfigRepository.save(cfg);
+                log.info("[LocationSeeder] Seeded Province Override distance config for {} ({} km)", p.getName(), maxKm);
+            }
+        }
+    }
 
     @EventListener(ApplicationReadyEvent.class)
     public void seedIfEmpty() {
