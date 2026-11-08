@@ -47,17 +47,6 @@ public class PaymentController {
                 .build();
     }
 
-    @PostMapping("/{id}/authorize")
-    public ApiResponse<PaymentResponse> authorizePayment(
-            @PathVariable String id,
-            @Valid @RequestBody MarkPaymentPaidRequest request
-    ) {
-        return ApiResponse.<PaymentResponse>builder()
-                .message("Payment authorized successfully")
-                .result(paymentService.authorizePayment(id, request))
-                .build();
-    }
-
     @PostMapping("/{id}/failed")
     public ApiResponse<PaymentResponse> markPaymentFailed(
             @PathVariable String id,

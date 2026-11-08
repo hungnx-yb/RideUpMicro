@@ -89,9 +89,6 @@ export const apiService = {
   getPaymentUrl: async (bookingId) => {
     return await apiClient.get(`/api/payment/payments/booking/${bookingId}`);
   },
-  markPaymentPaid: async (paymentId, transactionId) => {
-    return await apiClient.post(`/api/payment/payments/${paymentId}/authorize`, { transactionId });
-  },
 
   // Trip Service
   getAllTrips: async (params) => {

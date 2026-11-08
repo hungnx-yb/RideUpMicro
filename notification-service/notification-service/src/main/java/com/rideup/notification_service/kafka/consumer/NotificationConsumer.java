@@ -350,6 +350,70 @@ public class NotificationConsumer {
 		ack.acknowledge();
 	}
 
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(
+			topics = "${app.kafka.topics.refund-completed:refund.completed}",
+			groupId = "${spring.kafka.consumer.group-id}"
+	)
+	public void onRefundCompleted(String payload, Acknowledgment ack) throws Exception {
+		Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+		String bookingId = event.get("bookingId");
+		if (bookingId != null) {
+			BookingResponse booking = resolveBooking(bookingId);
+			if (booking != null && booking.getCustomerId() != null) {
+				notificationService.createNotification(
+						booking.getCustomerId(),
+						"Hoàn tiền thành công",
+						String.format("Yêu cầu hoàn tiền cho mã đặt chỗ %s đã được xử lý thành công.",
+								booking.getBookingCode() != null ? booking.getBookingCode() : bookingId),
+						NotificationType.SYSTEM,
+						buildMetadata("bookingId", bookingId, "type", "REFUND_COMPLETED")
+				);
+			}
+		}
+		ack.acknowledge();
+	}
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(
+			topics = "${app.kafka.topics.trip-request-expired:trip-request-expired}",
+			groupId = "${spring.kafka.consumer.group-id}"
+	)
+	public void onTripRequestExpired(String payload, Acknowledgment ack) throws Exception {
+		Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+		String passengerId = event.get("passengerId");
+		if (passengerId != null) {
+			notificationService.createNotification(
+					passengerId,
+					"Yêu cầu tìm xe đã hết hạn",
+					"Yêu cầu tìm xe của bạn đã hết hạn do chưa có chuyến đi phù hợp. Bạn có thể tạo yêu cầu mới bất cứ lúc nào.",
+					NotificationType.SYSTEM,
+					buildMetadata("tripRequestId", event.get("tripRequestId"), "type", "TRIP_REQUEST_EXPIRED")
+			);
+		}
+		ack.acknowledge();
+	}
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(
+			topics = "${app.kafka.topics.trip-request-cancelled:trip-request-cancelled}",
+			groupId = "${spring.kafka.consumer.group-id}"
+	)
+	public void onTripRequestCancelled(String payload, Acknowledgment ack) throws Exception {
+		Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+		String passengerId = event.get("passengerId");
+		if (passengerId != null) {
+			notificationService.createNotification(
+					passengerId,
+					"Hủy yêu cầu tìm xe",
+					"Bạn đã hủy yêu cầu tìm xe thành công.",
+					NotificationType.SYSTEM,
+					buildMetadata("tripRequestId", event.get("tripRequestId"), "type", "TRIP_REQUEST_CANCELLED")
+			);
+		}
+		ack.acknowledge();
+	}
+
 	private String buildMetadata(String... keyValues) {
 		try {
 			Map<String, String> metadata = new HashMap<>();

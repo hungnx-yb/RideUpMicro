@@ -146,5 +146,8 @@ app:
       marketplace-invitation-accepted: ${KAFKA_TOPIC_MARKETPLACE_ACCEPTED:marketplace-invitation-accepted}
       booking-modification-requested: ${KAFKA_TOPIC_BOOKING_MODIFICATION_REQUESTED:booking.modification.requested}
       booking-modification-resolved: ${KAFKA_TOPIC_BOOKING_MODIFICATION_RESOLVED:booking.modification.resolved}
+      refund-completed: ${KAFKA_TOPIC_REFUND_COMPLETED:refund.completed}
+      trip-request-expired: ${KAFKA_TOPIC_TRIP_REQUEST_EXPIRED:trip-request-expired}
+      trip-request-cancelled: ${KAFKA_TOPIC_TRIP_REQUEST_CANCELLED:trip-request-cancelled}
 
 
