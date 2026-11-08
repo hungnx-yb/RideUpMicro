@@ -460,6 +460,26 @@ export default function SearchRideScreen({ navigation, route }) {
       setBookingIdempotencyKey(generateUuid());
       setAcceptedInvitationId(prefillInvitation.id);
     }
+    if (route?.params?.directTrip) {
+      const targetTrip = route.params.directTrip;
+      setSelectedTrip(targetTrip);
+      setPickupWardId(targetTrip.stops?.find(s => s.stopType === 'PICKUP')?.wardId || '');
+      setDropoffWardId(targetTrip.stops?.find(s => s.stopType === 'DROPOFF')?.wardId || '');
+      setSeatCount(1);
+      setBookingNote('');
+      setBookingIdempotencyKey(generateUuid());
+    }
+    if (route?.params?.startProvinceId) {
+      setStartProvinceId(route.params.startProvinceId);
+    }
+    if (route?.params?.endProvinceId) {
+      setEndProvinceId(route.params.endProvinceId);
+    }
+    if (route?.params?.openPostRequest) {
+      setTimeout(() => {
+        setIsRequestModalVisible(true);
+      }, 400);
+    }
   }, [route?.params]);
 
   useEffect(() => {
