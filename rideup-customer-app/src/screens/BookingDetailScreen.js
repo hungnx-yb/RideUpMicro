@@ -55,6 +55,77 @@ const fTime = (iso) => {
   return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 };
 
+const removeDiacritics = (str) => {
+  if (!str) return '';
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+};
+
+/**
+ * Phân tách địa chỉ chuỗi thành { detail, ward, province }
+ * Đảm bảo ô 'detail' chỉ chứa số nhà, ngõ, tên đường (không chứa phường hay tỉnh)
+ */
+const parseAddressComponents = (fullText, wardName = '', provinceName = '') => {
+  if (!fullText) {
+    return { detail: '', ward: wardName || '', province: provinceName || '' };
+  }
+
+  const parts = fullText.split(',').map(p => p.trim()).filter(Boolean);
+  let detail = fullText;
+  let parsedWard = wardName || '';
+  let parsedProvince = provinceName || '';
+
+  if (parts.length >= 3) {
+    parsedProvince = provinceName || parts[parts.length - 1];
+    parsedWard = wardName || parts[parts.length - 2];
+    detail = parts.slice(0, -2).join(', ');
+  } else if (parts.length === 2) {
+    parsedProvince = provinceName || parts[1];
+    detail = parts[0];
+  }
+
+  // Tinh chỉnh nếu detail vẫn còn dính phần phường hoặc tỉnh
+  if (detail) {
+    const detailParts = detail.split(',').map(p => p.trim()).filter(Boolean);
+    const clean = [];
+    const normWard = removeDiacritics(parsedWard);
+    const normProv = removeDiacritics(parsedProvince);
+
+    for (const p of detailParts) {
+      const normP = removeDiacritics(p);
+      if (normWard && (normP === normWard || normP.includes(normWard))) continue;
+      if (normProv && (normP === normProv || normP.includes(normProv))) continue;
+      clean.push(p);
+    }
+    if (clean.length > 0) {
+      detail = clean.join(', ');
+    }
+  }
+
+  return {
+    detail: detail.trim(),
+    ward: parsedWard.trim(),
+    province: parsedProvince.trim(),
+  };
+};
+
+/**
+ * Ghép lại số nhà/đường với phường và tỉnh thành
+ */
+const buildFullAddress = (detail, ward, province) => {
+  const parts = [];
+  const cleanDetail = (detail || '').trim();
+  if (cleanDetail) parts.push(cleanDetail);
+
+  const normDetail = removeDiacritics(cleanDetail);
+  if (ward && (!cleanDetail || !normDetail.includes(removeDiacritics(ward)))) {
+    parts.push(ward.trim());
+  }
+  if (province && (!cleanDetail || !normDetail.includes(removeDiacritics(province)))) {
+    parts.push(province.trim());
+  }
+  return parts.join(', ');
+};
+
 // ──────────────────────────────── COMPONENT ────────────────────────────────
 const BookingDetailScreen = ({ route, navigation }) => {
   const { booking: initialBooking } = route.params || {};
@@ -68,11 +139,11 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const [showPickupMap, setShowPickupMap] = useState(false);
   const [showDropoffMap, setShowDropoffMap] = useState(false);
   const [editForm, setEditForm] = useState({
-    pickupAddressText: '',
+    pickupDetailAddress: '',
     pickupLat: null,
     pickupLng: null,
     pickupWardId: '',
-    dropoffAddressText: '',
+    dropoffDetailAddress: '',
     dropoffLat: null,
     dropoffLng: null,
     dropoffWardId: '',
@@ -135,11 +206,22 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const status = getStatus(booking.status);
   const shortCode = (booking.bookingCode || booking.id || '').toUpperCase();
 
-  // Location breakdown
+  // Location breakdown & phân tách địa chỉ chi tiết sạch
   const pickupWardName = trip?.stops?.find(s => String(s.wardId) === String(booking.pickupWardId))?.addressText || '';
   const dropoffWardName = trip?.stops?.find(s => String(s.wardId) === String(booking.dropoffWardId))?.addressText || '';
   const startProvinceName = trip?.startAddressText || '';
   const endProvinceName = trip?.endAddressText || '';
+
+  const rawPickupParsed = parseAddressComponents(booking.pickupAddressText, pickupWardName, startProvinceName);
+  const rawDropoffParsed = parseAddressComponents(booking.dropoffAddressText, dropoffWardName, endProvinceName);
+
+  const pickupDisplayProvince = startProvinceName || rawPickupParsed.province;
+  const pickupDisplayWard = pickupWardName || rawPickupParsed.ward;
+  const pickupDisplayDetail = rawPickupParsed.detail;
+
+  const dropoffDisplayProvince = endProvinceName || rawDropoffParsed.province;
+  const dropoffDisplayWard = dropoffWardName || rawDropoffParsed.ward;
+  const dropoffDisplayDetail = rawDropoffParsed.detail;
 
   // ── Context‑aware actions ──
   const showChat     = ['CONFIRMED', 'RESERVED', 'PENDING_PAYMENT', 'WAITING_DRIVER_APPROVAL'].includes(booking.status);
@@ -156,18 +238,22 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const dropoffWards = trip?.stops?.filter(s => s.stopType === 'DROPOFF').map(s => ({ id: String(s.wardId), name: s.addressText })) || [];
 
   const handleOpenEditModal = () => {
+    // Chỉ lấy phần số nhà/tên đường vào ô chỉnh sửa chi tiết, loại bỏ phường/tỉnh
+    const parsedPickup = parseAddressComponents(booking.pickupAddressText, pickupDisplayWard, pickupDisplayProvince);
+    const parsedDropoff = parseAddressComponents(booking.dropoffAddressText, dropoffDisplayWard, dropoffDisplayProvince);
+
     setEditForm({
-      pickupAddressText: booking.pickupAddressText || '',
+      pickupDetailAddress: parsedPickup.detail || '',
       pickupLat: booking.pickupLat != null ? Number(booking.pickupLat) : 21.0285,
       pickupLng: booking.pickupLng != null ? Number(booking.pickupLng) : 105.8542,
       pickupWardId: String(booking.pickupWardId || ''),
-      dropoffAddressText: booking.dropoffAddressText || '',
+      dropoffDetailAddress: parsedDropoff.detail || '',
       dropoffLat: booking.dropoffLat != null ? Number(booking.dropoffLat) : 20.8449,
       dropoffLng: booking.dropoffLng != null ? Number(booking.dropoffLng) : 106.6881,
       dropoffWardId: String(booking.dropoffWardId || ''),
-      passengerName: booking.passengerName || '',
-      passengerPhone: booking.passengerPhone || '',
-      note: '',
+      passengerName: booking.passengerName || booking.userName || '',
+      passengerPhone: booking.passengerPhone || booking.userPhone || '',
+      note: booking.note || '',
     });
     setShowPickupMap(false);
     setShowDropoffMap(false);
@@ -175,23 +261,35 @@ const BookingDetailScreen = ({ route, navigation }) => {
   };
 
   const handleSendModification = async () => {
-    if (!editForm.pickupAddressText.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ điểm đón mới.');
+    if (!editForm.pickupDetailAddress.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ chi tiết (số nhà, tên đường) điểm đón.');
       return;
     }
-    if (!editForm.dropoffAddressText.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ điểm trả mới.');
+    if (!editForm.dropoffDetailAddress.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ chi tiết (số nhà, tên đường) điểm trả.');
       return;
     }
+
+    // Ghép số nhà đã sửa với Phường và Tỉnh cố định thành địa chỉ hoàn chỉnh gửi lên máy chủ
+    const fullPickup = buildFullAddress(
+      editForm.pickupDetailAddress,
+      pickupDisplayWard,
+      pickupDisplayProvince
+    );
+    const fullDropoff = buildFullAddress(
+      editForm.dropoffDetailAddress,
+      dropoffDisplayWard,
+      dropoffDisplayProvince
+    );
 
     setSubmittingMod(true);
     try {
       const payload = {
-        pickupAddressText: editForm.pickupAddressText.trim(),
+        pickupAddressText: fullPickup,
         pickupLat: editForm.pickupLat != null ? Number(editForm.pickupLat) : 21.0285,
         pickupLng: editForm.pickupLng != null ? Number(editForm.pickupLng) : 105.8542,
         pickupWardId: String(editForm.pickupWardId || booking.pickupWardId || '0'),
-        dropoffAddressText: editForm.dropoffAddressText.trim(),
+        dropoffAddressText: fullDropoff,
         dropoffLat: editForm.dropoffLat != null ? Number(editForm.dropoffLat) : 20.8449,
         dropoffLng: editForm.dropoffLng != null ? Number(editForm.dropoffLng) : 106.6881,
         dropoffWardId: String(editForm.dropoffWardId || booking.dropoffWardId || '0'),
@@ -199,13 +297,23 @@ const BookingDetailScreen = ({ route, navigation }) => {
         passengerPhone: editForm.passengerPhone.trim(),
         note: editForm.note.trim(),
       };
-      await apiService.requestBookingModification(booking.id, payload);
+      const res = await apiService.requestBookingModification(booking.id, payload);
       setIsModalOpen(false);
-      Alert.alert(
-        'Đã gửi yêu cầu thành công',
-        'Yêu cầu sửa đổi lộ trình đã được gửi tới tài xế. Tài xế có tối đa 15 phút để phản hồi.',
-        [{ text: 'Đã hiểu' }]
-      );
+
+      const isAutoUpdated = booking.status === 'WAITING_DRIVER_APPROVAL' || res?.data?.result?.status === 'APPROVED';
+      if (isAutoUpdated) {
+        Alert.alert(
+          'Đã cập nhật thành công',
+          'Chuyến đi đang chờ tài xế duyệt nên thông tin đón/trả và người đi đã được tự động cập nhật ngay vào vé.',
+          [{ text: 'Đã hiểu' }]
+        );
+      } else {
+        Alert.alert(
+          'Đã gửi yêu cầu thành công',
+          'Yêu cầu sửa đổi lộ trình đã được gửi tới tài xế. Tài xế có tối đa 15 phút để phản hồi.',
+          [{ text: 'Đã hiểu' }]
+        );
+      }
       fetchModifications(booking.id);
       apiService.getBookingDetail(booking.id).then(res => {
         if (res?.data?.result) {
@@ -313,26 +421,26 @@ const BookingDetailScreen = ({ route, navigation }) => {
               {/* Pickup */}
               <View style={s.routeBlock}>
                 <Text style={s.routeTag}>ĐIỂM ĐÓN</Text>
-                {startProvinceName ? (
+                {pickupDisplayProvince ? (
                   <View style={s.addrBreakdown}>
                     <View style={s.addrItemRow}>
                       <Ionicons name="map-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
                       <Text style={s.addrAreaText}>
-                        <Text style={{ fontWeight: '700', color: COLORS.primary }}>Tỉnh/Thành: </Text>{startProvinceName}
+                        <Text style={{ fontWeight: '700', color: COLORS.primary }}>Tỉnh/Thành: </Text>{pickupDisplayProvince}
                       </Text>
                     </View>
-                    {!!pickupWardName && (
+                    {!!pickupDisplayWard && (
                       <View style={s.addrItemRow}>
                         <Ionicons name="business-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
                         <Text style={s.addrAreaText}>
-                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{pickupWardName}
+                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{pickupDisplayWard}
                         </Text>
                       </View>
                     )}
                     <View style={s.addrItemRow}>
                       <Ionicons name="navigate-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
                       <Text style={s.addrDetailText}>
-                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{booking.pickupAddressText || 'Không rõ'}
+                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{pickupDisplayDetail || 'Số nhà / điểm hẹn'}
                       </Text>
                     </View>
                   </View>
@@ -344,26 +452,26 @@ const BookingDetailScreen = ({ route, navigation }) => {
               {/* Dropoff */}
               <View style={[s.routeBlock, { marginTop: 20 }]}>
                 <Text style={[s.routeTag, { color: COLORS.orange }]}>ĐIỂM ĐẾN</Text>
-                {endProvinceName ? (
+                {dropoffDisplayProvince ? (
                   <View style={s.addrBreakdown}>
                     <View style={s.addrItemRow}>
                       <Ionicons name="map-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
                       <Text style={s.addrAreaText}>
-                        <Text style={{ fontWeight: '700', color: COLORS.orange }}>Tỉnh/Thành: </Text>{endProvinceName}
+                        <Text style={{ fontWeight: '700', color: COLORS.orange }}>Tỉnh/Thành: </Text>{dropoffDisplayProvince}
                       </Text>
                     </View>
-                    {!!dropoffWardName && (
+                    {!!dropoffDisplayWard && (
                       <View style={s.addrItemRow}>
                         <Ionicons name="business-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
                         <Text style={s.addrAreaText}>
-                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{dropoffWardName}
+                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{dropoffDisplayWard}
                         </Text>
                       </View>
                     )}
                     <View style={s.addrItemRow}>
                       <Ionicons name="navigate-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
                       <Text style={s.addrDetailText}>
-                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{booking.dropoffAddressText || booking.dropoffLocation || 'Không rõ'}
+                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{dropoffDisplayDetail || 'Số nhà / điểm đến'}
                       </Text>
                     </View>
                   </View>
@@ -373,6 +481,28 @@ const BookingDetailScreen = ({ route, navigation }) => {
               </View>
             </View>
           </View>
+        </View>
+
+        {/* ═══ NOTE CARD ═══ */}
+        <View style={s.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+            <Text style={s.sectionTitle}>Ghi chú chuyến đi</Text>
+          </View>
+          <View style={s.noteDisplayBox}>
+            <Text style={booking.note ? s.noteDisplayText : s.noteDisplayEmptyText}>
+              {booking.note ? booking.note : 'Không có ghi chú nào cho chuyến đi này.'}
+            </Text>
+          </View>
+          {!!pendingMod?.newNote && pendingMod.newNote !== booking.note && (
+            <View style={s.notePendingDiffBox}>
+              <Ionicons name="time-outline" size={14} color="#D97706" style={{ marginRight: 6, marginTop: 1 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.notePendingDiffLabel}>Ghi chú mới đang chờ duyệt:</Text>
+                <Text style={s.notePendingDiffText}>{pendingMod.newNote}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* ═══ TRIP INFO ═══ */}
@@ -652,110 +782,202 @@ const BookingDetailScreen = ({ route, navigation }) => {
               <View style={s.modalNoticeBox}>
                 <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.primary} style={{ marginRight: 8, marginTop: 2 }} />
                 <Text style={s.modalNoticeText}>
-                  Chính sách: Bạn được chỉnh sửa tối đa 2 lần và phải thực hiện trước giờ xuất phát ít nhất 2 tiếng. Tài xế có 15 phút để phản hồi xác nhận.
+                  {booking.status === 'WAITING_DRIVER_APPROVAL'
+                    ? 'Vé đang chờ tài xế duyệt: Bạn có thể cập nhật lại điểm đón/trả và thông tin người đi, hệ thống sẽ tự động cập nhật ngay vào vé mà không cần chờ tài xế duyệt lại.'
+                    : 'Chính sách: Bạn được chỉnh sửa tối đa 2 lần và phải thực hiện trước giờ xuất phát ít nhất 2 tiếng. Tài xế có 15 phút để phản hồi xác nhận.'}
                 </Text>
               </View>
 
-              {/* Input Đón */}
-              <View style={s.formGroup}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={s.formLabel}>
-                    <Ionicons name="location" size={13} color={COLORS.primary} /> ĐỊA CHỈ ĐÓN MỚI <Text style={{ color: COLORS.red }}>*</Text>
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowPickupMap(prev => !prev)}
-                    style={s.mapToggleBtn}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name={showPickupMap ? "chevron-up" : "map-outline"} size={13} color={COLORS.primary} />
-                    <Text style={s.mapToggleBtnText}>{showPickupMap ? "Đóng bản đồ" : "Chọn trên bản đồ"}</Text>
-                  </TouchableOpacity>
+              {/* ── KHỐI ĐIỂM ĐÓN MỚI ── */}
+              <View style={s.sectionCardBlock}>
+                <View style={s.sectionCardHeader}>
+                  <Ionicons name="location" size={16} color={COLORS.primary} />
+                  <Text style={s.sectionCardTitle}>ĐIỂM ĐÓN CỦA BẠN</Text>
                 </View>
 
-                {showPickupMap && (
-                  <View style={{ marginBottom: 12 }}>
-                    <LocationMapPicker
-                      title="Ghim vị trí điểm đón"
-                      wardOptions={pickupWards.length > 0 ? pickupWards : (booking.pickupWardId ? [{ id: String(booking.pickupWardId), name: pickupWardName || 'Khu vực đón' }] : [])}
-                      wardId={String(editForm.pickupWardId || '')}
-                      onWardChange={(id) => setEditForm(p => ({ ...p, pickupWardId: id }))}
-                      value={{
-                        lat: editForm.pickupLat,
-                        lng: editForm.pickupLng,
-                        addressText: editForm.pickupAddressText
-                      }}
-                      onChange={(loc) => {
-                        setEditForm(p => ({
-                          ...p,
-                          pickupLat: loc.lat,
-                          pickupLng: loc.lng,
-                          pickupAddressText: loc.addressText || p.pickupAddressText
-                        }));
-                      }}
-                      accentColor={COLORS.primary}
-                    />
+                {/* Thanh Tỉnh/Thành (Disable) */}
+                <View style={s.formGroupDisabled}>
+                  <View style={s.disabledFieldHeader}>
+                    <Text style={s.disabledLabel}>TỈNH / THÀNH PHỐ</Text>
+                    <View style={s.disabledBadge}>
+                      <Ionicons name="lock-closed" size={10} color={COLORS.textMuted} />
+                      <Text style={s.disabledBadgeText}>Cố định theo tuyến</Text>
+                    </View>
                   </View>
-                )}
+                  <View style={s.disabledInputBox}>
+                    <Ionicons name="map-outline" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={s.disabledInputText} numberOfLines={1}>{pickupDisplayProvince || 'Không xác định'}</Text>
+                  </View>
+                </View>
 
-                <TextInput
-                  style={s.formInput}
-                  placeholder="Nhập chi tiết điểm đón (số nhà, ngõ, đường...)"
-                  placeholderTextColor={COLORS.textMuted}
-                  value={editForm.pickupAddressText}
-                  onChangeText={(text) => setEditForm(p => ({ ...p, pickupAddressText: text }))}
-                  multiline
-                />
+                {/* Thanh Phường/Xã (Disable) */}
+                <View style={s.formGroupDisabled}>
+                  <View style={s.disabledFieldHeader}>
+                    <Text style={s.disabledLabel}>PHƯỜNG / XÃ</Text>
+                    <View style={s.disabledBadge}>
+                      <Ionicons name="lock-closed" size={10} color={COLORS.textMuted} />
+                      <Text style={s.disabledBadgeText}>Cố định</Text>
+                    </View>
+                  </View>
+                  <View style={s.disabledInputBox}>
+                    <Ionicons name="business-outline" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={s.disabledInputText} numberOfLines={1}>{pickupDisplayWard || 'Không xác định'}</Text>
+                  </View>
+                </View>
+
+                {/* Thanh Địa chỉ chi tiết (Được phép sửa) */}
+                <View style={s.formGroup}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={s.formLabel}>
+                      ĐỊA CHỈ CHI TIẾT (SỐ NHÀ, TÊN ĐƯỜNG) <Text style={{ color: COLORS.red }}>*</Text>
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowPickupMap(prev => !prev)}
+                      style={s.mapToggleBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name={showPickupMap ? "chevron-up" : "map-outline"} size={13} color={COLORS.primary} />
+                      <Text style={s.mapToggleBtnText}>{showPickupMap ? "Đóng bản đồ" : "Chọn trên bản đồ"}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {showPickupMap && (
+                    <View style={{ marginBottom: 12 }}>
+                      <LocationMapPicker
+                        title="Ghim vị trí điểm đón"
+                        wardOptions={pickupWards.length > 0 ? pickupWards : (booking.pickupWardId ? [{ id: String(booking.pickupWardId), name: pickupWardName || 'Khu vực đón' }] : [])}
+                        wardId={String(editForm.pickupWardId || '')}
+                        onWardChange={(id) => setEditForm(p => ({ ...p, pickupWardId: id }))}
+                        value={{
+                          lat: editForm.pickupLat,
+                          lng: editForm.pickupLng,
+                          addressText: editForm.pickupDetailAddress
+                        }}
+                        onChange={(loc) => {
+                          const parsed = parseAddressComponents(loc.addressText, pickupDisplayWard, pickupDisplayProvince);
+                          setEditForm(p => ({
+                            ...p,
+                            pickupLat: loc.lat,
+                            pickupLng: loc.lng,
+                            pickupDetailAddress: parsed.detail || loc.addressText || p.pickupDetailAddress
+                          }));
+                        }}
+                        accentColor={COLORS.primary}
+                      />
+                    </View>
+                  )}
+
+                  <TextInput
+                    style={s.formInput}
+                    placeholder="Nhập số nhà, ngõ, tên đường (Ví dụ: Số 5, ngõ 12...)"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={editForm.pickupDetailAddress}
+                    onChangeText={(text) => setEditForm(p => ({ ...p, pickupDetailAddress: text }))}
+                    multiline
+                  />
+                  <View style={s.previewAddrWrap}>
+                    <Text style={s.previewAddrLabel}>Địa chỉ đầy đủ sẽ lưu:</Text>
+                    <Text style={s.previewAddrText} numberOfLines={2}>
+                      {buildFullAddress(editForm.pickupDetailAddress, pickupDisplayWard, pickupDisplayProvince) || '...'}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
-              {/* Input Trả */}
-              <View style={s.formGroup}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={[s.formLabel, { color: COLORS.orange }]}>
-                    <Ionicons name="flag" size={13} color={COLORS.orange} /> ĐỊA CHỈ TRẢ MỚI <Text style={{ color: COLORS.red }}>*</Text>
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowDropoffMap(prev => !prev)}
-                    style={[s.mapToggleBtn, { borderColor: COLORS.orange, backgroundColor: '#FFF7ED' }]}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name={showDropoffMap ? "chevron-up" : "map-outline"} size={13} color={COLORS.orange} />
-                    <Text style={[s.mapToggleBtnText, { color: COLORS.orange }]}>{showDropoffMap ? "Đóng bản đồ" : "Chọn trên bản đồ"}</Text>
-                  </TouchableOpacity>
+              {/* ── KHỐI ĐIỂM TRẢ MỚI ── */}
+              <View style={[s.sectionCardBlock, { borderColor: '#FED7AA' }]}>
+                <View style={s.sectionCardHeader}>
+                  <Ionicons name="flag" size={16} color={COLORS.orange} />
+                  <Text style={[s.sectionCardTitle, { color: COLORS.orange }]}>ĐIỂM TRẢ CỦA BẠN</Text>
                 </View>
 
-                {showDropoffMap && (
-                  <View style={{ marginBottom: 12 }}>
-                    <LocationMapPicker
-                      title="Ghim vị trí điểm trả"
-                      wardOptions={dropoffWards.length > 0 ? dropoffWards : (booking.dropoffWardId ? [{ id: String(booking.dropoffWardId), name: dropoffWardName || 'Khu vực trả' }] : [])}
-                      wardId={String(editForm.dropoffWardId || '')}
-                      onWardChange={(id) => setEditForm(p => ({ ...p, dropoffWardId: id }))}
-                      value={{
-                        lat: editForm.dropoffLat,
-                        lng: editForm.dropoffLng,
-                        addressText: editForm.dropoffAddressText
-                      }}
-                      onChange={(loc) => {
-                        setEditForm(p => ({
-                          ...p,
-                          dropoffLat: loc.lat,
-                          dropoffLng: loc.lng,
-                          dropoffAddressText: loc.addressText || p.dropoffAddressText
-                        }));
-                      }}
-                      accentColor={COLORS.orange}
-                    />
+                {/* Thanh Tỉnh/Thành (Disable) */}
+                <View style={s.formGroupDisabled}>
+                  <View style={s.disabledFieldHeader}>
+                    <Text style={[s.disabledLabel, { color: COLORS.orange }]}>TỈNH / THÀNH PHỐ</Text>
+                    <View style={s.disabledBadge}>
+                      <Ionicons name="lock-closed" size={10} color={COLORS.textMuted} />
+                      <Text style={s.disabledBadgeText}>Cố định theo tuyến</Text>
+                    </View>
                   </View>
-                )}
+                  <View style={s.disabledInputBox}>
+                    <Ionicons name="map-outline" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={s.disabledInputText} numberOfLines={1}>{dropoffDisplayProvince || 'Không xác định'}</Text>
+                  </View>
+                </View>
 
-                <TextInput
-                  style={s.formInput}
-                  placeholder="Nhập chi tiết điểm trả (số nhà, ngõ, đường...)"
-                  placeholderTextColor={COLORS.textMuted}
-                  value={editForm.dropoffAddressText}
-                  onChangeText={(text) => setEditForm(p => ({ ...p, dropoffAddressText: text }))}
-                  multiline
-                />
+                {/* Thanh Phường/Xã (Disable) */}
+                <View style={s.formGroupDisabled}>
+                  <View style={s.disabledFieldHeader}>
+                    <Text style={[s.disabledLabel, { color: COLORS.orange }]}>PHƯỜNG / XÃ</Text>
+                    <View style={s.disabledBadge}>
+                      <Ionicons name="lock-closed" size={10} color={COLORS.textMuted} />
+                      <Text style={s.disabledBadgeText}>Cố định</Text>
+                    </View>
+                  </View>
+                  <View style={s.disabledInputBox}>
+                    <Ionicons name="business-outline" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={s.disabledInputText} numberOfLines={1}>{dropoffDisplayWard || 'Không xác định'}</Text>
+                  </View>
+                </View>
+
+                {/* Thanh Địa chỉ chi tiết (Được phép sửa) */}
+                <View style={s.formGroup}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[s.formLabel, { color: COLORS.orange }]}>
+                      ĐỊA CHỈ CHI TIẾT (SỐ NHÀ, TÊN ĐƯỜNG) <Text style={{ color: COLORS.red }}>*</Text>
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowDropoffMap(prev => !prev)}
+                      style={[s.mapToggleBtn, { borderColor: COLORS.orange, backgroundColor: '#FFF7ED' }]}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name={showDropoffMap ? "chevron-up" : "map-outline"} size={13} color={COLORS.orange} />
+                      <Text style={[s.mapToggleBtnText, { color: COLORS.orange }]}>{showDropoffMap ? "Đóng bản đồ" : "Chọn trên bản đồ"}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {showDropoffMap && (
+                    <View style={{ marginBottom: 12 }}>
+                      <LocationMapPicker
+                        title="Ghim vị trí điểm trả"
+                        wardOptions={dropoffWards.length > 0 ? dropoffWards : (booking.dropoffWardId ? [{ id: String(booking.dropoffWardId), name: dropoffWardName || 'Khu vực trả' }] : [])}
+                        wardId={String(editForm.dropoffWardId || '')}
+                        onWardChange={(id) => setEditForm(p => ({ ...p, dropoffWardId: id }))}
+                        value={{
+                          lat: editForm.dropoffLat,
+                          lng: editForm.dropoffLng,
+                          addressText: editForm.dropoffDetailAddress
+                        }}
+                        onChange={(loc) => {
+                          const parsed = parseAddressComponents(loc.addressText, dropoffDisplayWard, dropoffDisplayProvince);
+                          setEditForm(p => ({
+                            ...p,
+                            dropoffLat: loc.lat,
+                            dropoffLng: loc.lng,
+                            dropoffDetailAddress: parsed.detail || loc.addressText || p.dropoffDetailAddress
+                          }));
+                        }}
+                        accentColor={COLORS.orange}
+                      />
+                    </View>
+                  )}
+
+                  <TextInput
+                    style={s.formInput}
+                    placeholder="Nhập số nhà, ngõ, tên đường (Ví dụ: Số 123 đường ABC...)"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={editForm.dropoffDetailAddress}
+                    onChangeText={(text) => setEditForm(p => ({ ...p, dropoffDetailAddress: text }))}
+                    multiline
+                  />
+                  <View style={s.previewAddrWrap}>
+                    <Text style={s.previewAddrLabel}>Địa chỉ đầy đủ sẽ lưu:</Text>
+                    <Text style={s.previewAddrText} numberOfLines={2}>
+                      {buildFullAddress(editForm.dropoffDetailAddress, dropoffDisplayWard, dropoffDisplayProvince) || '...'}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               {/* Input Hành Khách */}
@@ -946,6 +1168,142 @@ const s = StyleSheet.create({
   modalForm: { padding: 20 },
   modalNoticeBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BAE6FD', marginBottom: 16 },
   modalNoticeText: { flex: 1, fontSize: 12, color: '#0369A1', lineHeight: 18 },
+
+  // Block Section Card
+  sectionCardBlock: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+  },
+  sectionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sectionCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.primaryDark,
+    letterSpacing: 0.5,
+  },
+
+  // Disabled Field
+  formGroupDisabled: {
+    marginBottom: 10,
+  },
+  disabledFieldHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  disabledLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.textMuted,
+    letterSpacing: 0.3,
+  },
+  disabledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  disabledBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  disabledInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+  },
+  disabledInputText: {
+    fontSize: 13.5,
+    color: '#64748B',
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  // Preview Addr
+  previewAddrWrap: {
+    marginTop: 6,
+    padding: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  previewAddrLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+  },
+  previewAddrText: {
+    fontSize: 12,
+    color: COLORS.text,
+    fontWeight: '600',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+
+  // Note Display Box
+  noteDisplayBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  noteDisplayText: {
+    fontSize: 13.5,
+    color: COLORS.text,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  noteDisplayEmptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+  notePendingDiffBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginTop: 8,
+  },
+  notePendingDiffLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  notePendingDiffText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#78350F',
+    marginTop: 2,
+  },
+
   formGroup: { marginBottom: 14 },
   formRow: { flexDirection: 'row' },
   formLabel: { fontSize: 12, fontWeight: '800', color: COLORS.textSec, marginBottom: 6, letterSpacing: 0.3 },

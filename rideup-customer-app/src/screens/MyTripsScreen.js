@@ -266,15 +266,41 @@ const getStatus = (status) =>
   STATUS_CONFIG[status] || { label: status || 'Không rõ', color: COLORS.textMuted, icon: 'ellipse-outline', bg: 'rgba(160,160,160,0.1)' };
 
 // Helper phân tách địa chỉ đầy đủ ("chi tiết, phường/xã, tỉnh/thành") thành các phần riêng biệt
-const parseFullAddress = (fullText) => {
-  if (!fullText) return { detail: '', ward: '', province: '' };
+const parseFullAddress = (fullText, wardName = '', provinceName = '') => {
+  if (!fullText) return { detail: '', ward: wardName || '', province: provinceName || '' };
   const parts = fullText.split(',').map(p => p.trim()).filter(Boolean);
+  let detail = fullText;
+  let parsedWard = wardName || '';
+  let parsedProvince = provinceName || '';
+
   if (parts.length >= 3) {
-    return { detail: parts.slice(0, -2).join(', '), ward: parts[parts.length - 2], province: parts[parts.length - 1] };
+    parsedProvince = provinceName || parts[parts.length - 1];
+    parsedWard = wardName || parts[parts.length - 2];
+    detail = parts.slice(0, -2).join(', ');
   } else if (parts.length === 2) {
-    return { detail: parts[0], ward: '', province: parts[1] };
+    parsedProvince = provinceName || parts[1];
+    detail = parts[0];
   }
-  return { detail: fullText, ward: '', province: '' };
+
+  // Tinh chỉnh nếu detail vẫn còn dính phần phường hoặc tỉnh
+  if (detail) {
+    const detailParts = detail.split(',').map(p => p.trim()).filter(Boolean);
+    const clean = [];
+    const normWard = removeDiacritics(parsedWard);
+    const normProv = removeDiacritics(parsedProvince);
+
+    for (const p of detailParts) {
+      const normP = removeDiacritics(p);
+      if (normWard && (normP === normWard || normP.includes(normWard))) continue;
+      if (normProv && (normP === normProv || normP.includes(normProv))) continue;
+      clean.push(p);
+    }
+    if (clean.length > 0) {
+      detail = clean.join(', ');
+    }
+  }
+
+  return { detail: detail.trim(), ward: parsedWard.trim(), province: parsedProvince.trim() };
 };
 
 const REQUEST_STATUS_CONFIG = {
@@ -317,21 +343,17 @@ const BookingCard = ({ item, trip, onPress, onChatPress }) => {
   const tripEndProvince = trip?.endAddressText || '';
 
   // 3. Fallback phân tách nếu item.pickupAddressText có định dạng ghép chuỗi
-  const fallbackPickup = parseFullAddress(item.pickupAddressText);
-  const fallbackDropoff = parseFullAddress(item.dropoffAddressText);
+  const fallbackPickup = parseFullAddress(item.pickupAddressText, tripPickupWard, tripStartProvince);
+  const fallbackDropoff = parseFullAddress(item.dropoffAddressText, tripDropoffWard, tripEndProvince);
 
   // Xác định tỉnh thành, phường xã và chi tiết
   const displayPickupProvince = tripStartProvince || fallbackPickup.province;
   const displayPickupWard = tripPickupWard || fallbackPickup.ward;
-  const displayPickupDetail = (tripStartProvince || tripPickupWard) 
-    ? (item.pickupAddressText || '') 
-    : (fallbackPickup.detail || item.pickupAddressText || '');
+  const displayPickupDetail = fallbackPickup.detail || item.pickupAddressText || '';
 
   const displayDropoffProvince = tripEndProvince || fallbackDropoff.province;
   const displayDropoffWard = tripDropoffWard || fallbackDropoff.ward;
-  const displayDropoffDetail = (tripEndProvince || tripDropoffWard) 
-    ? (item.dropoffAddressText || '') 
-    : (fallbackDropoff.detail || item.dropoffAddressText || '');
+  const displayDropoffDetail = fallbackDropoff.detail || item.dropoffAddressText || '';
 
   const formatMoney = (val) => {
     if (!val && val !== 0) return '0 đ';

@@ -54,6 +54,9 @@ public class CreateBookingRequest {
     @NotBlank(message = "Dropoff address is required")
     String dropoffAddressText;
 
+    String passengerName;
+    String passengerPhone;
+
     String note;
 
     String paymentIntentId;

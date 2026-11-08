@@ -62,6 +62,66 @@ public class BookingModificationService {
             throw new AppException(ErrorCode.MODIFICATION_INVALID_STATUS);
         }
 
+        // TRƯỜNG HỢP 1: Tài xế CHƯA duyệt booking (trạng thái WAITING_DRIVER_APPROVAL)
+        // -> Tự động sửa trực tiếp vào Booking luôn, không cần tạo yêu cầu duyệt PENDING_DRIVER
+        if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL) {
+            log.info("Booking {} đang chờ tài xế duyệt -> Tự động cập nhật trực tiếp vào Booking", bookingId);
+
+            booking.setPickupAddressText(request.getPickupAddressText());
+            booking.setPickupLat(request.getPickupLat());
+            booking.setPickupLng(request.getPickupLng());
+            booking.setPickupWardId(request.getPickupWardId());
+
+            booking.setDropoffAddressText(request.getDropoffAddressText());
+            booking.setDropoffLat(request.getDropoffLat());
+            booking.setDropoffLng(request.getDropoffLng());
+            booking.setDropoffWardId(request.getDropoffWardId());
+
+            if (StringUtils.hasText(request.getPassengerName())) {
+                booking.setPassengerName(request.getPassengerName().trim());
+            }
+            if (StringUtils.hasText(request.getPassengerPhone())) {
+                booking.setPassengerPhone(request.getPassengerPhone().trim());
+            }
+            if (request.getNote() != null) {
+                booking.setNote(request.getNote().trim());
+            }
+
+            Booking savedBooking = bookingRepository.save(booking);
+
+            // Lưu bản ghi lịch sử với trạng thái APPROVED
+            BookingModification modification = BookingModification.builder()
+                    .bookingId(savedBooking.getId())
+                    .customerId(savedBooking.getCustomerId())
+                    .tripId(savedBooking.getTripId())
+                    .oldPickupAddressText(booking.getPickupAddressText())
+                    .oldPickupLat(booking.getPickupLat())
+                    .oldPickupLng(booking.getPickupLng())
+                    .oldDropoffAddressText(booking.getDropoffAddressText())
+                    .oldDropoffLat(booking.getDropoffLat())
+                    .oldDropoffLng(booking.getDropoffLng())
+                    .oldNote(booking.getNote())
+                    .newPickupAddressText(request.getPickupAddressText())
+                    .newPickupLat(request.getPickupLat())
+                    .newPickupLng(request.getPickupLng())
+                    .newPickupWardId(request.getPickupWardId())
+                    .newDropoffAddressText(request.getDropoffAddressText())
+                    .newDropoffLat(request.getDropoffLat())
+                    .newDropoffLng(request.getDropoffLng())
+                    .newDropoffWardId(request.getDropoffWardId())
+                    .newPassengerName(request.getPassengerName())
+                    .newPassengerPhone(request.getPassengerPhone())
+                    .newNote(request.getNote())
+                    .status(ModificationStatus.APPROVED)
+                    .resolvedAt(LocalDateTime.now())
+                    .build();
+
+            BookingModification saved = bookingModificationRepository.save(modification);
+            return toResponse(saved);
+        }
+
+        // TRƯỜNG HỢP 2: Tài xế ĐÃ duyệt booking (trạng thái CONFIRMED)
+        // -> Cần tạo yêu cầu chỉnh sửa có kiểm soát (PENDING_DRIVER) chờ tài xế duyệt
         // Quy tắc 3: Kiểm soát tính duy nhất (không có yêu cầu pending khác)
         if (bookingModificationRepository.existsByBookingIdAndStatus(bookingId, ModificationStatus.PENDING_DRIVER)) {
             throw new AppException(ErrorCode.MODIFICATION_ALREADY_PENDING);
@@ -208,14 +268,14 @@ public class BookingModificationService {
         booking.setDropoffLng(modification.getNewDropoffLng());
         booking.setDropoffWardId(modification.getNewDropoffWardId());
 
-        // Nếu có đổi tên/SĐT người đi, gắn thông tin vào note
+        if (StringUtils.hasText(modification.getNewPassengerName())) {
+            booking.setPassengerName(modification.getNewPassengerName().trim());
+        }
         if (StringUtils.hasText(modification.getNewPassengerPhone())) {
-            String passengerInfo = "[Người đi: " + (modification.getNewPassengerName() != null ? modification.getNewPassengerName() : "Khách")
-                    + " - " + modification.getNewPassengerPhone() + "]";
-            String baseNote = modification.getNewNote() != null ? modification.getNewNote() : "";
-            booking.setNote(passengerInfo + " " + baseNote);
-        } else if (modification.getNewNote() != null) {
-            booking.setNote(modification.getNewNote());
+            booking.setPassengerPhone(modification.getNewPassengerPhone().trim());
+        }
+        if (modification.getNewNote() != null) {
+            booking.setNote(modification.getNewNote().trim());
         }
 
         bookingRepository.save(booking);

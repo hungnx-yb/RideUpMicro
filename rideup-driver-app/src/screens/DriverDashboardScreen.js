@@ -1042,12 +1042,12 @@ export default function DriverDashboardScreen() {
                     })()}
                   </View>
 
-                  {req.note ? (
-                    <View style={styles.noteBox}>
-                      <Ionicons name="chatbubble-ellipses-outline" size={14} color={COLORS.textMuted} />
-                      <Text style={styles.noteText} numberOfLines={2}>Ghi chú: {req.note}</Text>
-                    </View>
-                  ) : null}
+                  <View style={[styles.noteBox, !req.note && { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={14} color={req.note ? '#D97706' : COLORS.textMuted} />
+                    <Text style={[styles.noteText, !req.note && { color: COLORS.textMuted, fontStyle: 'italic' }]} numberOfLines={2}>
+                      Ghi chú: {req.note ? req.note : 'Không có ghi chú'}
+                    </Text>
+                  </View>
 
                   <View style={styles.pendingMetaBox}>
                     <View style={styles.metaItem}>

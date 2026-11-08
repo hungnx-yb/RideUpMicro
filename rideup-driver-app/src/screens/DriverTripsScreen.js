@@ -796,12 +796,30 @@ export default function DriverTripsScreen({ navigation }) {
             </View>
           </View>
 
-          {!!item.note && (
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' }}>
-              <Ionicons name="chatbox-ellipses-outline" size={14} color={COLORS.warning} style={{ marginTop: 2, marginRight: 6 }} />
-              <Text style={{ flex: 1, fontSize: 12, color: COLORS.textMuted, fontStyle: 'italic' }}>{item.note}</Text>
+          {/* Ghi chú của khách (Luôn hiển thị) */}
+          <View style={{
+            backgroundColor: item.note ? '#FFFBEB' : '#F8FAFC',
+            borderRadius: 8,
+            padding: 8,
+            borderWidth: 1,
+            borderColor: item.note ? '#FDE68A' : '#E2E8F0',
+            marginTop: 4,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+              <Ionicons name="chatbox-ellipses" size={13} color={item.note ? '#D97706' : COLORS.textMuted} style={{ marginRight: 4 }} />
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: item.note ? '#B45309' : COLORS.textMuted }}>
+                GHI CHÚ CỦA KHÁCH:
+              </Text>
             </View>
-          )}
+            <Text style={{
+              fontSize: 12,
+              color: item.note ? '#78350F' : COLORS.textMuted,
+              lineHeight: 17,
+              fontStyle: item.note ? 'normal' : 'italic',
+            }}>
+              {item.note ? item.note : 'Khách không để lại ghi chú'}
+            </Text>
+          </View>
           {!!item.cancelReason && (
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' }}>
               <Ionicons name="alert-circle-outline" size={14} color={COLORS.error} style={{ marginTop: 2, marginRight: 6 }} />
