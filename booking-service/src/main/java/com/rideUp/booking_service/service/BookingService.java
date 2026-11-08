@@ -222,33 +222,16 @@ public class BookingService {
     }
 
     @Transactional
-    public void markBookingWaitingApproval(String bookingId) {
-        Booking booking = bookingRepository.findById(bookingId).orElse(null);
-        if (booking != null && booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-            booking.setStatus(BookingStatus.WAITING_DRIVER_APPROVAL);
-            try {
-                var tripResponse = tripServiceClient.getTripById(booking.getTripId());
-                if (tripResponse != null && tripResponse.getResult() != null && tripResponse.getResult().getDepartureTime() != null) {
-                    booking.setExpiresAt(tripResponse.getResult().getDepartureTime().minusHours(1));
-                }
-            } catch (Exception e) {
-                log.warn("Failed to fetch trip departureTime in markBookingWaitingApproval: {}", e.getMessage());
-            }
-            bookingRepository.save(booking);
+    public BookingResponse handleRefundCompleted(com.rideUp.booking_service.dto.request.RefundCompletedRequest request) {
+        log.info("Handling refund completed for bookingId={}, refundId={}, correlationId={}",
+                request.getBookingId(), request.getRefundId(), request.getCorrelationId());
 
-            com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent waitEvent = com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent.builder()
-                    .eventId(UUID.randomUUID().toString())
-                    .correlationId(UUID.randomUUID().toString())
-                    .bookingId(booking.getId())
-                    .customerId(booking.getCustomerId())
-                    .tripId(booking.getTripId())
-                    .seatCount(booking.getSeatCount())
-                    .paymentMethod(PaymentMethod.STRIPE.name())
-                    .totalAmount(booking.getTotalAmount())
-                    .createdAt(LocalDateTime.now())
-                    .build();
-            bookingServicePublisher.publishBookingWaitingApproval(waitEvent);
-        }
+        Booking booking = bookingRepository.findById(request.getBookingId())
+                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+
+        booking.setPaymentStatus(PaymentStatus.REFUNDED);
+        Booking saved = bookingRepository.save(booking);
+        return toBookingResponse(saved);
     }
 
     @Transactional

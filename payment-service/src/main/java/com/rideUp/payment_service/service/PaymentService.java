@@ -134,43 +134,6 @@ public class PaymentService {
 	}
 
 	@Transactional
-	public PaymentResponse authorizePayment(String paymentId, MarkPaymentPaidRequest request) {
-		Payment payment = paymentRepository.findById(paymentId)
-				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
-
-		if (payment.getMethod() != PaymentMethod.STRIPE) {
-			throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
-		}
-
-		if (payment.getStatus() == PaymentStatus.HOLDING || payment.getStatus() == PaymentStatus.PAID) {
-			return modelMapper.map(payment, PaymentResponse.class);
-		}
-
-		if (payment.getStatus() == PaymentStatus.FAILED) {
-			throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
-		}
-
-		try {
-			PaymentIntent paymentIntent = PaymentIntent.retrieve(request.getTransactionId());
-			if (!"requires_capture".equals(paymentIntent.getStatus())) {
-				log.error("Stripe verification failed for payment {}. Actual Stripe status: {}", paymentId, paymentIntent.getStatus());
-				throw new AppException(ErrorCode.PAYMENT_STATUS_INVALID);
-			}
-		} catch (com.stripe.exception.StripeException e) {
-			log.error("Error retrieving Stripe PaymentIntent: ", e);
-			throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
-		}
-
-		payment.setStatus(PaymentStatus.HOLDING);
-		payment.setTransactionId(request.getTransactionId());
-		payment.setFailureReason(null);
-
-		Payment savedPayment = paymentRepository.save(payment);
-		publishPaymentAuthorized(savedPayment);
-		return modelMapper.map(savedPayment, PaymentResponse.class);
-	}
-
-	@Transactional
 	public PaymentResponse markPaymentFailed(String paymentId, MarkPaymentFailedRequest request) {
 		Payment payment = paymentRepository.findById(paymentId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
@@ -206,17 +169,6 @@ public class PaymentService {
 			paymentServicePublisher.publishPaymentFailed(payment, reason);
 		} catch (Exception ex) {
 			log.error("Failed to publish payment-failed event for bookingId={}", payment.getBookingId(), ex);
-			throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
-		}
-	}
-
-
-
-	private void publishPaymentAuthorized(Payment payment) {
-		try {
-			paymentServicePublisher.publishPaymentAuthorized(payment);
-		} catch (Exception ex) {
-			log.error("Failed to publish payment-authorized event for bookingId={}", payment.getBookingId(), ex);
 			throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
 		}
 	}

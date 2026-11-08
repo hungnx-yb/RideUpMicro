@@ -70,16 +70,22 @@ public class BookingServiceConsumer {
 
     @RetryableTopic(exclude = {JsonProcessingException.class})
     @KafkaListener(
-            topics = "${app.kafka.topics.payment-authorized}",
+            topics = "${app.kafka.topics.refund-completed:refund.completed}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void onPaymentAuthorized(String payload, Acknowledgment ack) throws Exception {
-        com.rideUp.booking_service.dto.event.PaymentAuthorizedEvent event = objectMapper.readValue(payload, com.rideUp.booking_service.dto.event.PaymentAuthorizedEvent.class);
-        log.info("[PaymentAuthorizedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
-                event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
-        
-        bookingService.markBookingWaitingApproval(event.getBookingId());
-        
+    public void onRefundCompleted(String payload, Acknowledgment ack) throws Exception {
+        RefundCompletedEvent event = objectMapper.readValue(payload, RefundCompletedEvent.class);
+        log.info("[RefundCompletedEvent] eventId={}, bookingId={}, refundId={}, correlationId={}",
+                event.getEventId(), event.getBookingId(), event.getRefundId(), event.getCorrelationId());
+
+        bookingService.handleRefundCompleted(
+                RefundCompletedRequest.builder()
+                        .bookingId(event.getBookingId())
+                        .refundId(event.getRefundId())
+                        .correlationId(event.getCorrelationId())
+                        .build()
+        );
+
         ack.acknowledge();
     }
 

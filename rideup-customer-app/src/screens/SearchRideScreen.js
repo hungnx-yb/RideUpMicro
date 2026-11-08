@@ -795,73 +795,7 @@ export default function SearchRideScreen({ navigation, route }) {
     setPaymentMethod('CASH');
   };
 
-  // Retry lấy link tối đa 6 lần
-  const getUrlWithRetry = async (bookingId) => {
-    const maxAttempts = 600; // Tăng lên 60 giây để debug backend thoải mái
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const res = await apiService.getPaymentUrl(bookingId);
-        const result = res?.data?.result;
-        if (result?.paymentUrl) return result;
-      } catch (err) {
-        if (attempt === maxAttempts) throw err;
-      }
-      await new Promise(r => setTimeout(r, 1000));
-    }
-    return null;
-  };
-
   const [stripeSuccessBooking, setStripeSuccessBooking] = useState(null);
-
-  const handlePayNow = async () => {
-    if (!successBooking?.id || isRedirectingPayment) return;
-    setIsRedirectingPayment(true);
-    try {
-      const paymentData = await getUrlWithRetry(successBooking.id);
-      if (!paymentData || !paymentData.paymentUrl) {
-        Alert.alert('Chưa sẵn sàng', 'Chưa lấy được thông tin thanh toán. Vui lòng thử lại.');
-        setIsRedirectingPayment(false);
-        return;
-      }
-
-      if (successBooking.paymentMethod === 'STRIPE') {
-        const { error: initError } = await initPaymentSheet({
-          merchantDisplayName: 'RideUp',
-          paymentIntentClientSecret: paymentData.paymentUrl,
-        });
-        if (initError) {
-          Alert.alert('Lỗi khởi tạo', initError.message);
-          setIsRedirectingPayment(false);
-          return;
-        }
-
-        // Đợi 1 chút trước khi hiển thị Stripe để UI ổn định (nhưng KHÔNG ĐÓNG modal cũ, tránh xung đột View gốc của HĐH)
-        const currentBooking = successBooking;
-
-        const { error: presentError } = await presentPaymentSheet();
-        
-        if (presentError) {
-          Alert.alert('Thanh toán thất bại', presentError.message);
-        } else {
-          // Báo cho backend biết đã thanh toán thành công
-          try {
-            await apiService.markPaymentPaid(paymentData.id, paymentData.transactionId);
-          } catch (e) {
-            console.warn('Lỗi cập nhật backend:', e);
-          }
-          // Chuyển đổi mượt mà từ Modal thông báo sang Modal Thành công xịn xò
-          setSuccessBooking(null);
-          setTimeout(() => {
-            setStripeSuccessBooking(currentBooking);
-          }, 300);
-        }
-      }
-    } catch (error) {
-      Alert.alert('Lỗi thanh toán', 'Không thể khởi tạo thanh toán. Vui lòng thử lại.');
-    } finally {
-      setIsRedirectingPayment(false);
-    }
-  };
 
   const formatTime = (isoString) => {
     if (!isoString) return '--:--';
@@ -991,7 +925,7 @@ export default function SearchRideScreen({ navigation, route }) {
 
       {/* Search Filter Card */}
       <View style={styles.filterCard}>
-        <TouchableOpacity style={styles.cardHeader} onPress={() => setIsFilterExpanded(!isFilterExpanded)} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.filterCardHeader} onPress={() => setIsFilterExpanded(!isFilterExpanded)} activeOpacity={0.8}>
           <View>
             <Text style={styles.brandText}>RIDEUP NOW</Text>
             <Text style={styles.cardTitle}>Bạn muốn đi đâu hôm nay?</Text>
@@ -1451,50 +1385,24 @@ export default function SearchRideScreen({ navigation, route }) {
               <Text style={{ fontSize: 13, color: '#475569', fontWeight: 'bold' }}>Mã: {successBooking?.bookingCode || successBooking?.id}</Text>
             </View>
 
-            {successBooking?.paymentMethod === 'STRIPE' ? (
-              <View style={{ width: '100%', alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
-                  Vui lòng thanh toán bảo đảm bằng thẻ tín dụng qua cổng Stripe để hoàn tất yêu cầu đặt xe.
-                </Text>
-                <TouchableOpacity 
-                  style={{ backgroundColor: '#0F172A', width: '100%', paddingVertical: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }} 
-                  onPress={handlePayNow} 
-                  disabled={isRedirectingPayment}
-                >
-                  {isRedirectingPayment ? <ActivityIndicator color="#fff" /> : (
-                    <>
-                      <Ionicons name="card" size={20} color="#fff" style={{ marginRight: 8 }} />
-                      <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>THANH TOÁN BẰNG THẺ</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ width: '100%', marginTop: 12, paddingVertical: 12, alignItems: 'center' }}
-                  onPress={() => setSuccessBooking(null)}
-                >
-                  <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>Đóng</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ width: '100%', alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
-                  Yêu cầu đặt chỗ của bạn đã được gửi. Bạn sẽ thanh toán bằng tiền mặt trực tiếp cho tài xế.
-                </Text>
-                <TouchableOpacity
-                  style={{ backgroundColor: '#10b981', width: '100%', paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }}
-                  onPress={() => {
-                    setSuccessBooking(null);
-                    try {
-                      navigation.navigate('Main', { screen: 'MyTrips' });
-                    } catch (_) {
-                      navigation.navigate('MyTrips');
-                    }
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>XONG</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            <View style={{ width: '100%', alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+                Yêu cầu đặt chỗ của bạn đã được gửi. Bạn sẽ thanh toán bằng tiền mặt trực tiếp cho tài xế.
+              </Text>
+              <TouchableOpacity
+                style={{ backgroundColor: '#10b981', width: '100%', paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }}
+                onPress={() => {
+                  setSuccessBooking(null);
+                  try {
+                    navigation.navigate('Main', { screen: 'MyTrips' });
+                  } catch (_) {
+                    navigation.navigate('MyTrips');
+                  }
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>XONG</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1763,7 +1671,7 @@ const styles = StyleSheet.create({
 
   // Filter Card
   filterCard: { backgroundColor: COLORS.surface, marginHorizontal: 16, marginBottom: 12, borderRadius: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6, borderWidth: 1, borderColor: COLORS.border },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 10 },
+  filterCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 10 },
   brandText: { color: COLORS.green, fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 4 },
   cardTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
   toggleBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, gap: 4 },

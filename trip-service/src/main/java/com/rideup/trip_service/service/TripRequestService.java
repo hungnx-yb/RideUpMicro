@@ -20,6 +20,7 @@ import com.rideup.trip_service.exception.ErrorCode;
 import com.rideup.trip_service.feignClient.IdentityServiceClient;
 import com.rideup.trip_service.kafka.producer.MarketplaceEventProducer;
 import com.rideup.trip_service.dto.event.InvitationRejectedEvent;
+import com.rideup.trip_service.dto.event.InvitationAcceptedEvent;
 import com.rideup.trip_service.dto.event.TripRequestCreatedEvent;
 import com.rideup.trip_service.dto.event.TripRequestInvitedEvent;
 import com.rideup.trip_service.repository.TripRequestInvitationRepository;
@@ -145,7 +146,8 @@ public class TripRequestService {
         }
 
         TripRequestResponse response = mapToTripRequestResponse(tripRequest, passenger);
-        long pendingCount = invitationRepository.countByTripRequestIdAndStatus(tripRequest.getId(), InvitationStatus.PENDING);
+        long pendingCount = invitationRepository.countByTripRequestIdAndStatus(tripRequest.getId(),
+                InvitationStatus.PENDING);
         response.setPendingInvitationCount((int) pendingCount);
         return response;
     }
@@ -168,8 +170,9 @@ public class TripRequestService {
         tripRequest.setCancelledAt(java.time.LocalDateTime.now());
         tripRequest.setCancelReason("Passenger cancelled");
         tripRequestRepository.save(tripRequest);
-        
-        List<TripRequestInvitation> pendingInvitations = invitationRepository.findByTripRequestIdAndStatus(tripRequest.getId(), InvitationStatus.PENDING);
+
+        List<TripRequestInvitation> pendingInvitations = invitationRepository
+                .findByTripRequestIdAndStatus(tripRequest.getId(), InvitationStatus.PENDING);
         pendingInvitations.forEach(inv -> {
             inv.setStatus(InvitationStatus.REJECTED);
             marketplaceEventProducer.publishInvitationRejectedEvent(InvitationRejectedEvent.builder()
@@ -180,7 +183,7 @@ public class TripRequestService {
                     .build());
         });
         invitationRepository.saveAll(pendingInvitations);
-        
+
         marketplaceEventProducer.publishTripRequestCancelledEvent(TripRequestCancelEvent.builder()
                 .tripRequestId(tripRequest.getId())
                 .passengerId(tripRequest.getPassengerId())
@@ -189,14 +192,16 @@ public class TripRequestService {
 
     @Transactional
     public void cancelAllOpenRequests(String passengerId, String reason) {
-        List<TripRequest> openRequests = tripRequestRepository.findByPassengerIdAndStatus(passengerId, TripRequestStatus.OPEN);
+        List<TripRequest> openRequests = tripRequestRepository.findByPassengerIdAndStatus(passengerId,
+                TripRequestStatus.OPEN);
         for (TripRequest request : openRequests) {
             request.setStatus(TripRequestStatus.CANCELLED);
             request.setCancelledAt(java.time.LocalDateTime.now());
             request.setCancelReason(reason);
             tripRequestRepository.save(request);
-            
-            List<TripRequestInvitation> pendingInvitations = invitationRepository.findByTripRequestIdAndStatus(request.getId(), InvitationStatus.PENDING);
+
+            List<TripRequestInvitation> pendingInvitations = invitationRepository
+                    .findByTripRequestIdAndStatus(request.getId(), InvitationStatus.PENDING);
             pendingInvitations.forEach(inv -> {
                 inv.setStatus(InvitationStatus.REJECTED);
                 marketplaceEventProducer.publishInvitationRejectedEvent(InvitationRejectedEvent.builder()
@@ -236,7 +241,7 @@ public class TripRequestService {
         invitation.setStatus(InvitationStatus.REJECTED);
         invitation.setRespondedAt(java.time.LocalDateTime.now());
         invitationRepository.save(invitation);
-        
+
         marketplaceEventProducer.publishInvitationRejectedEvent(InvitationRejectedEvent.builder()
                 .invitationId(invitation.getId())
                 .tripRequestId(invitation.getTripRequest().getId())
@@ -251,7 +256,7 @@ public class TripRequestService {
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_REQUEST_INVITATION_NOT_FOUND));
 
         if (acceptedInv.getStatus() != InvitationStatus.PENDING) {
-            throw new AppException(ErrorCode.TRIP_REQUEST_INVITATION_NOT_FOUND); 
+            throw new AppException(ErrorCode.TRIP_REQUEST_INVITATION_NOT_FOUND);
         }
 
         TripRequest tripRequest = acceptedInv.getTripRequest();
@@ -265,6 +270,15 @@ public class TripRequestService {
         acceptedInv.setRespondedAt(java.time.LocalDateTime.now());
         tripRequestRepository.save(tripRequest);
         invitationRepository.save(acceptedInv);
+
+        // Bắn Kafka báo cho tài xế thắng lời mời
+        marketplaceEventProducer.publishInvitationAcceptedEvent(
+                InvitationAcceptedEvent.builder()
+                        .invitationId(acceptedInv.getId())
+                        .tripRequestId(tripRequest.getId())
+                        .driverId(acceptedInv.getDriverId())
+                        .passengerId(tripRequest.getPassengerId())
+                        .build());
 
         // Reject tất cả invitation PENDING còn lại + bắn Kafka báo tài xế trượt
         List<TripRequestInvitation> others = invitationRepository
@@ -282,8 +296,9 @@ public class TripRequestService {
                     .build());
         });
         invitationRepository.saveAll(others);
-        
-        log.info("TripRequest {} accepted invitation {} from driver {}", tripRequest.getId(), acceptedInv.getId(), acceptedInv.getDriverId());
+
+        log.info("TripRequest {} accepted invitation {} from driver {}", tripRequest.getId(), acceptedInv.getId(),
+                acceptedInv.getDriverId());
     }
 
     @Transactional
@@ -296,7 +311,7 @@ public class TripRequestService {
         }
 
         if (acceptedInv.getStatus() != InvitationStatus.PENDING) {
-            throw new AppException(ErrorCode.TRIP_REQUEST_INVITATION_NOT_FOUND); 
+            throw new AppException(ErrorCode.TRIP_REQUEST_INVITATION_NOT_FOUND);
         }
 
         TripRequest tripRequest = acceptedInv.getTripRequest();
@@ -305,13 +320,13 @@ public class TripRequestService {
         }
 
         var seatResponse = tripService.reserveSeats(
-            SeatReserveRequest.builder()
-                .tripId(acceptedInv.getTripId())
-                .seatCount(tripRequest.getSeatTotal())
-                .build()
-        );
-        
-        log.info("TripRequest {} validated and seats reserved for invitation {}.", tripRequest.getId(), acceptedInv.getId());
+                SeatReserveRequest.builder()
+                        .tripId(acceptedInv.getTripId())
+                        .seatCount(tripRequest.getSeatTotal())
+                        .build());
+
+        log.info("TripRequest {} validated and seats reserved for invitation {}.", tripRequest.getId(),
+                acceptedInv.getId());
 
         return ProcessMarketplaceBookingResponse.builder()
                 .tripId(acceptedInv.getTripId())
@@ -323,7 +338,8 @@ public class TripRequestService {
 
     // ----- DRIVER APIs -----
 
-    public Page<TripRequestResponse> getOpenRequestsInMarketplace(MarketplaceTripRequestFilter filter, Pageable pageable) {
+    public Page<TripRequestResponse> getOpenRequestsInMarketplace(MarketplaceTripRequestFilter filter,
+            Pageable pageable) {
         return tripRequestRepository.getMarketplaceRequests(filter, pageable)
                 .map(req -> mapToTripRequestResponse(req, null));
     }
@@ -334,10 +350,9 @@ public class TripRequestService {
         TripRequest tripRequest = tripRequestRepository.findById(request.getTripRequestId())
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_REQUEST_NOT_FOUND));
 
-
         Trip trip = tripRepository.findById(request.getTripId())
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
-                
+
         if (!trip.getDriverId().equals(driver.getId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
@@ -349,8 +364,9 @@ public class TripRequestService {
         if (invitationRepository.existsByTripRequestIdAndTripId(tripRequest.getId(), request.getTripId())) {
             throw new AppException(ErrorCode.INVITATION_ALREADY_SENT);
         }
-        
-        long pendingCount = invitationRepository.countByTripRequestIdAndStatus(tripRequest.getId(), InvitationStatus.PENDING);
+
+        long pendingCount = invitationRepository.countByTripRequestIdAndStatus(tripRequest.getId(),
+                InvitationStatus.PENDING);
         if (pendingCount >= 5) {
             throw new AppException(ErrorCode.TOO_MANY_PENDING_INVITATIONS);
         }
@@ -364,7 +380,7 @@ public class TripRequestService {
                 .build();
 
         invitation = invitationRepository.save(invitation);
-        
+
         marketplaceEventProducer.publishTripRequestInvitedEvent(TripRequestInvitedEvent.builder()
                 .invitationId(invitation.getId())
                 .tripRequestId(tripRequest.getId())
@@ -372,7 +388,7 @@ public class TripRequestService {
                 .passengerId(tripRequest.getPassengerId())
                 .tripId(trip.getId())
                 .build());
-        
+
         TripRequestInvitationResponse response = modelMapper.map(invitation, TripRequestInvitationResponse.class);
         response.setTripRequestId(tripRequest.getId());
         return response;
@@ -387,12 +403,14 @@ public class TripRequestService {
         if (request.getInvitations() != null && !request.getInvitations().isEmpty()) {
             List<TripRequestInvitationResponse> invResponses = request.getInvitations().stream()
                     .map(inv -> {
-                        TripRequestInvitationResponse invResp = modelMapper.map(inv, TripRequestInvitationResponse.class);
+                        TripRequestInvitationResponse invResp = modelMapper.map(inv,
+                                TripRequestInvitationResponse.class);
                         invResp.setTripRequestId(request.getId());
                         try {
                             tripRepository.findById(inv.getTripId()).ifPresent(trip -> {
                                 if (trip.getPriceVnd() != null && request.getSeatTotal() != null) {
-                                    invResp.setPrice(trip.getPriceVnd().multiply(BigDecimal.valueOf(request.getSeatTotal())));
+                                    invResp.setPrice(
+                                            trip.getPriceVnd().multiply(BigDecimal.valueOf(request.getSeatTotal())));
                                 } else if (trip.getPriceVnd() != null) {
                                     invResp.setPrice(trip.getPriceVnd());
                                 }
@@ -425,7 +443,8 @@ public class TripRequestService {
                                 invResp.setDriverAvatar(d.getAvatarUrl());
                                 invResp.setDriverRating(d.getDriverRating());
                                 if (d.getVehicleBrand() != null) {
-                                    invResp.setVehicleInfo(d.getVehicleBrand() + (d.getVehicleModel() != null ? " " + d.getVehicleModel() : ""));
+                                    invResp.setVehicleInfo(d.getVehicleBrand()
+                                            + (d.getVehicleModel() != null ? " " + d.getVehicleModel() : ""));
                                 }
                             }
                         }
