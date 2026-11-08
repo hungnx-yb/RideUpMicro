@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import DropdownSelect from '../components/DropdownSelect';
@@ -128,6 +130,15 @@ export default function MarketplaceScreen({ navigation, route }) {
     handleTargetNavigation();
   }, [route?.params?.targetRequestId, route?.params?.startProvinceId, route?.params?.endProvinceId]);
 
+  useFocusEffect(
+    useCallback(() => {
+      // Khi tài xế vào màn hình Chợ Khách, tự động nạp danh sách tỉnh nếu chưa có
+      if (provinces.length === 0) {
+        fetchProvinces();
+      }
+    }, [provinces.length])
+  );
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -158,22 +169,37 @@ export default function MarketplaceScreen({ navigation, route }) {
     init();
   }, []);
 
-  // 1. Lấy danh sách 63 tỉnh thành từ location-service
+  // 1. Lấy danh sách 63 tỉnh thành từ location-service (có lưu cache cục bộ)
   const fetchProvinces = async () => {
     try {
       const res = await apiService.getAllProvinces();
-      if (res.data.code === 1000 && Array.isArray(res.data.result)) {
-        const list = res.data.result.map((p) => ({
+      const rawList = res?.data?.result || res?.data;
+      if (Array.isArray(rawList) && rawList.length > 0) {
+        const list = rawList.map((p) => ({
           id: String(p.id),
           name: p.name,
           code: p.code,
         }));
         setProvinces(list);
+        await AsyncStorage.setItem('cached_provinces', JSON.stringify(list)).catch(() => {});
         return list;
       }
     } catch (e) {
       console.warn('Cannot fetch provinces from location-service:', e);
     }
+
+    // Nếu API gặp sự cố mạng hoặc đang tải lại, khôi phục từ cache để không bao giờ hiện ID
+    try {
+      const cached = await AsyncStorage.getItem('cached_provinces');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setProvinces(parsed);
+          return parsed;
+        }
+      }
+    } catch (_) {}
+
     return [];
   };
 
@@ -258,7 +284,11 @@ export default function MarketplaceScreen({ navigation, route }) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchMyStartedTrips();
+    await Promise.all([
+      fetchProvinces(),
+      fetchMyStartedTrips(),
+      fetchDriverProfile(),
+    ]);
     if (startProvinceId && endProvinceId) {
       await loadRequests(startProvinceId, endProvinceId);
     } else {
@@ -287,7 +317,12 @@ export default function MarketplaceScreen({ navigation, route }) {
   // Helper lấy tên tỉnh theo ID từ danh sách location-service
   const getProvinceName = (id) => {
     if (!id) return '';
-    return provinces.find((p) => String(p.id) === String(id))?.name || id;
+    const match = provinces.find((p) => String(p.id) === String(id));
+    if (match) return match.name;
+    if (typeof id === 'string' && id.length > 20) {
+      return 'Đang tải tỉnh...';
+    }
+    return id;
   };
 
   // Nhãn của Smart Location Pill trên Header
@@ -307,6 +342,9 @@ export default function MarketplaceScreen({ navigation, route }) {
 
   // Mở modal cài đặt tỉnh hoạt động
   const handleOpenOperatingModal = () => {
+    if (provinces.length === 0) {
+      fetchProvinces();
+    }
     setTempOperatingIds([...operatingProvinceIds]);
     setProvinceSearchQuery('');
     setIsOperatingModalVisible(true);

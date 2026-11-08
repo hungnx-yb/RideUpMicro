@@ -11,8 +11,15 @@ const apiClient = axios.create({
 // 2. Tự động đính kèm Token vào Header trước khi gửi API
 apiClient.interceptors.request.use(
   async (config) => {
-    // Không đính kèm token nếu đang gọi API đăng nhập hoặc đăng ký
-    if (config.url && (config.url.includes('/auth/authentication') || config.url.includes('/auth/register'))) {
+    // Không đính kèm token nếu đang gọi API đăng nhập, đăng ký hoặc dữ liệu địa lý công khai
+    if (
+      config.url &&
+      (config.url.includes('/auth/authentication') ||
+        config.url.includes('/auth/register') ||
+        config.url.includes('/api/location/province') ||
+        config.url.includes('/api/location/ward') ||
+        config.url.includes('/config/max-distance'))
+    ) {
       return config;
     }
 
