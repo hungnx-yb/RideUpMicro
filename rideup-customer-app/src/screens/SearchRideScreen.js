@@ -324,13 +324,13 @@ export default function SearchRideScreen({ navigation, route }) {
 
   // Mở modal phát tín hiệu: Tự động lấy toàn bộ dữ liệu từ bộ lọc tìm kiếm
   const handleOpenRequestModal = () => {
-    if (!startProvinceId || !endProvinceId) {
+    if (!startProvinceId || !endProvinceId || !startWardId || !endWardId) {
       Alert.alert(
-        'Chưa chọn tuyến đường',
-        'Vui lòng chọn Tỉnh/Thành đi và Tỉnh/Thành đến trong phần tìm kiếm trước khi phát tín hiệu tìm xe.',
+        'Chưa đủ thông tin tuyến đường',
+        'Vui lòng chọn đầy đủ Tỉnh/Thành và Phường/Xã cho cả điểm đi và điểm đến trong bộ lọc tìm kiếm trước khi phát tín hiệu tìm xe.',
         [
           { 
-            text: 'Mở bộ lọc', 
+            text: 'Mở bộ lọc chọn tuyến', 
             onPress: () => setIsFilterExpanded(true) 
           }
         ]
@@ -338,16 +338,9 @@ export default function SearchRideScreen({ navigation, route }) {
       return;
     }
 
-    const startProv = provinces.find(p => p.id === startProvinceId)?.name || '';
-    const startW = startWards.find(w => w.id === startWardId)?.name || '';
-    const endProv = provinces.find(p => p.id === endProvinceId)?.name || '';
-    const endW = endWards.find(w => w.id === endWardId)?.name || '';
-
-    const defaultStart = startW ? `${startW}, ${startProv}` : startProv;
-    const defaultEnd = endW ? `${endW}, ${endProv}` : endProv;
-
-    setRequestStartAddress(defaultStart);
-    setRequestEndAddress(defaultEnd);
+    // Địa chỉ chi tiết để trống để người dùng nhập số nhà / tên đường, không điền tên tỉnh xã vào đây
+    setRequestStartAddress('');
+    setRequestEndAddress('');
 
     // Xử lý thời gian khởi hành hợp lệ (> now + 30 phút theo yêu cầu backend)
     const now = new Date();
@@ -370,16 +363,28 @@ export default function SearchRideScreen({ navigation, route }) {
   };
 
   const handleCreateTripRequest = async () => {
-    if (!startProvinceId || !endProvinceId) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Tỉnh/Thành đi và Tỉnh/Thành đến.');
+    if (!startProvinceId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Tỉnh/Thành điểm đón.');
+      return;
+    }
+    if (!startWardId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Phường/Xã điểm đón.');
       return;
     }
     if (!requestStartAddress || !requestStartAddress.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ điểm đón cụ thể.');
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ chi tiết điểm đón (số nhà, ngõ/đường).');
+      return;
+    }
+    if (!endProvinceId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Tỉnh/Thành điểm đến.');
+      return;
+    }
+    if (!endWardId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Phường/Xã điểm đến.');
       return;
     }
     if (!requestEndAddress || !requestEndAddress.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ điểm đến cụ thể.');
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ chi tiết điểm đến (số nhà, ngõ/đường).');
       return;
     }
 
@@ -399,9 +404,9 @@ export default function SearchRideScreen({ navigation, route }) {
 
       const payload = {
         startProvinceId,
-        startWardId: startWardId || undefined,
+        startWardId,
         endProvinceId,
-        endWardId: endWardId || undefined,
+        endWardId,
         startAddressText: requestStartAddress.trim(),
         endAddressText: requestEndAddress.trim(),
         departureTime: localISOTime,
@@ -1481,22 +1486,20 @@ export default function SearchRideScreen({ navigation, route }) {
                       <Text style={styles.reqBadgeLabel}>Điểm đón:</Text>
                       <View style={styles.reqPill}>
                         <Text style={styles.reqPillText} numberOfLines={1}>
-                          {provinces.find(p => p.id === startProvinceId)?.name || 'Chưa chọn'}
+                          {provinces.find(p => p.id === startProvinceId)?.name || 'Chưa chọn tỉnh'}
                         </Text>
                       </View>
-                      {startWardId ? (
-                        <View style={[styles.reqPill, { backgroundColor: '#F1F5F9' }]}>
-                          <Text style={[styles.reqPillText, { color: COLORS.text }]} numberOfLines={1}>
-                            {startWards.find(w => w.id === startWardId)?.name}
-                          </Text>
-                        </View>
-                      ) : null}
+                      <View style={[styles.reqPill, { backgroundColor: '#F1F5F9' }]}>
+                        <Text style={[styles.reqPillText, { color: COLORS.text }]} numberOfLines={1}>
+                          {startWards.find(w => w.id === startWardId)?.name || 'Chưa chọn xã'}
+                        </Text>
+                      </View>
                     </View>
                     <TextInput
                       style={styles.reqTextInput}
                       value={requestStartAddress}
                       onChangeText={setRequestStartAddress}
-                      placeholder="Nhập địa chỉ đón chi tiết (thôn, số nhà, đường...)"
+                      placeholder="Số nhà, tên ngõ/đường đón (bắt buộc)..."
                       placeholderTextColor={COLORS.textMuted}
                     />
                   </View>
@@ -1508,22 +1511,20 @@ export default function SearchRideScreen({ navigation, route }) {
                       <Text style={styles.reqBadgeLabel}>Điểm đến:</Text>
                       <View style={styles.reqPill}>
                         <Text style={styles.reqPillText} numberOfLines={1}>
-                          {provinces.find(p => p.id === endProvinceId)?.name || 'Chưa chọn'}
+                          {provinces.find(p => p.id === endProvinceId)?.name || 'Chưa chọn tỉnh'}
                         </Text>
                       </View>
-                      {endWardId ? (
-                        <View style={[styles.reqPill, { backgroundColor: '#F1F5F9' }]}>
-                          <Text style={[styles.reqPillText, { color: COLORS.text }]} numberOfLines={1}>
-                            {endWards.find(w => w.id === endWardId)?.name}
-                          </Text>
-                        </View>
-                      ) : null}
+                      <View style={[styles.reqPill, { backgroundColor: '#F1F5F9' }]}>
+                        <Text style={[styles.reqPillText, { color: COLORS.text }]} numberOfLines={1}>
+                          {endWards.find(w => w.id === endWardId)?.name || 'Chưa chọn xã'}
+                        </Text>
+                      </View>
                     </View>
                     <TextInput
                       style={styles.reqTextInput}
                       value={requestEndAddress}
                       onChangeText={setRequestEndAddress}
-                      placeholder="Nhập địa chỉ trả chi tiết (thôn, số nhà, đường...)"
+                      placeholder="Số nhà, tên ngõ/đường đến (bắt buộc)..."
                       placeholderTextColor={COLORS.textMuted}
                     />
                   </View>

@@ -15,10 +15,8 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class MarketplaceTripRequestFilter {
 
-    @NotBlank(message = "START_PROVINCE_REQUIRED")
     String startProvinceId;
 
-    @NotBlank(message = "END_PROVINCE_REQUIRED")
     String endProvinceId;
 
     String startWardId;

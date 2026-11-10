@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -41,6 +41,9 @@ export default function MarketplaceScreen({ navigation, route }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
 
   // Provinces & Manual Filter
   const [provinces, setProvinces] = useState([]);
@@ -61,6 +64,40 @@ export default function MarketplaceScreen({ navigation, route }) {
   const [selectedTripId, setSelectedTripId] = useState('');
   const [quickMessage, setQuickMessage] = useState('Xe trống, sẵn sàng đón ngay!');
   const [isSending, setIsSending] = useState(false);
+  const [filteredTripsForInvite, setFilteredTripsForInvite] = useState([]);
+
+  // Cache tên phường/xã theo wardId để hiển thị trên thẻ yêu cầu
+  const wardNameCacheRef = useRef({});
+  const [wardNameCache, setWardNameCache] = useState({});
+
+  // Resolve ward names khi requests thay đổi
+  useEffect(() => {
+    if (requests.length === 0) return;
+    const wardIds = new Set();
+    requests.forEach(r => {
+      if (r.startWardId && !wardNameCacheRef.current[r.startWardId]) wardIds.add(r.startWardId);
+      if (r.endWardId && !wardNameCacheRef.current[r.endWardId]) wardIds.add(r.endWardId);
+    });
+    if (wardIds.size === 0) return;
+
+    const resolveWards = async () => {
+      const entries = {};
+      await Promise.allSettled(
+        [...wardIds].map(async (wId) => {
+          try {
+            const res = await apiService.getWardById(wId);
+            const ward = res?.data?.result || res?.data;
+            if (ward?.name) entries[wId] = ward.name;
+          } catch (e) { /* ignore */ }
+        })
+      );
+      if (Object.keys(entries).length > 0) {
+        wardNameCacheRef.current = { ...wardNameCacheRef.current, ...entries };
+        setWardNameCache(prev => ({ ...prev, ...entries }));
+      }
+    };
+    resolveWards();
+  }, [requests]);
 
   // 0. Xử lý khi được điều hướng từ Thông báo với targetRequestId hoặc tuyến đường cụ thể
   useEffect(() => {
@@ -88,7 +125,7 @@ export default function MarketplaceScreen({ navigation, route }) {
             if (endId) setEndProvinceId(endId);
 
             if (startId && endId) {
-              await loadRequests(startId, endId);
+              await loadRequests(0, startId, endId);
             }
 
             if (data.status === 'OPEN') {
@@ -107,7 +144,7 @@ export default function MarketplaceScreen({ navigation, route }) {
         } else if (navStartId && navEndId) {
           setStartProvinceId(String(navStartId));
           setEndProvinceId(String(navEndId));
-          await loadRequests(String(navStartId), String(navEndId));
+          await loadRequests(0, String(navStartId), String(navEndId));
         }
       } catch (err) {
         console.warn('Lỗi khi lấy chi tiết yêu cầu từ thông báo:', err);
@@ -115,7 +152,7 @@ export default function MarketplaceScreen({ navigation, route }) {
         if (navStartId && navEndId) {
           setStartProvinceId(String(navStartId));
           setEndProvinceId(String(navEndId));
-          await loadRequests(String(navStartId), String(navEndId));
+          await loadRequests(0, String(navStartId), String(navEndId));
         } else {
           Alert.alert('Thông báo', 'Không thể tìm thấy yêu cầu di chuyển này hoặc đã hết hạn.');
         }
@@ -143,24 +180,15 @@ export default function MarketplaceScreen({ navigation, route }) {
     const init = async () => {
       setLoading(true);
       try {
-        const loadedProvinces = await fetchProvinces();
-        const profileIds = await fetchDriverProfile();
-        await fetchMyStartedTrips();
+        await Promise.all([
+          fetchProvinces(),
+          fetchDriverProfile(),
+          fetchMyStartedTrips(),
+        ]);
 
-        // Tự động gán tuyến mặc định nếu tài xế có đăng ký tỉnh hoạt động và không có targetRequestId / tuyến từ thông báo
+        // Tự động tìm tất cả các chuyến ngay khi vào màn hình chợ
         if (!route?.params?.targetRequestId && !route?.params?.startProvinceId) {
-          let initialStart = '';
-          let initialEnd = '';
-          if (profileIds && profileIds.length >= 2) {
-            initialStart = profileIds[0];
-            initialEnd = profileIds[1];
-            setStartProvinceId(initialStart);
-            setEndProvinceId(initialEnd);
-            await loadRequests(initialStart, initialEnd);
-          } else if (profileIds && profileIds.length === 1 && loadedProvinces.length > 1) {
-            initialStart = profileIds[0];
-            setStartProvinceId(initialStart);
-          }
+          await loadRequests(0, '', '');
         }
       } finally {
         setLoading(false);
@@ -241,6 +269,7 @@ export default function MarketplaceScreen({ navigation, route }) {
             seatAvailable: t.seatAvailable,
             startProvinceId: String(t.startProvinceId || ''),
             endProvinceId: String(t.endProvinceId || ''),
+            stops: t.stops || [],
           };
         });
         setMyTrips(mapped);
@@ -253,29 +282,37 @@ export default function MarketplaceScreen({ navigation, route }) {
   };
 
   // 4. Gọi API thật từ trip-service: /api/trip/trip-requests/marketplace
-  const loadRequests = async (startId = startProvinceId, endId = endProvinceId) => {
-    if (!startId || !endId) {
-      setRequests([]);
-      return;
-    }
+  const loadRequests = async (page = 0, startId = startProvinceId, endId = endProvinceId) => {
     setLoading(true);
     try {
       const params = {
-        startProvinceId: startId,
-        endProvinceId: endId,
-        page: 0,
-        size: 50,
+        page: page,
+        size: 10,
       };
+      if (startId) params.startProvinceId = startId;
+      if (endId) params.endProvinceId = endId;
+
       const res = await apiService.getMarketplaceTripRequests(params);
-      const rawContent = res.data?.result?.content || res.data?.result;
+      const resData = res.data?.result;
+      const rawContent = resData?.content || (Array.isArray(resData) ? resData : []);
+
       if (res.data?.code === 1000 && Array.isArray(rawContent)) {
         setRequests(rawContent);
+        setCurrentPage(resData?.number !== undefined ? resData.number : page);
+        setTotalPages(resData?.totalPages !== undefined ? resData.totalPages : 1);
+        setTotalElements(resData?.totalElements !== undefined ? resData.totalElements : rawContent.length);
       } else {
         setRequests([]);
+        setCurrentPage(0);
+        setTotalPages(1);
+        setTotalElements(0);
       }
     } catch (e) {
       console.warn('Fetch marketplace requests error:', e);
       setRequests([]);
+      setCurrentPage(0);
+      setTotalPages(1);
+      setTotalElements(0);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -289,11 +326,7 @@ export default function MarketplaceScreen({ navigation, route }) {
       fetchMyStartedTrips(),
       fetchDriverProfile(),
     ]);
-    if (startProvinceId && endProvinceId) {
-      await loadRequests(startProvinceId, endProvinceId);
-    } else {
-      setRefreshing(false);
-    }
+    await loadRequests(0, startProvinceId, endProvinceId);
   };
 
   // Đảo chiều tuyến đường đi - về
@@ -302,16 +335,14 @@ export default function MarketplaceScreen({ navigation, route }) {
     const newEnd = startProvinceId;
     setStartProvinceId(newStart);
     setEndProvinceId(newEnd);
-    if (newStart && newEnd) {
-      loadRequests(newStart, newEnd);
-    }
+    loadRequests(0, newStart, newEnd);
   };
 
   // Chọn tuyến nhanh từ 1 trong các tỉnh đã đăng ký
   const handleSelectQuickRoute = (fromId, toId) => {
     setStartProvinceId(fromId);
     setEndProvinceId(toId);
-    loadRequests(fromId, toId);
+    loadRequests(0, fromId, toId);
   };
 
   // Helper lấy tên tỉnh theo ID từ danh sách location-service
@@ -389,15 +420,35 @@ export default function MarketplaceScreen({ navigation, route }) {
     }
   };
 
-  // Mời khách
+  // Mời khách — chỉ hiển thị chuyến xe phủ tới phường/xã của yêu cầu
   const handleOpenInvite = (req) => {
     setSelectedRequest(req);
-    // Ưu tiên chọn chuyến xe của tài xế trùng tuyến với yêu cầu của khách
-    const matchingTrip = myTrips.find(
-      (t) => String(t.startProvinceId) === String(req.startProvinceId) && String(t.endProvinceId) === String(req.endProvinceId)
-    );
-    if (matchingTrip) {
-      setSelectedTripId(matchingTrip.id);
+
+    // Lọc chuyến xe hợp lệ: stops phải phủ wardId đón & trả của yêu cầu
+    const compatibleTrips = myTrips.filter((t) => {
+      const stops = t.stops || [];
+      // Kiểm tra ward-level coverage
+      const coversStart = req.startWardId
+        ? stops.some(s => String(s.wardId) === String(req.startWardId))
+        : String(t.startProvinceId) === String(req.startProvinceId);
+      const coversEnd = req.endWardId
+        ? stops.some(s => String(s.wardId) === String(req.endWardId))
+        : String(t.endProvinceId) === String(req.endProvinceId);
+      return coversStart && coversEnd;
+    });
+
+    // Fallback: nếu không có chuyến khớp ward, thử province-level
+    const tripsToShow = compatibleTrips.length > 0
+      ? compatibleTrips
+      : myTrips.filter(t =>
+          String(t.startProvinceId) === String(req.startProvinceId) &&
+          String(t.endProvinceId) === String(req.endProvinceId)
+        );
+
+    setFilteredTripsForInvite(tripsToShow.length > 0 ? tripsToShow : myTrips);
+
+    if (tripsToShow.length > 0) {
+      setSelectedTripId(tripsToShow[0].id);
     } else if (myTrips.length > 0) {
       setSelectedTripId(myTrips[0].id);
     } else {
@@ -460,36 +511,53 @@ export default function MarketplaceScreen({ navigation, route }) {
           </View>
         </View>
 
-        <View style={styles.routeBox}>
-          <View style={styles.routePoint}>
-            <Ionicons name="location" size={16} color={COLORS.primary} />
-            <Text style={styles.routeText} numberOfLines={1}>
-              {startName}
-            </Text>
+        {/* Route - Hiển thị chuẩn form: Tỉnh/Thành → Phường/Xã → Chi tiết */}
+        <View style={styles.routeSection}>
+          {/* Điểm đón */}
+          <View style={styles.routeRow}>
+            <View style={styles.routeIconBox}>
+              <Ionicons name="location" size={16} color={COLORS.primary} />
+              <View style={styles.routeConnector} />
+            </View>
+            <View style={styles.routeAddressBox}>
+              <Text style={styles.routeAddressText} numberOfLines={1}>
+                {startName}
+              </Text>
+              {wardNameCache[item.startWardId] ? (
+                <Text style={styles.routeWardText} numberOfLines={1}>
+                  ↳ {wardNameCache[item.startWardId]}
+                </Text>
+              ) : null}
+              {item.startAddressText ? (
+                <Text style={styles.routeDetailText} numberOfLines={2}>
+                  📍 {item.startAddressText}
+                </Text>
+              ) : null}
+            </View>
           </View>
-          <Ionicons name="arrow-forward" size={14} color={COLORS.textMuted} />
-          <View style={styles.routePoint}>
-            <Ionicons name="flag" size={16} color={COLORS.warning} />
-            <Text style={styles.routeText} numberOfLines={1}>
-              {endName}
-            </Text>
+
+          {/* Điểm trả */}
+          <View style={styles.routeRow}>
+            <View style={styles.routeIconBox}>
+              <Ionicons name="flag" size={16} color={COLORS.warning} />
+            </View>
+            <View style={styles.routeAddressBox}>
+              <Text style={styles.routeAddressText} numberOfLines={1}>
+                {endName}
+              </Text>
+              {wardNameCache[item.endWardId] ? (
+                <Text style={styles.routeWardText} numberOfLines={1}>
+                  ↳ {wardNameCache[item.endWardId]}
+                </Text>
+              ) : null}
+              {item.endAddressText ? (
+                <Text style={styles.routeDetailText} numberOfLines={2}>
+                  🏁 {item.endAddressText}
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
-
-        {(item.startAddressText || item.endAddressText) && (
-          <View style={styles.addressBox}>
-            {item.startAddressText ? (
-              <Text style={styles.addressDetailText} numberOfLines={1}>
-                📍 Đón: {item.startAddressText}
-              </Text>
-            ) : null}
-            {item.endAddressText ? (
-              <Text style={styles.addressDetailText} numberOfLines={1}>
-                🏁 Trả: {item.endAddressText}
-              </Text>
-            ) : null}
-          </View>
-        )}
 
         {item.note ? (
           <View style={styles.noteBox}>
@@ -507,6 +575,38 @@ export default function MarketplaceScreen({ navigation, route }) {
             <Text style={styles.inviteBtnText}>BÁO GIÁ & MỜI ĐI</Text>
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  };
+
+  const renderPagination = () => {
+    if (requests.length === 0) return null;
+    return (
+      <View style={styles.paginationContainer}>
+        <TouchableOpacity
+          style={[styles.pageBtn, currentPage === 0 && styles.pageBtnDisabled]}
+          disabled={currentPage === 0 || loading}
+          onPress={() => loadRequests(currentPage - 1, startProvinceId, endProvinceId)}
+        >
+          <Ionicons name="chevron-back" size={18} color={currentPage === 0 ? COLORS.textMuted : COLORS.primary} />
+          <Text style={[styles.pageBtnText, currentPage === 0 && styles.pageBtnTextDisabled]}>Trước</Text>
+        </TouchableOpacity>
+
+        <View style={styles.pageInfoBadge}>
+          <Text style={styles.pageInfoText}>
+            Trang {currentPage + 1} / {Math.max(1, totalPages)}
+          </Text>
+          <Text style={styles.pageTotalElementsText}>({totalElements} khách)</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.pageBtn, currentPage >= totalPages - 1 && styles.pageBtnDisabled]}
+          disabled={currentPage >= totalPages - 1 || loading}
+          onPress={() => loadRequests(currentPage + 1, startProvinceId, endProvinceId)}
+        >
+          <Text style={[styles.pageBtnText, currentPage >= totalPages - 1 && styles.pageBtnTextDisabled]}>Sau</Text>
+          <Ionicons name="chevron-forward" size={18} color={currentPage >= totalPages - 1 ? COLORS.textMuted : COLORS.primary} />
+        </TouchableOpacity>
       </View>
     );
   };
@@ -575,12 +675,12 @@ export default function MarketplaceScreen({ navigation, route }) {
             <View style={styles.filterCol}>
               <Text style={styles.filterColLabel}>TỪ TỈNH</Text>
               <DropdownSelect
-                placeholder="Chọn tỉnh đi"
+                placeholder="Tất cả tỉnh đi"
                 value={startProvinceId}
                 options={provinces}
                 onSelect={(val) => {
                   setStartProvinceId(val);
-                  if (val && endProvinceId) loadRequests(val, endProvinceId);
+                  loadRequests(0, val, endProvinceId);
                 }}
               />
             </View>
@@ -597,26 +697,39 @@ export default function MarketplaceScreen({ navigation, route }) {
             <View style={styles.filterCol}>
               <Text style={styles.filterColLabel}>ĐẾN TỈNH</Text>
               <DropdownSelect
-                placeholder="Chọn tỉnh đến"
+                placeholder="Tất cả tỉnh đến"
                 value={endProvinceId}
                 options={provinces}
                 onSelect={(val) => {
                   setEndProvinceId(val);
-                  if (startProvinceId && val) loadRequests(startProvinceId, val);
+                  loadRequests(0, startProvinceId, val);
                 }}
               />
             </View>
           </View>
 
-          {startProvinceId && endProvinceId && (
-            <TouchableOpacity
-              style={styles.searchActionBtn}
-              onPress={() => loadRequests(startProvinceId, endProvinceId)}
-            >
-              <Ionicons name="search" size={15} color={COLORS.surface} style={{ marginRight: 6 }} />
-              <Text style={styles.searchActionBtnText}>TÌM KHÁCH TRÊN TUYẾN NÀY</Text>
-            </TouchableOpacity>
-          )}
+          {(startProvinceId || endProvinceId) ? (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              <TouchableOpacity
+                style={[styles.searchActionBtn, { flex: 2, marginTop: 0 }]}
+                onPress={() => loadRequests(0, startProvinceId, endProvinceId)}
+              >
+                <Ionicons name="search" size={15} color={COLORS.surface} style={{ marginRight: 6 }} />
+                <Text style={styles.searchActionBtnText}>LỌC THEO TUYẾN</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.searchActionBtn, { flex: 1, marginTop: 0, backgroundColor: '#64748B' }]}
+                onPress={() => {
+                  setStartProvinceId('');
+                  setEndProvinceId('');
+                  loadRequests(0, '', '');
+                }}
+              >
+                <Ionicons name="refresh" size={15} color={COLORS.surface} style={{ marginRight: 6 }} />
+                <Text style={styles.searchActionBtnText}>XÓA LỌC</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -633,6 +746,7 @@ export default function MarketplaceScreen({ navigation, route }) {
           renderItem={renderRequestCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={renderPagination}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -646,24 +760,37 @@ export default function MarketplaceScreen({ navigation, route }) {
               <View style={styles.emptyIconCircle}>
                 <Ionicons name="car-outline" size={38} color={COLORS.primary} />
               </View>
-              {startProvinceId && endProvinceId ? (
+              {startProvinceId || endProvinceId ? (
                 <>
                   <Text style={styles.emptyTitle}>Chưa có khách đặt tuyến này</Text>
                   <Text style={styles.emptySub}>
-                    Hiện tại chưa có khách nào đăng nhu cầu tìm xe từ{' '}
-                    <Text style={{ fontWeight: 'bold' }}>{getProvinceName(startProvinceId)}</Text> đến{' '}
-                    <Text style={{ fontWeight: 'bold' }}>{getProvinceName(endProvinceId)}</Text>.
+                    Hiện tại chưa có khách nào đăng nhu cầu tìm xe phù hợp với bộ lọc đã chọn.
                   </Text>
-                  <TouchableOpacity style={styles.emptyActionBtn} onPress={handleSwapProvinces}>
-                    <Ionicons name="swap-horizontal" size={16} color={COLORS.surface} style={{ marginRight: 6 }} />
-                    <Text style={styles.emptyActionBtnText}>Tìm chiều ngược lại</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                    {startProvinceId && endProvinceId && (
+                      <TouchableOpacity style={styles.emptyActionBtn} onPress={handleSwapProvinces}>
+                        <Ionicons name="swap-horizontal" size={16} color={COLORS.surface} style={{ marginRight: 6 }} />
+                        <Text style={styles.emptyActionBtnText}>Đảo chiều</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.emptyActionBtn, { backgroundColor: COLORS.primary }]}
+                      onPress={() => {
+                        setStartProvinceId('');
+                        setEndProvinceId('');
+                        loadRequests(0, '', '');
+                      }}
+                    >
+                      <Ionicons name="apps-outline" size={16} color={COLORS.surface} style={{ marginRight: 6 }} />
+                      <Text style={styles.emptyActionBtnText}>Xem tất cả các chuyến</Text>
+                    </TouchableOpacity>
+                  </View>
                 </>
               ) : (
                 <>
-                  <Text style={styles.emptyTitle}>Chọn tuyến để xem khách</Text>
+                  <Text style={styles.emptyTitle}>Hiện chưa có yêu cầu nào</Text>
                   <Text style={styles.emptySub}>
-                    Vui lòng chọn Tỉnh đi và Tỉnh đến ở bộ lọc phía trên để tra cứu danh sách khách đang tìm xe ghép.
+                    Chưa có khách hàng nào phát tín hiệu tìm xe trên hệ thống lúc này. Hãy vuốt xuống để tải lại.
                   </Text>
                   {operatingProvinceIds.length === 0 && (
                     <TouchableOpacity style={styles.emptyActionBtn} onPress={handleOpenOperatingModal}>
@@ -865,7 +992,7 @@ export default function MarketplaceScreen({ navigation, route }) {
                 label="Chuyến xe"
                 placeholder="Chọn chuyến xe đang mở/chạy"
                 value={selectedTripId}
-                options={myTrips}
+                options={filteredTripsForInvite.length > 0 ? filteredTripsForInvite : myTrips}
                 onSelect={setSelectedTripId}
               />
               {(() => {
@@ -1133,6 +1260,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.text,
+  },
+
+  // Structured route display (Tỉnh → Phường → Chi tiết)
+  routeSection: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  routeIconBox: {
+    width: 24,
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  routeConnector: {
+    width: 2,
+    height: 34,
+    backgroundColor: '#CBD5E1',
+    position: 'absolute',
+    top: 20,
+  },
+  routeAddressBox: {
+    flex: 1,
+    paddingLeft: 8,
+  },
+  routeAddressText: {
+    color: COLORS.text,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  routeWardText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  routeDetailText: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    marginTop: 3,
+    fontWeight: '500',
+    lineHeight: 17,
   },
 
   addressBox: {
@@ -1505,5 +1679,54 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontStyle: 'italic',
     marginTop: 6,
+  },
+
+  // Pagination
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 24,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  pageBtnDisabled: {
+    backgroundColor: COLORS.chipBg,
+    opacity: 0.5,
+  },
+  pageBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginHorizontal: 4,
+  },
+  pageBtnTextDisabled: {
+    color: COLORS.textMuted,
+  },
+  pageInfoBadge: {
+    alignItems: 'center',
+  },
+  pageInfoText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  pageTotalElementsText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
 });

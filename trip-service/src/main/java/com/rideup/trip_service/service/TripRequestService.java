@@ -67,7 +67,7 @@ public class TripRequestService {
         }
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime latestPossibleExpire = request.getDepartureTime().minusMinutes(15);
-        LocalDateTime maxOpenTime = now.plusHours(12);
+        LocalDateTime maxOpenTime = now.plusDays(1);
         if (maxOpenTime.isAfter(latestPossibleExpire)) {
             maxOpenTime = latestPossibleExpire;
         }
@@ -240,7 +240,7 @@ public class TripRequestService {
 
         invitation.setStatus(InvitationStatus.REJECTED);
         invitation.setRespondedAt(java.time.LocalDateTime.now());
-        invitationRepository.save(invitation);
+        invitationRepository.saveAndFlush(invitation);
 
         marketplaceEventProducer.publishInvitationRejectedEvent(InvitationRejectedEvent.builder()
                 .invitationId(invitation.getId())
@@ -402,6 +402,7 @@ public class TripRequestService {
 
         if (request.getInvitations() != null && !request.getInvitations().isEmpty()) {
             List<TripRequestInvitationResponse> invResponses = request.getInvitations().stream()
+                    .filter(inv -> inv.getStatus() == InvitationStatus.PENDING)
                     .map(inv -> {
                         TripRequestInvitationResponse invResp = modelMapper.map(inv,
                                 TripRequestInvitationResponse.class);

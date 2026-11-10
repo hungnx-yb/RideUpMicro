@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   ActivityIndicator, FlatList, TouchableOpacity, RefreshControl, ScrollView,
@@ -546,6 +546,45 @@ const MyTripsScreen = ({ navigation, route }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  // Cache tên phường/xã theo wardId để hiển thị trên thẻ yêu cầu
+  const wardNameCacheRef = useRef({});
+  const [wardNameCache, setWardNameCache] = useState({});
+
+  const getProvinceName = useCallback((id) => {
+    if (!id) return '';
+    const match = provinces.find(p => String(p.id) === String(id));
+    return match ? match.name : '';
+  }, [provinces]);
+
+  // Resolve ward names khi requests thay đổi
+  useEffect(() => {
+    if (requests.length === 0) return;
+    const wardIds = new Set();
+    requests.forEach(r => {
+      if (r.startWardId && !wardNameCacheRef.current[r.startWardId]) wardIds.add(r.startWardId);
+      if (r.endWardId && !wardNameCacheRef.current[r.endWardId]) wardIds.add(r.endWardId);
+    });
+    if (wardIds.size === 0) return;
+
+    const resolveWards = async () => {
+      const entries = {};
+      await Promise.allSettled(
+        [...wardIds].map(async (wId) => {
+          try {
+            const res = await apiService.getWardById(wId);
+            const ward = res?.data?.result || res?.data;
+            if (ward?.name) entries[wId] = ward.name;
+          } catch (e) { /* ignore */ }
+        })
+      );
+      if (Object.keys(entries).length > 0) {
+        wardNameCacheRef.current = { ...wardNameCacheRef.current, ...entries };
+        setWardNameCache(prev => ({ ...prev, ...entries }));
+      }
+    };
+    resolveWards();
+  }, [requests]);
+
   useEffect(() => {
     if (route?.params?.initialTab) {
       setMainTab(route.params.initialTab);
@@ -559,7 +598,11 @@ const MyTripsScreen = ({ navigation, route }) => {
       const res = await apiService.getMyTripRequests();
       const rawData = res?.data?.result ?? res?.data;
       const data = Array.isArray(rawData) ? rawData : (rawData?.content || []);
-      setRequests(data);
+      const cleaned = data.map(req => ({
+        ...req,
+        invitations: (req.invitations || []).filter(inv => inv.status === 'PENDING' || !inv.status)
+      }));
+      setRequests(cleaned);
     } catch (e) {
       console.warn('Fetch requests error:', e?.response?.data || e);
       setRequests([]);
@@ -783,16 +826,17 @@ const MyTripsScreen = ({ navigation, route }) => {
 
   const handleRejectInvitation = async (inv) => {
     try {
-      await apiService.rejectTripRequestInvitation(inv.id);
-      // Optimistic update: remove from local state
+      // Optimistic update: remove from local state immediately
       setRequests(prev => prev.map(req => {
         if (req.id === inv.tripRequestId) {
           return { ...req, invitations: (req.invitations || []).filter(i => i.id !== inv.id) };
         }
         return req;
       }));
+      await apiService.rejectTripRequestInvitation(inv.id);
     } catch (e) {
       console.warn('Reject error', e);
+      fetchMyRequests();
     }
   };
 
@@ -1036,19 +1080,51 @@ const MyTripsScreen = ({ navigation, route }) => {
                     </View>
                   </View>
 
-                  {/* Route */}
-                  <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                      <Ionicons name="location" size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
-                      <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', flex: 1 }} numberOfLines={1}>
-                        {item.startAddressText || 'Điểm đón'}
-                      </Text>
+                  {/* Route - Hiển thị chuẩn form như BookingCard */}
+                  <View style={styles.cardBody}>
+                    {/* Điểm đón */}
+                    <View style={styles.routeRow}>
+                      <View style={styles.iconBox}>
+                        <Ionicons name="location" size={18} color={COLORS.primary} />
+                        <View style={styles.routeLine} />
+                      </View>
+                      <View style={styles.addressBox}>
+                        <Text style={styles.addressText} numberOfLines={1}>
+                          {getProvinceName(item.startProvinceId) || 'Điểm đón'}
+                        </Text>
+                        {wardNameCache[item.startWardId] ? (
+                          <Text style={styles.subAddressText} numberOfLines={1}>
+                            ↳ {wardNameCache[item.startWardId]}
+                          </Text>
+                        ) : null}
+                        {item.startAddressText ? (
+                          <Text style={styles.detailAddressText} numberOfLines={2}>
+                            <Ionicons name="navigate-outline" size={11} color={COLORS.textMuted} />{' '}{item.startAddressText}
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="flag" size={16} color="#F59E0B" style={{ marginRight: 6 }} />
-                      <Text style={{ fontSize: 13, color: COLORS.text, fontWeight: '600', flex: 1 }} numberOfLines={1}>
-                        {item.endAddressText || 'Điểm đến'}
-                      </Text>
+
+                    {/* Điểm trả */}
+                    <View style={styles.routeRow}>
+                      <View style={styles.iconBox}>
+                        <Ionicons name="flag" size={18} color="#F59E0B" />
+                      </View>
+                      <View style={styles.addressBox}>
+                        <Text style={styles.addressText} numberOfLines={1}>
+                          {getProvinceName(item.endProvinceId) || 'Điểm đến'}
+                        </Text>
+                        {wardNameCache[item.endWardId] ? (
+                          <Text style={styles.subAddressText} numberOfLines={1}>
+                            ↳ {wardNameCache[item.endWardId]}
+                          </Text>
+                        ) : null}
+                        {item.endAddressText ? (
+                          <Text style={styles.detailAddressText} numberOfLines={2}>
+                            <Ionicons name="navigate-outline" size={11} color={COLORS.textMuted} />{' '}{item.endAddressText}
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
                   </View>
 
@@ -1068,34 +1144,40 @@ const MyTripsScreen = ({ navigation, route }) => {
                   </View>
 
                   {/* Invitations section */}
-                  {item.invitations && item.invitations.length > 0 ? (
-                    <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.primary }}>
-                          Lời mời từ tài xế ({item.invitations.length}):
-                        </Text>
-                        <Text style={{ fontSize: 11, color: COLORS.textMuted }}>
-                          Chọn xe để tiếp tục
+                  {(() => {
+                    const pendingInvitations = (item.invitations || []).filter(inv => inv.status === 'PENDING' || !inv.status);
+                    if (pendingInvitations.length > 0) {
+                      return (
+                        <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.primary }}>
+                              Lời mời từ tài xế ({pendingInvitations.length}):
+                            </Text>
+                            <Text style={{ fontSize: 11, color: COLORS.textMuted }}>
+                              Chọn xe để tiếp tục
+                            </Text>
+                          </View>
+                          {pendingInvitations.map(inv => (
+                            <InvitationCard 
+                              key={inv.id} 
+                              invitation={inv} 
+                              onAccept={() => handleAcceptInvitation(inv, item)} 
+                              onReject={() => handleRejectInvitation(inv)} 
+                            />
+                          ))}
+                        </View>
+                      );
+                    }
+                    return (
+                      <View style={{ paddingVertical: 8, alignItems: 'center' }}>
+                        <Text style={{ color: COLORS.textMuted, fontStyle: 'italic', fontSize: 12 }}>
+                          {item.status === 'OPEN' 
+                            ? 'Đang phát sóng tìm tài xế gần bạn nhất...' 
+                            : 'Không có lời mời nào.'}
                         </Text>
                       </View>
-                      {item.invitations.map(inv => (
-                        <InvitationCard 
-                          key={inv.id} 
-                          invitation={inv} 
-                          onAccept={() => handleAcceptInvitation(inv, item)} 
-                          onReject={() => handleRejectInvitation(inv)} 
-                        />
-                      ))}
-                    </View>
-                  ) : (
-                    <View style={{ paddingVertical: 8, alignItems: 'center' }}>
-                      <Text style={{ color: COLORS.textMuted, fontStyle: 'italic', fontSize: 12 }}>
-                        {item.status === 'OPEN' 
-                          ? 'Đang phát sóng tìm tài xế gần bạn nhất...' 
-                          : 'Không có lời mời nào.'}
-                      </Text>
-                    </View>
-                  )}
+                    );
+                  })()}
                 </View>
               );
             }
