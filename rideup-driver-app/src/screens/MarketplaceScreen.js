@@ -66,38 +66,48 @@ export default function MarketplaceScreen({ navigation, route }) {
   const [isSending, setIsSending] = useState(false);
   const [filteredTripsForInvite, setFilteredTripsForInvite] = useState([]);
 
-  // Cache tên phường/xã theo wardId để hiển thị trên thẻ yêu cầu
+  // Cache tên phường/xã theo wardId để hiển thị trên thẻ yêu cầu và chuyến xe
   const wardNameCacheRef = useRef({});
   const [wardNameCache, setWardNameCache] = useState({});
 
-  // Resolve ward names khi requests thay đổi
-  useEffect(() => {
-    if (requests.length === 0) return;
-    const wardIds = new Set();
-    requests.forEach(r => {
-      if (r.startWardId && !wardNameCacheRef.current[r.startWardId]) wardIds.add(r.startWardId);
-      if (r.endWardId && !wardNameCacheRef.current[r.endWardId]) wardIds.add(r.endWardId);
-    });
-    if (wardIds.size === 0) return;
+  const resolveWardIds = useCallback(async (ids) => {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    const missing = ids.filter((id) => id && !wardNameCacheRef.current[String(id)]);
+    if (missing.length === 0) return;
 
-    const resolveWards = async () => {
-      const entries = {};
-      await Promise.allSettled(
-        [...wardIds].map(async (wId) => {
-          try {
-            const res = await apiService.getWardById(wId);
-            const ward = res?.data?.result || res?.data;
-            if (ward?.name) entries[wId] = ward.name;
-          } catch (e) { /* ignore */ }
-        })
-      );
-      if (Object.keys(entries).length > 0) {
-        wardNameCacheRef.current = { ...wardNameCacheRef.current, ...entries };
-        setWardNameCache(prev => ({ ...prev, ...entries }));
-      }
-    };
-    resolveWards();
-  }, [requests]);
+    const uniqueMissing = [...new Set(missing.map(String))];
+    const entries = {};
+    await Promise.allSettled(
+      uniqueMissing.map(async (wId) => {
+        try {
+          const res = await apiService.getWardById(wId);
+          const ward = res?.data?.result || res?.data;
+          if (ward?.name) entries[wId] = ward.name;
+        } catch (e) { /* ignore */ }
+      })
+    );
+    if (Object.keys(entries).length > 0) {
+      wardNameCacheRef.current = { ...wardNameCacheRef.current, ...entries };
+      setWardNameCache((prev) => ({ ...prev, ...entries }));
+    }
+  }, []);
+
+  // Resolve ward names khi requests hoặc myTrips thay đổi
+  useEffect(() => {
+    const wardIds = [];
+    requests.forEach((r) => {
+      if (r.startWardId) wardIds.push(r.startWardId);
+      if (r.endWardId) wardIds.push(r.endWardId);
+    });
+    myTrips.forEach((t) => {
+      (t.stops || []).forEach((s) => {
+        if (s.wardId) wardIds.push(s.wardId);
+      });
+    });
+    if (wardIds.length > 0) {
+      resolveWardIds(wardIds);
+    }
+  }, [requests, myTrips, resolveWardIds]);
 
   // 0. Xử lý khi được điều hướng từ Thông báo với targetRequestId hoặc tuyến đường cụ thể
   useEffect(() => {
@@ -209,7 +219,7 @@ export default function MarketplaceScreen({ navigation, route }) {
           code: p.code,
         }));
         setProvinces(list);
-        await AsyncStorage.setItem('cached_provinces', JSON.stringify(list)).catch(() => {});
+        await AsyncStorage.setItem('cached_provinces', JSON.stringify(list)).catch(() => { });
         return list;
       }
     } catch (e) {
@@ -226,7 +236,7 @@ export default function MarketplaceScreen({ navigation, route }) {
           return parsed;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     return [];
   };
@@ -269,6 +279,10 @@ export default function MarketplaceScreen({ navigation, route }) {
             seatAvailable: t.seatAvailable,
             startProvinceId: String(t.startProvinceId || ''),
             endProvinceId: String(t.endProvinceId || ''),
+            startAddressText: t.startAddressText || '',
+            endAddressText: t.endAddressText || '',
+            vehicleBrand: t.vehicleBrand || '',
+            vehicleModel: t.vehicleModel || '',
             stops: t.stops || [],
           };
         });
@@ -420,45 +434,97 @@ export default function MarketplaceScreen({ navigation, route }) {
     }
   };
 
-  // Mời khách — chỉ hiển thị chuyến xe phủ tới phường/xã của yêu cầu
-  const handleOpenInvite = (req) => {
+  // Kiểm tra chuyến xe có trùng tuyến và phủ trúng điểm đón/trả của yêu cầu không
+  const checkTripMatchesRequest = (trip, req) => {
+    if (!trip || !req) return false;
+
+    // 1. Chuyến xe phải còn đủ số ghế khách yêu cầu
+    const reqSeats = Number(req.seatTotal || 1);
+    const availableSeats = Number(trip.seatAvailable || 0);
+    if (availableSeats < reqSeats) return false;
+
+    // 2. Tuyến tỉnh/thành: Tỉnh đi và tỉnh đến phải trùng khớp
+    const reqStartProv = String(req.startProvinceId || '').trim();
+    const reqEndProv = String(req.endProvinceId || '').trim();
+    const tripStartProv = String(trip.startProvinceId || '').trim();
+    const tripEndProv = String(trip.endProvinceId || '').trim();
+
+    if (reqStartProv && tripStartProv && reqStartProv !== tripStartProv) return false;
+    if (reqEndProv && tripEndProv && reqEndProv !== tripEndProv) return false;
+
+    const stops = Array.isArray(trip.stops) ? trip.stops : [];
+    const pickupStops = stops.filter(s => s.stopType === 'PICKUP');
+    const dropoffStops = stops.filter(s => s.stopType === 'DROPOFF');
+
+    // 3. Phủ điểm đón tới cấp phường/xã của yêu cầu
+    const reqStartWard = String(req.startWardId || '').trim();
+    if (reqStartWard) {
+      if (pickupStops.length > 0) {
+        const hasWard = pickupStops.some(s => String(s.wardId || '').trim() === reqStartWard);
+        if (!hasWard) return false;
+      } else if (stops.length > 0) {
+        const hasWard = stops.some(s => String(s.wardId || '').trim() === reqStartWard);
+        if (!hasWard) return false;
+      }
+    }
+
+    // 4. Phủ điểm trả tới cấp phường/xã của yêu cầu
+    const reqEndWard = String(req.endWardId || '').trim();
+    if (reqEndWard) {
+      if (dropoffStops.length > 0) {
+        const hasWard = dropoffStops.some(s => String(s.wardId || '').trim() === reqEndWard);
+        if (!hasWard) return false;
+      } else if (stops.length > 0) {
+        const hasWard = stops.some(s => String(s.wardId || '').trim() === reqEndWard);
+        if (!hasWard) return false;
+      }
+    }
+
+    return true;
+  };
+
+  // Mở modal mời khách — CHỈ hiển thị chuyến xe hợp lệ trùng với yêu cầu khách
+  const handleOpenInvite = async (req) => {
     setSelectedRequest(req);
 
-    // Lọc chuyến xe hợp lệ: stops phải phủ wardId đón & trả của yêu cầu
-    const compatibleTrips = myTrips.filter((t) => {
-      const stops = t.stops || [];
-      // Kiểm tra ward-level coverage
-      const coversStart = req.startWardId
-        ? stops.some(s => String(s.wardId) === String(req.startWardId))
-        : String(t.startProvinceId) === String(req.startProvinceId);
-      const coversEnd = req.endWardId
-        ? stops.some(s => String(s.wardId) === String(req.endWardId))
-        : String(t.endProvinceId) === String(req.endProvinceId);
-      return coversStart && coversEnd;
-    });
+    let trips = myTrips;
+    if (!trips || trips.length === 0) {
+      trips = await fetchMyStartedTrips();
+    }
 
-    // Fallback: nếu không có chuyến khớp ward, thử province-level
-    const tripsToShow = compatibleTrips.length > 0
-      ? compatibleTrips
-      : myTrips.filter(t =>
-          String(t.startProvinceId) === String(req.startProvinceId) &&
-          String(t.endProvinceId) === String(req.endProvinceId)
-        );
+    // Lọc chuẩn xác: CHỈ giữ lại các chuyến xe trùng tuyến, phủ trúng đón/trả và đủ ghế
+    const compatibleTrips = (trips || []).filter((t) => checkTripMatchesRequest(t, req));
 
-    setFilteredTripsForInvite(tripsToShow.length > 0 ? tripsToShow : myTrips);
+    setFilteredTripsForInvite(compatibleTrips);
 
-    if (tripsToShow.length > 0) {
-      setSelectedTripId(tripsToShow[0].id);
-    } else if (myTrips.length > 0) {
-      setSelectedTripId(myTrips[0].id);
+    if (compatibleTrips.length > 0) {
+      setSelectedTripId(compatibleTrips[0].id);
     } else {
       setSelectedTripId('');
+    }
+
+    // Nạp tên phường/xã cho yêu cầu và tất cả các điểm dừng của chuyến phù hợp
+    const wardIdsToFetch = [];
+    if (req?.startWardId) wardIdsToFetch.push(req.startWardId);
+    if (req?.endWardId) wardIdsToFetch.push(req.endWardId);
+    compatibleTrips.forEach((t) => {
+      (t.stops || []).forEach((s) => {
+        if (s.wardId) wardIdsToFetch.push(s.wardId);
+      });
+    });
+    if (wardIdsToFetch.length > 0) {
+      resolveWardIds(wardIdsToFetch);
     }
   };
 
   const sendInvitation = async () => {
     if (!selectedTripId) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng chọn một chuyến xe của bạn để mời khách.');
+      Alert.alert('Chưa chọn chuyến', 'Vui lòng chọn một chuyến xe phù hợp của bạn để gửi lời mời.');
+      return;
+    }
+    const matchingTrip = filteredTripsForInvite.find((t) => String(t.id) === String(selectedTripId));
+    if (!matchingTrip) {
+      Alert.alert('Chuyến không phù hợp', 'Chuyến xe đã chọn không bao trọn điểm đón/trả của khách hàng.');
       return;
     }
     setIsSending(true);
@@ -470,7 +536,7 @@ export default function MarketplaceScreen({ navigation, route }) {
       };
       const res = await apiService.sendTripRequestInvitation(payload);
       if (res.data.code === 1000) {
-        Alert.alert('Thành công', 'Đã gửi lời mời đến khách hàng!');
+        Alert.alert('Thành công', 'Đã gửi lời mời và báo giá đến khách hàng!');
         setSelectedRequest(null);
         loadRequests();
       } else {
@@ -943,125 +1009,408 @@ export default function MarketplaceScreen({ navigation, route }) {
       <Modal visible={!!selectedRequest} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            {/* Header */}
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Báo Giá & Mời Khách</Text>
-              <TouchableOpacity onPress={() => setSelectedRequest(null)}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
+              <View>
+                <Text style={styles.modalTitle}>Báo Giá & Mời Khách</Text>
+                <Text style={styles.modalSub}>
+                  Khách hàng:{' '}
+                  <Text style={{ fontWeight: 'bold', color: COLORS.text }}>
+                    {selectedRequest?.passenger?.fullName || selectedRequest?.passenger?.username || selectedRequest?.passengerName || 'Khách Hàng'}
+                  </Text>
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedRequest(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalSub}>
-              Gửi lời mời và báo giá tới khách{' '}
-              <Text style={{ fontWeight: 'bold' }}>
-                {selectedRequest?.passenger?.fullName || selectedRequest?.passenger?.username || selectedRequest?.passengerName || 'Khách Hàng'}
-              </Text>
-            </Text>
-
-            {/* Chi tiết thông tin yêu cầu của khách */}
-            <View style={styles.requestSummaryCard}>
-              <View style={styles.requestSummaryRow}>
-                <Ionicons name="location-outline" size={16} color={COLORS.primary} />
-                <Text style={styles.requestSummaryRoute} numberOfLines={2}>
-                  {selectedRequest?.startAddressText ? `${selectedRequest.startAddressText}, ` : ''}{getProvinceName(selectedRequest?.startProvinceId)} ➔ {selectedRequest?.endAddressText ? `${selectedRequest.endAddressText}, ` : ''}{getProvinceName(selectedRequest?.endProvinceId)}
-                </Text>
-              </View>
-              <View style={styles.requestSummaryDetails}>
-                <View style={styles.requestSummaryBadge}>
-                  <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />
-                  <Text style={styles.requestSummaryBadgeText}>
-                    {selectedRequest?.departureTime ? new Date(selectedRequest.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Giờ linh hoạt'}
-                  </Text>
-                </View>
-                <View style={styles.requestSummaryBadge}>
-                  <Ionicons name="people-outline" size={13} color={COLORS.textMuted} />
-                  <Text style={styles.requestSummaryBadgeText}>
-                    Cần {selectedRequest?.seatTotal || 1} ghế
-                  </Text>
-                </View>
-              </View>
-              {!!selectedRequest?.note && (
-                <Text style={styles.requestSummaryNote} numberOfLines={2}>
-                  💬 "{selectedRequest.note}"
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Chọn chuyến xe của bạn để báo giá:</Text>
-              <DropdownSelect
-                label="Chuyến xe"
-                placeholder="Chọn chuyến xe đang mở/chạy"
-                value={selectedTripId}
-                options={filteredTripsForInvite.length > 0 ? filteredTripsForInvite : myTrips}
-                onSelect={setSelectedTripId}
-              />
-              {(() => {
-                const selectedTrip = myTrips.find((t) => String(t.id) === String(selectedTripId));
-                if (!selectedTrip) return null;
-                const pricePerSeat = selectedTrip.priceVnd || 0;
-                const seats = selectedRequest?.seatTotal || 1;
-                const totalEstimated = pricePerSeat * seats;
-                return (
-                  <View style={styles.quoteBox}>
-                    <View style={styles.quoteRow}>
-                      <Text style={styles.quoteLabel}>Giá vé chuyến của bạn:</Text>
-                      <Text style={styles.quotePrice}>
-                        {Number(pricePerSeat).toLocaleString('vi-VN')} đ/ghế
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 16 }}
+              style={{ maxHeight: 520 }}
+            >
+              {/* 1. Chi tiết thông tin yêu cầu của khách (Chuẩn form Tỉnh -> Phường -> Chi tiết) */}
+              <View style={styles.reqSummaryCard}>
+                <View style={styles.reqSummaryTopRow}>
+                  <View style={styles.reqBadgeRow}>
+                    <View style={styles.reqBadge}>
+                      <Ionicons name="people" size={13} color={COLORS.primary} />
+                      <Text style={styles.reqBadgeText}>Cần {selectedRequest?.seatTotal || 1} ghế</Text>
+                    </View>
+                    <View style={styles.reqBadge}>
+                      <Ionicons name="time" size={13} color="#F59E0B" />
+                      <Text style={styles.reqBadgeText}>
+                        {selectedRequest?.departureTime
+                          ? new Date(selectedRequest.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ', ' +
+                          new Date(selectedRequest.departureTime).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+                          : 'Giờ linh hoạt'}
                       </Text>
                     </View>
-                    <View style={styles.quoteRow}>
-                      <Text style={styles.quoteSub}>Tổng tiền báo khách ({seats} ghế):</Text>
-                      <Text style={styles.quoteTotal}>
-                        {Number(totalEstimated).toLocaleString('vi-VN')} đ
+                  </View>
+                </View>
+
+                {/* Tuyến đường của khách */}
+                <View style={styles.reqRouteBox}>
+                  {/* Điểm đón */}
+                  <View style={styles.reqRouteRow}>
+                    <View style={styles.reqRouteIconBox}>
+                      <Ionicons name="location" size={15} color={COLORS.primary} />
+                      <View style={styles.reqRouteConnector} />
+                    </View>
+                    <View style={{ flex: 1, paddingLeft: 6 }}>
+                      <Text style={styles.reqProvText}>
+                        {getProvinceName(selectedRequest?.startProvinceId) || 'Điểm đón'}
                       </Text>
+                      {wardNameCache[selectedRequest?.startWardId] ? (
+                        <Text style={styles.reqWardText}>
+                          ↳ {wardNameCache[selectedRequest.startWardId]}
+                        </Text>
+                      ) : null}
+                      {selectedRequest?.startAddressText ? (
+                        <Text style={styles.reqDetailText} numberOfLines={1}>
+                          📍 {selectedRequest.startAddressText}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {/* Điểm trả */}
+                  <View style={[styles.reqRouteRow, { marginTop: 8 }]}>
+                    <View style={styles.reqRouteIconBox}>
+                      <Ionicons name="flag" size={15} color="#F59E0B" />
+                    </View>
+                    <View style={{ flex: 1, paddingLeft: 6 }}>
+                      <Text style={styles.reqProvText}>
+                        {getProvinceName(selectedRequest?.endProvinceId) || 'Điểm đến'}
+                      </Text>
+                      {wardNameCache[selectedRequest?.endWardId] ? (
+                        <Text style={styles.reqWardText}>
+                          ↳ {wardNameCache[selectedRequest.endWardId]}
+                        </Text>
+                      ) : null}
+                      {selectedRequest?.endAddressText ? (
+                        <Text style={styles.reqDetailText} numberOfLines={1}>
+                          🏁 {selectedRequest.endAddressText}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+
+                {selectedRequest?.note ? (
+                  <View style={styles.reqNoteBox}>
+                    <Text style={styles.reqNoteText}>💬 "{selectedRequest.note}"</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {/* 2. Danh sách chuyến xe phù hợp để mời */}
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={styles.inputLabel}>
+                    Chuyến xe phù hợp của bạn ({filteredTripsForInvite.length}):
+                  </Text>
+                  {filteredTripsForInvite.length > 0 && (
+                    <Text style={{ fontSize: 11, color: COLORS.success, fontWeight: '700' }}>
+                      ✓ Trùng tuyến với khách
+                    </Text>
+                  )}
+                </View>
+
+                {filteredTripsForInvite.length > 0 ? (
+                  <View style={styles.tripCardList}>
+                    {filteredTripsForInvite.map((trip) => {
+                      const isSelected = String(trip.id) === String(selectedTripId);
+                      const depTimeStr = trip.departureTime
+                        ? new Date(trip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' • ' +
+                        new Date(trip.departureTime).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+                        : 'Linh hoạt';
+                      const startProvName = getProvinceName(trip.startProvinceId) || trip.startAddressText || 'Điểm đi';
+                      const endProvName = getProvinceName(trip.endProvinceId) || trip.endAddressText || 'Điểm đến';
+
+                      const stops = Array.isArray(trip.stops) ? trip.stops : [];
+                      const pickupStops = stops.filter((s) => s.stopType === 'PICKUP');
+                      const dropoffStops = stops.filter((s) => s.stopType === 'DROPOFF');
+
+                      // Deduplicate and resolve ward names for pickup
+                      const pickupWards = [];
+                      const seenP = new Set();
+                      (pickupStops.length > 0 ? pickupStops : stops).forEach((s) => {
+                        const name = s.addressText || wardNameCache[s.wardId] || '';
+                        const key = String(s.wardId || name);
+                        if (key && !seenP.has(key)) {
+                          seenP.add(key);
+                          pickupWards.push({
+                            wardId: s.wardId,
+                            name: name || (s.wardId ? `Phường/Xã #${s.wardId}` : 'Phường/Xã'),
+                          });
+                        }
+                      });
+
+                      // Deduplicate and resolve ward names for dropoff
+                      const dropoffWards = [];
+                      const seenD = new Set();
+                      (dropoffStops.length > 0 ? dropoffStops : []).forEach((s) => {
+                        const name = s.addressText || wardNameCache[s.wardId] || '';
+                        const key = String(s.wardId || name);
+                        if (key && !seenD.has(key)) {
+                          seenD.add(key);
+                          dropoffWards.push({
+                            wardId: s.wardId,
+                            name: name || (s.wardId ? `Phường/Xã #${s.wardId}` : 'Phường/Xã'),
+                          });
+                        }
+                      });
+
+                      return (
+                        <TouchableOpacity
+                          key={trip.id}
+                          style={[styles.tripCardItem, isSelected && styles.tripCardItemActive]}
+                          onPress={() => setSelectedTripId(trip.id)}
+                          activeOpacity={0.88}
+                        >
+                          <View style={styles.tripCardItemTop}>
+                            <View style={styles.tripRadioRow}>
+                              <View style={[styles.tripRadioCircle, isSelected && styles.tripRadioCircleActive]}>
+                                {isSelected && <View style={styles.tripRadioDot} />}
+                              </View>
+                              <View style={styles.tripTimePill}>
+                                <Ionicons name="time-outline" size={13} color={COLORS.primaryDark} />
+                                <Text style={styles.tripTimePillText}>{depTimeStr}</Text>
+                              </View>
+                            </View>
+                            <View style={[styles.tripSeatBadge, trip.seatAvailable <= 2 ? styles.tripSeatBadgeWarn : styles.tripSeatBadgeOk]}>
+                              <Ionicons name="people" size={12} color={trip.seatAvailable <= 2 ? '#D97706' : '#059669'} />
+                              <Text style={[styles.tripSeatText, { color: trip.seatAvailable <= 2 ? '#D97706' : '#059669' }]}>
+                                Còn {trip.seatAvailable} chỗ
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Lộ trình chuyến với chi tiết Tỉnh và các Phường/Xã */}
+                          <View style={styles.tripRouteContainer}>
+                            {/* Điểm đón */}
+                            <View style={styles.tripRouteStopRow}>
+                              <View style={styles.tripRouteIconCol}>
+                                <Ionicons name="radio-button-on" size={14} color={COLORS.primary} />
+                                <View style={styles.tripRouteLine} />
+                              </View>
+                              <View style={styles.tripRouteDetailCol}>
+                                <View style={styles.tripRouteHeadRow}>
+                                  <Text style={styles.tripRouteProvText}>{startProvName}</Text>
+                                  <View style={styles.tripTypeTagPickup}>
+                                    <Text style={styles.tripTypeTagTextPickup}>Điểm đón</Text>
+                                  </View>
+                                </View>
+
+                                {pickupWards.length > 0 ? (
+                                  <View style={styles.tripWardsWrap}>
+                                    {pickupWards.map((w, idx) => {
+                                      const isMatch = selectedRequest?.startWardId && String(w.wardId) === String(selectedRequest.startWardId);
+                                      return (
+                                        <View
+                                          key={`p-${w.wardId || idx}`}
+                                          style={[styles.tripWardPill, isMatch && styles.tripWardPillMatch]}
+                                        >
+                                          {isMatch && <Ionicons name="checkmark-circle" size={11} color="#059669" style={{ marginRight: 3 }} />}
+                                          <Text
+                                            style={[styles.tripWardPillText, isMatch && styles.tripWardPillTextMatch]}
+                                            numberOfLines={1}
+                                          >
+                                            {w.name}
+                                          </Text>
+                                        </View>
+                                      );
+                                    })}
+                                  </View>
+                                ) : (
+                                  <Text style={styles.tripWardFallbackText} numberOfLines={1}>
+                                    {trip.startAddressText && trip.startAddressText !== startProvName
+                                      ? `📍 ${trip.startAddressText}`
+                                      : 'Đón linh hoạt toàn tỉnh'}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+
+                            {/* Điểm trả */}
+                            <View style={styles.tripRouteStopRow}>
+                              <View style={styles.tripRouteIconCol}>
+                                <Ionicons name="location" size={14} color="#EA580C" />
+                              </View>
+                              <View style={styles.tripRouteDetailCol}>
+                                <View style={styles.tripRouteHeadRow}>
+                                  <Text style={styles.tripRouteProvText}>{endProvName}</Text>
+                                  <View style={styles.tripTypeTagDropoff}>
+                                    <Text style={styles.tripTypeTagTextDropoff}>Điểm trả</Text>
+                                  </View>
+                                </View>
+
+                                {dropoffWards.length > 0 ? (
+                                  <View style={styles.tripWardsWrap}>
+                                    {dropoffWards.map((w, idx) => {
+                                      const isMatch = selectedRequest?.endWardId && String(w.wardId) === String(selectedRequest.endWardId);
+                                      return (
+                                        <View
+                                          key={`d-${w.wardId || idx}`}
+                                          style={[styles.tripWardPill, isMatch && styles.tripWardPillMatch]}
+                                        >
+                                          {isMatch && <Ionicons name="checkmark-circle" size={11} color="#059669" style={{ marginRight: 3 }} />}
+                                          <Text
+                                            style={[styles.tripWardPillText, isMatch && styles.tripWardPillTextMatch]}
+                                            numberOfLines={1}
+                                          >
+                                            {w.name}
+                                          </Text>
+                                        </View>
+                                      );
+                                    })}
+                                  </View>
+                                ) : (
+                                  <Text style={styles.tripWardFallbackText} numberOfLines={1}>
+                                    {trip.endAddressText && trip.endAddressText !== endProvName
+                                      ? `🏁 ${trip.endAddressText}`
+                                      : 'Trả linh hoạt toàn tỉnh'}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Giá & Xe */}
+                          <View style={styles.tripCardItemBottom}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                              <Ionicons name="car-outline" size={14} color={COLORS.textMuted} />
+                              <Text style={styles.tripVehicleName}>
+                                {trip.vehicleBrand ? `${trip.vehicleBrand} ${trip.vehicleModel || ''}` : 'Xe của bạn'}
+                              </Text>
+                            </View>
+                            <Text style={styles.tripPriceValue}>
+                              {Number(trip.priceVnd || 0).toLocaleString('vi-VN')} đ
+                              <Text style={styles.tripPriceUnit}>/ghế</Text>
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={styles.noTripNotice}>
+                    <View style={styles.noTripNoticeIcon}>
+                      <Ionicons name="alert-circle-outline" size={32} color="#D97706" />
+                    </View>
+                    <Text style={styles.noTripNoticeTitle}>Không có chuyến xe trùng khớp</Text>
+                    <Text style={styles.noTripNoticeDesc}>
+                      Khách đang tìm xe từ{' '}
+                      <Text style={{ fontWeight: 'bold', color: COLORS.text }}>
+                        {getProvinceName(selectedRequest?.startProvinceId)}
+                        {wardNameCache[selectedRequest?.startWardId] ? ` (${wardNameCache[selectedRequest.startWardId]})` : ''}
+                      </Text>
+                      {' '}➔{' '}
+                      <Text style={{ fontWeight: 'bold', color: COLORS.text }}>
+                        {getProvinceName(selectedRequest?.endProvinceId)}
+                        {wardNameCache[selectedRequest?.endWardId] ? ` (${wardNameCache[selectedRequest.endWardId]})` : ''}
+                      </Text>
+                      {' '}với {selectedRequest?.seatTotal || 1} ghế.
+                    </Text>
+                    <Text style={styles.noTripNoticeSub}>
+                      Bạn chưa tạo chuyến xe nào bao trọn điểm đón/trả của khách hoặc các chuyến trùng tuyến đã hết chỗ trống.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.createMatchingTripBtn}
+                      onPress={() => {
+                        setSelectedRequest(null);
+                        navigation.navigate('CreateTrip');
+                      }}
+                    >
+                      <Ionicons name="add-circle" size={16} color="#FFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.createMatchingTripBtnText}>Tạo Chuyến Mới Tuyến Này</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {/* 3. Bảng báo giá chi tiết (Nếu đã chọn chuyến) */}
+              {(() => {
+                const selectedTrip = filteredTripsForInvite.find((t) => String(t.id) === String(selectedTripId));
+                if (!selectedTrip) return null;
+                const pricePerSeat = Number(selectedTrip.priceVnd || 0);
+                const seats = Number(selectedRequest?.seatTotal || 1);
+                const totalEstimated = pricePerSeat * seats;
+                const sName = getProvinceName(selectedTrip.startProvinceId) || 'Điểm đón';
+                const eName = getProvinceName(selectedTrip.endProvinceId) || 'Điểm trả';
+
+                return (
+                  <View style={styles.quoteSummaryCard}>
+                    <View style={styles.quoteSummaryHeader}>
+                      <Ionicons name="calculator-outline" size={16} color={COLORS.primary} />
+                      <Text style={styles.quoteSummaryTitle}>Chi tiết báo giá gửi khách</Text>
+                    </View>
+                    <View style={styles.quoteSummaryRow}>
+                      <Text style={styles.quoteSummaryLabel}>Chuyến áp dụng:</Text>
+                      <Text style={[styles.quoteSummaryVal, { color: COLORS.text, fontWeight: '700' }]}>{sName} ➔ {eName}</Text>
+                    </View>
+                    <View style={styles.quoteSummaryRow}>
+                      <Text style={styles.quoteSummaryLabel}>Giá vé gốc chuyến:</Text>
+                      <Text style={styles.quoteSummaryVal}>{pricePerSeat.toLocaleString('vi-VN')} đ/ghế</Text>
+                    </View>
+                    <View style={styles.quoteSummaryRow}>
+                      <Text style={styles.quoteSummaryLabel}>Số ghế khách đặt:</Text>
+                      <Text style={styles.quoteSummaryVal}>x {seats} ghế</Text>
+                    </View>
+                    <View style={styles.quoteSummaryDivider} />
+                    <View style={styles.quoteSummaryRow}>
+                      <Text style={styles.quoteSummaryTotalLabel}>Tổng tiền báo khách:</Text>
+                      <Text style={styles.quoteSummaryTotalVal}>{totalEstimated.toLocaleString('vi-VN')} đ</Text>
                     </View>
                   </View>
                 );
               })()}
-              {myTrips.length === 0 && (
-                <View style={{ marginTop: 8, padding: 12, backgroundColor: '#FEF2F2', borderRadius: 10, borderWidth: 1, borderColor: '#FCA5A5' }}>
-                  <Text style={{ color: COLORS.error, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
-                    Bạn chưa có chuyến xe nào đang mở. Hãy tạo chuyến xe trước để mời khách.
-                  </Text>
-                  <TouchableOpacity 
-                    style={{ backgroundColor: COLORS.primary, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, alignSelf: 'flex-start' }}
-                    onPress={() => {
-                      setSelectedRequest(null);
-                      navigation.navigate('CreateTrip');
-                    }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>+ Tạo Chuyến Mới</Text>
-                  </TouchableOpacity>
+
+              {/* 4. Tin nhắn nhanh */}
+              {filteredTripsForInvite.length > 0 && (
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.inputLabel}>Gửi kèm lời nhắn:</Text>
+                  <View style={styles.chipRow}>
+                    {['Xe trống, đón ngay!', 'Tiện đường giá tốt', 'Xe êm ái, đúng giờ', 'Đón tận nơi trả tận chỗ'].map((msg, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        style={[styles.chip, quickMessage === msg && styles.chipActive]}
+                        onPress={() => setQuickMessage(msg)}
+                      >
+                        <Text style={[styles.chipText, quickMessage === msg && styles.chipTextActive]}>
+                          {msg}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
               )}
-            </View>
+            </ScrollView>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Gửi tin nhắn nhanh:</Text>
-              <View style={styles.chipRow}>
-                {['Xe trống, đón ngay!', 'Tiện đường giá tốt', 'Xe 7 chỗ êm ái'].map((msg, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.chip, quickMessage === msg && styles.chipActive]}
-                    onPress={() => setQuickMessage(msg)}
-                  >
-                    <Text style={[styles.chipText, quickMessage === msg && styles.chipTextActive]}>
-                      {msg}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
+            {/* Action Button */}
             <TouchableOpacity
-              style={[styles.confirmBtn, (!selectedTripId || isSending) && { opacity: 0.7 }]}
+              style={[
+                styles.confirmBtn,
+                (!selectedTripId || isSending || filteredTripsForInvite.length === 0) && styles.confirmBtnDisabled,
+              ]}
               onPress={sendInvitation}
-              disabled={!selectedTripId || isSending}
+              disabled={!selectedTripId || isSending || filteredTripsForInvite.length === 0}
             >
               {isSending ? (
                 <ActivityIndicator color={COLORS.surface} />
               ) : (
-                <Text style={styles.confirmBtnText}>GỬI BÁO GIÁ ĐẾN KHÁCH</Text>
+                <Text style={styles.confirmBtnText}>
+                  {filteredTripsForInvite.length === 0
+                    ? 'KHÔNG CÓ CHUYẾN XE PHÙ HỢP'
+                    : selectedTripId
+                      ? `GỬI BÁO GIÁ (${(
+                        Number(filteredTripsForInvite.find((t) => String(t.id) === String(selectedTripId))?.priceVnd || 0) *
+                        Number(selectedRequest?.seatTotal || 1)
+                      ).toLocaleString('vi-VN')} đ)`
+                      : 'VUI LÒNG CHỌN CHUYẾN XE'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -1638,7 +1987,430 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
+  confirmBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    opacity: 0.6,
+  },
   confirmBtnText: { color: COLORS.surface, fontWeight: '800', fontSize: 14 },
+
+  // Summary Card of passenger's request inside modal
+  reqSummaryCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reqSummaryTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reqBadgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  reqBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  reqBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  reqRouteBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  reqRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  reqRouteIconBox: {
+    width: 20,
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  reqRouteConnector: {
+    width: 2,
+    height: 26,
+    backgroundColor: '#CBD5E1',
+    position: 'absolute',
+    top: 18,
+  },
+  reqProvText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  reqWardText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  reqDetailText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  reqNoteBox: {
+    marginTop: 8,
+    padding: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+  },
+  reqNoteText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+
+  // Trip selection cards inside modal
+  tripCardList: {
+    gap: 10,
+    marginTop: 4,
+  },
+  tripCardItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  tripCardItemActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: '#F0F9FF',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  tripCardItemTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tripRadioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tripRadioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#94A3B8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tripRadioCircleActive: {
+    borderColor: COLORS.primary,
+  },
+  tripRadioDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: COLORS.primary,
+  },
+  tripTimePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  tripTimePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  tripSeatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  tripSeatBadgeOk: {
+    backgroundColor: '#ECFDF5',
+  },
+  tripSeatBadgeWarn: {
+    backgroundColor: '#FEF3C7',
+  },
+  tripSeatText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  tripRoutePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  tripRoutePreviewPoint: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  tripRoutePreviewText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+    flex: 1,
+  },
+  tripRouteContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tripRouteStopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  tripRouteIconCol: {
+    width: 20,
+    alignItems: 'center',
+    paddingTop: 2,
+    marginRight: 8,
+  },
+  tripRouteLine: {
+    width: 1.5,
+    minHeight: 20,
+    backgroundColor: '#CBD5E1',
+    marginVertical: 2,
+  },
+  tripRouteDetailCol: {
+    flex: 1,
+    paddingBottom: 6,
+  },
+  tripRouteHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  tripRouteProvText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    flex: 1,
+  },
+  tripTypeTagPickup: {
+    backgroundColor: 'rgba(14, 165, 233, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  tripTypeTagTextPickup: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  tripTypeTagDropoff: {
+    backgroundColor: 'rgba(234, 88, 12, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  tripTypeTagTextDropoff: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#C2410C',
+  },
+  tripWardsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 2,
+  },
+  tripWardPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  tripWardPillMatch: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  tripWardPillText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+    maxWidth: 220,
+  },
+  tripWardPillTextMatch: {
+    color: '#047857',
+    fontWeight: '700',
+  },
+  tripWardFallbackText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+    marginTop: 1,
+  },
+  tripCardItemBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  tripVehicleName: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  tripPriceValue: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORS.primary,
+  },
+  tripPriceUnit: {
+    fontSize: 11,
+    fontWeight: 'normal',
+    color: COLORS.textMuted,
+  },
+
+  // Empty state when no trips match request
+  noTripNotice: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginTop: 4,
+  },
+  noTripNoticeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  noTripNoticeTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#92400E',
+    marginBottom: 6,
+  },
+  noTripNoticeDesc: {
+    fontSize: 12,
+    color: '#78350F',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  noTripNoticeSub: {
+    fontSize: 11,
+    color: '#B45309',
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: 12,
+  },
+  createMatchingTripBtn: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  createMatchingTripBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+
+  // Quote calculation summary card
+  quoteSummaryCard: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  quoteSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  quoteSummaryTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  quoteSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  quoteSummaryLabel: {
+    fontSize: 12,
+    color: '#047857',
+  },
+  quoteSummaryVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  quoteSummaryDivider: {
+    height: 1,
+    backgroundColor: '#A7F3D0',
+    marginVertical: 6,
+  },
+  quoteSummaryTotalLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  quoteSummaryTotalVal: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#047857',
+  },
+
   requestSummaryCard: {
     backgroundColor: '#F1F5F9',
     borderRadius: 12,

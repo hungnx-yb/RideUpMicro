@@ -114,6 +114,9 @@ export const apiService = {
   rejectTripRequestInvitation: async (invitationId) => {
     return await apiClient.post(`/api/trip/trip-requests/invitations/${invitationId}/reject`);
   },
+  acceptTripRequestInvitation: async (invitationId) => {
+    return await apiClient.post(`/api/trip/trip-requests/invitations/${invitationId}/accept`);
+  },
   cancelTripRequest: async (requestId) => {
     return await apiClient.delete(`/api/trip/trip-requests/${requestId}`);
   },

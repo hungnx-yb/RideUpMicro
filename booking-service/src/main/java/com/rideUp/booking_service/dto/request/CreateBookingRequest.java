@@ -60,4 +60,6 @@ public class CreateBookingRequest {
     String note;
 
     String paymentIntentId;
+
+    String invitationId;
 }

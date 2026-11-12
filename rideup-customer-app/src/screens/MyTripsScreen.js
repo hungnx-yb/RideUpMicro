@@ -530,6 +530,10 @@ const MyTripsScreen = ({ navigation, route }) => {
   const [requestActiveTab, setRequestActiveTab] = useState(null);
   const [page, setPage] = useState(0);
 
+  // State cho Modal Xác nhận chốt chuyến từ lời mời
+  const [selectedInviteData, setSelectedInviteData] = useState(null); // { invitation, tripRequest }
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+
   // Filter states giống hệt màn Tìm kiếm
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [provinces, setProvinces] = useState([]);
@@ -841,11 +845,71 @@ const MyTripsScreen = ({ navigation, route }) => {
   };
 
   const handleAcceptInvitation = (invitation, tripRequest) => {
-    // Chuyển hướng về SearchRide kèm theo thông tin lời mời để Đặt vé
-    navigation.navigate('SearchRide', { 
-      prefillInvitation: invitation,
-      tripRequest: tripRequest
-    });
+    // Mở modal xác nhận chốt chuyến xe trực tiếp tại đây, không chuyển màn hình tránh nhiều popup
+    setSelectedInviteData({ invitation, tripRequest });
+  };
+
+  const handleConfirmAcceptInvitation = async () => {
+    if (!selectedInviteData || isSubmittingBooking) return;
+    setIsSubmittingBooking(true);
+    const { invitation, tripRequest } = selectedInviteData;
+    try {
+      const idempotencyKey = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+
+      const payload = {
+        tripId: invitation.tripId,
+        seatCount: tripRequest.seatTotal || 1,
+        paymentMethod: 'CASH',
+        pickupLat: 0,
+        pickupLng: 0,
+        pickupWardId: tripRequest.startWardId || '',
+        pickupAddressText: tripRequest.startAddressText || '',
+        dropoffLat: 0,
+        dropoffLng: 0,
+        dropoffWardId: tripRequest.endWardId || '',
+        dropoffAddressText: tripRequest.endAddressText || '',
+        note: tripRequest.note || 'Đặt từ lời mời tìm xe',
+        invitationId: invitation.id,
+      };
+
+      const res = await apiService.createBooking(payload, idempotencyKey);
+      if (res?.data?.code === 1000) {
+        try {
+          await apiService.acceptTripRequestInvitation(invitation.id);
+        } catch (_) {}
+
+        setSelectedInviteData(null);
+        Alert.alert(
+          'Chốt chuyến thành công! 🎉',
+          'Bạn đã đồng ý lời mời và đặt chỗ thành công. Tài xế đã nhận được thông tin chuyến đi của bạn.',
+          [
+            {
+              text: 'Xem vé đã đặt',
+              onPress: () => {
+                setMainTab('BOOKINGS');
+                fetchMyBookings(true);
+                fetchMyRequests(true);
+              },
+            },
+          ]
+        );
+        setMainTab('BOOKINGS');
+        fetchMyBookings(true);
+        fetchMyRequests(true);
+      } else {
+        Alert.alert('Không thể đặt chỗ', res?.data?.message || 'Có lỗi xảy ra khi tạo vé.');
+      }
+    } catch (err) {
+      console.warn('Lỗi khi chấp nhận lời mời:', err);
+      const errMsg = err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi chốt chuyến đi.';
+      Alert.alert('Lỗi đặt chỗ', errMsg);
+    } finally {
+      setIsSubmittingBooking(false);
+    }
   };
 
   return (
@@ -1145,6 +1209,16 @@ const MyTripsScreen = ({ navigation, route }) => {
 
                   {/* Invitations section */}
                   {(() => {
+                    if (item.status === 'ACCEPTED') {
+                      return (
+                        <View style={{ marginTop: 10, padding: 10, backgroundColor: '#ECFDF5', borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: '#A7F3D0' }}>
+                          <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                          <Text style={{ color: '#047857', fontSize: 12, fontWeight: 'bold' }}>
+                            Đã chốt xe thành công! Xem chi tiết tại "Vé Đã Đặt"
+                          </Text>
+                        </View>
+                      );
+                    }
                     const pendingInvitations = (item.invitations || []).filter(inv => inv.status === 'PENDING' || !inv.status);
                     if (pendingInvitations.length > 0) {
                       return (
@@ -1253,6 +1327,195 @@ const MyTripsScreen = ({ navigation, route }) => {
           }
         />
       )}
+
+      {/* ── MODAL XÁC NHẬN CHỐT CHUYẾN GỌN GÀNG TẠI CHỖ ── */}
+      <Modal
+        visible={!!selectedInviteData}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isSubmittingBooking) setSelectedInviteData(null);
+        }}
+      >
+        <View style={styles.confirmModalOverlay}>
+          <View style={styles.confirmModalCard}>
+            {/* Header */}
+            <View style={styles.confirmModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.confirmHeaderIconBox}>
+                  <Ionicons name="car-sport" size={20} color={COLORS.primary} />
+                </View>
+                <View>
+                  <Text style={styles.confirmHeaderTitle}>Xác nhận chốt chuyến</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <Text style={styles.confirmHeaderSub}>Đồng ý lời mời</Text>
+                    {selectedInviteData?.invitation?.tripId && (
+                      <View style={styles.confirmTripIdBadge}>
+                        <Ionicons name="barcode-outline" size={11} color={COLORS.primary} />
+                        <Text style={styles.confirmTripIdText}>
+                          Mã: #{selectedInviteData.invitation.tripId.length > 12 ? selectedInviteData.invitation.tripId.slice(0, 8).toUpperCase() : selectedInviteData.invitation.tripId}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedInviteData(null)}
+                disabled={isSubmittingBooking}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              {/* Departure Time Hero Banner */}
+              {selectedInviteData?.invitation?.departureTime && (
+                <View style={styles.confirmTimeHeroBox}>
+                  <View style={styles.confirmTimeHeroIconWrap}>
+                    <Ionicons name="time" size={20} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.confirmTimeHeroSub}>THỜI GIAN KHỞI HÀNH</Text>
+                    <Text style={styles.confirmTimeHeroMain}>
+                      {new Date(selectedInviteData.invitation.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date(selectedInviteData.invitation.departureTime).toLocaleDateString('vi-VN')}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {/* Driver & Vehicle info */}
+              <View style={styles.confirmSectionBox}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <Text style={styles.confirmDriverName}>{selectedInviteData?.invitation?.driverName || 'Tài xế'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                        <Ionicons name="star" size={13} color="#f59e0b" />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.text }}>
+                          {selectedInviteData?.invitation?.driverRating ? Number(selectedInviteData.invitation.driverRating).toFixed(1) : '5.0'}
+                        </Text>
+                      </View>
+                      {selectedInviteData?.invitation?.totalRides != null && (
+                        <Text style={{ fontSize: 12, color: COLORS.textMuted }}>
+                          ({selectedInviteData.invitation.totalRides} chuyến)
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {selectedInviteData?.invitation?.driverPhone ? (
+                    <View style={styles.confirmPhoneBadge}>
+                      <Ionicons name="call" size={12} color="#0284c7" />
+                      <Text style={styles.confirmPhoneText}>{selectedInviteData.invitation.driverPhone}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Car Details */}
+                {(selectedInviteData?.invitation?.vehicleName || selectedInviteData?.invitation?.plateNumber) && (
+                  <View style={styles.confirmCarRow}>
+                    <Ionicons name="car" size={14} color={COLORS.textMuted} />
+                    <Text style={styles.confirmCarName}>
+                      {selectedInviteData?.invitation?.vehicleName || 'Xe ô tô'}
+                      {selectedInviteData?.invitation?.vehicleColor ? ` (${selectedInviteData.invitation.vehicleColor})` : ''}
+                    </Text>
+                    {selectedInviteData?.invitation?.plateNumber && (
+                      <View style={styles.confirmPlateBadge}>
+                        <Text style={styles.confirmPlateText}>{selectedInviteData.invitation.plateNumber}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* Route Info */}
+              <View style={styles.confirmSectionBox}>
+                <Text style={styles.confirmSectionTitle}>LỘ TRÌNH ĐÓN TRẢ</Text>
+                
+                {selectedInviteData?.invitation?.departureTime && (
+                  <View style={styles.confirmTimeRow}>
+                    <Ionicons name="time" size={14} color={COLORS.primary} />
+                    <Text style={styles.confirmTimeText}>
+                      Khởi hành: {new Date(selectedInviteData.invitation.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date(selectedInviteData.invitation.departureTime).toLocaleDateString('vi-VN')}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.confirmRoutePoint}>
+                  <View style={[styles.confirmDot, { backgroundColor: COLORS.green }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.confirmPointLabel}>Điểm đón của bạn</Text>
+                    <Text style={styles.confirmPointValue}>
+                      {selectedInviteData?.tripRequest?.startAddressText || 'Địa chỉ điểm đón'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.confirmRouteLine} />
+
+                <View style={styles.confirmRoutePoint}>
+                  <View style={[styles.confirmDot, { backgroundColor: COLORS.error }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.confirmPointLabel}>Điểm trả của bạn</Text>
+                    <Text style={styles.confirmPointValue}>
+                      {selectedInviteData?.tripRequest?.endAddressText || 'Địa chỉ điểm đến'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Payment & Price Summary */}
+              <View style={styles.confirmPriceBox}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, color: COLORS.textMuted }}>Số lượng chỗ</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text }}>
+                    {selectedInviteData?.tripRequest?.seatTotal || 1} ghế
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, color: COLORS.textMuted }}>Hình thức</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="cash-outline" size={15} color={COLORS.green} />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.green }}>Tiền mặt khi lên xe</Text>
+                  </View>
+                </View>
+                <View style={styles.confirmDivider} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text }}>Tổng thanh toán</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.primary }}>
+                    {Number(selectedInviteData?.invitation?.price || 0).toLocaleString('vi-VN')} đ
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Action buttons */}
+            <View style={styles.confirmActionsRow}>
+              <TouchableOpacity
+                style={styles.confirmCancelBtn}
+                onPress={() => setSelectedInviteData(null)}
+                disabled={isSubmittingBooking}
+              >
+                <Text style={styles.confirmCancelText}>Để sau</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmSubmitBtn, isSubmittingBooking && { opacity: 0.7 }]}
+                onPress={handleConfirmAcceptInvitation}
+                disabled={isSubmittingBooking}
+              >
+                {isSubmittingBooking ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                    <Text style={styles.confirmSubmitText}>Xác nhận chốt</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1489,6 +1752,256 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: '600',
+  },
+
+  // Confirm Invitation Modal styles
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  confirmModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 12,
+  },
+  confirmHeaderIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  confirmHeaderSub: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 1,
+  },
+  confirmTripIdBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 3,
+  },
+  confirmTripIdText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: 0.5,
+  },
+  confirmTimeHeroBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  confirmTimeHeroIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmTimeHeroSub: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  confirmTimeHeroMain: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  confirmSectionBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  confirmSectionTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  confirmDriverName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  confirmPhoneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  confirmPhoneText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284c7',
+  },
+  confirmCarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF2F6',
+  },
+  confirmCarName: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '500',
+    flex: 1,
+  },
+  confirmPlateBadge: {
+    backgroundColor: '#0ea5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  confirmPlateText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  confirmTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  confirmTimeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  confirmRoutePoint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  confirmDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
+  },
+  confirmRouteLine: {
+    width: 2,
+    height: 14,
+    backgroundColor: '#CBD5E1',
+    marginLeft: 4,
+    marginVertical: 2,
+  },
+  confirmPointLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+  },
+  confirmPointValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 1,
+  },
+  confirmPriceBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginBottom: 12,
+  },
+  confirmDivider: {
+    height: 1,
+    backgroundColor: '#DCFCE7',
+    marginVertical: 8,
+  },
+  confirmActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  confirmCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+  },
+  confirmSubmitBtn: {
+    flex: 1.5,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmSubmitText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
 

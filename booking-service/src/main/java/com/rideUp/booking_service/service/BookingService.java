@@ -105,11 +105,19 @@ public class BookingService {
                 && request.getPaymentIntentId() != null
                 && !request.getPaymentIntentId().isBlank();
 
-        booking.setStatus(
-                (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid)
-                        ? BookingStatus.WAITING_DRIVER_APPROVAL
-                        : BookingStatus.PENDING_PAYMENT
-        );
+        boolean isFromInvitation = request.getInvitationId() != null && !request.getInvitationId().isBlank();
+
+        if (isFromInvitation && (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid)) {
+            // Khách chấp nhận lời mời từ tài xế -> Đã được tài xế chủ động mời nên chuyển thẳng CONFIRMED
+            booking.setStatus(BookingStatus.CONFIRMED);
+            booking.setExpiresAt(null);
+        } else {
+            booking.setStatus(
+                    (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid)
+                            ? BookingStatus.WAITING_DRIVER_APPROVAL
+                            : BookingStatus.PENDING_PAYMENT
+            );
+        }
         booking.setPaymentStatus(PaymentStatus.PENDING);
         if (isStripePrePaid) {
             booking.setPaymentId(request.getPaymentIntentId());
@@ -125,7 +133,7 @@ public class BookingService {
             booking.setExpiresAt(trip.getDepartureTime() != null
                     ? trip.getDepartureTime().minusHours(1)
                     : now.plusSeconds(expirySeconds));
-        } else {
+        } else if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
             LocalDateTime paymentDeadline = now.plusSeconds(expirySeconds);
             if (trip.getDepartureTime() != null && trip.getDepartureTime().minusHours(1).isBefore(paymentDeadline)) {
                 booking.setExpiresAt(trip.getDepartureTime().minusHours(1));
@@ -136,7 +144,9 @@ public class BookingService {
         Booking saved = bookingRepository.save(booking);
         publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId, request.getPaymentIntentId());
 
-        if (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid) {
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            publishBookingConfirmed(saved, correlationId);
+        } else if (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid) {
             com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent waitEvent = com.rideUp.booking_service.dto.event.BookingWaitingApprovalEvent.builder()
                     .eventId(UUID.randomUUID().toString())
                     .correlationId(correlationId)
@@ -150,6 +160,26 @@ public class BookingService {
                     .build();
             bookingServicePublisher.publishBookingWaitingApproval(waitEvent);
         }
+
+        if (isFromInvitation) {
+            try {
+                tripServiceClient.acceptInvitation(request.getInvitationId());
+            } catch (Exception e) {
+                log.warn("Failed to call internal-accept for invitationId={}: {}", request.getInvitationId(), e.getMessage());
+            }
+            try {
+                bookingServicePublisher.publishMarketplaceBookingCreated(
+                    com.rideUp.booking_service.dto.event.MarketplaceBookingCreatedEvent.builder()
+                        .bookingId(saved.getId())
+                        .invitationId(request.getInvitationId())
+                        .customerId(saved.getCustomerId())
+                        .build()
+                );
+            } catch (Exception e) {
+                log.warn("Failed to publish MarketplaceBookingCreatedEvent: {}", e.getMessage());
+            }
+        }
+
         return modelMapper.map(saved, BookingResponse.class);
     }
 

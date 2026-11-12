@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet,
 } from 'react-native';
-import MapView, { Marker, Circle } from 'react-native-maps';
-import * as Location from 'expo-location';
+// [MAP_DISABLED] import MapView, { Marker, Circle } from 'react-native-maps';
+// [MAP_DISABLED] import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 
@@ -213,21 +213,11 @@ export default function LocationMapPicker({
     }
   }, [wardCenter, value, onChange, maxDistanceMeters, maxDistanceKm, selectedWardName]);
 
-  const useCurrentLocation = async () => {
-    setLocalError('');
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocalError('Bạn cần cấp quyền vị trí để sử dụng tính năng này.');
-        return;
-      }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      await updateFromCoord(loc.coords.latitude, loc.coords.longitude);
-    } catch {
-      setLocalError('Không thể lấy vị trí hiện tại.');
-    }
-  };
+  // [MAP_DISABLED] — Tạm vô hiệu hóa GPS/bản đồ. Giữ lại code để bật lại sau.
+  // const useCurrentLocation = async () => { ... };
+  // const updateFromCoord = useCallback(async (nextLat, nextLng) => { ... });
 
+  /* [MAP_DISABLED] — mapRegion and distance are unused while map is disabled
   const mapRegion = hasCoord
     ? { latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }
     : wardCenter
@@ -237,6 +227,7 @@ export default function LocationMapPicker({
   const distance = hasCoord && wardCenter
     ? haversine(lat, lng, wardCenter.latitude, wardCenter.longitude)
     : null;
+  */
 
   return (
     <View style={styles.wrapper}>
@@ -289,9 +280,10 @@ export default function LocationMapPicker({
         </View>
       )}
 
-      {/* STEP 2: Chọn trên bản đồ — chỉ hiện khi đã chọn phường/xã */}
+      {/* STEP 2: Chọn trên bản đồ — [MAP_DISABLED] tạm ẩn bản đồ */}
       {wardId ? (
         <>
+          {/* [MAP_DISABLED] — Bỏ phần bản đồ, chỉ giữ input địa chỉ
           <View style={[styles.sectionHeader, { marginTop: 16 }]}>
             <View style={[styles.stepBadge, { backgroundColor: accentColor }]}>
               <Text style={styles.stepText}>2</Text>
@@ -341,11 +333,12 @@ export default function LocationMapPicker({
               Cách tâm phường/xã: {(distance / 1000).toFixed(2)} km (tối đa {maxDistanceKm} km)
             </Text>
           )}
+          [MAP_DISABLED] — Kết thúc phần bản đồ bị ẩn */}
 
-          {/* STEP 3: Địa chỉ chi tiết */}
+          {/* Địa chỉ chi tiết */}
           <View style={[styles.sectionHeader, { marginTop: 12 }]}>
             <View style={[styles.stepBadge, { backgroundColor: accentColor }]}>
-              <Text style={styles.stepText}>3</Text>
+              <Text style={styles.stepText}>2</Text>
             </View>
             <Text style={[styles.sectionTitle, { color: accentColor }]}>Địa chỉ chi tiết</Text>
             {resolvingAddress && <ActivityIndicator color="#FFD700" size="small" style={{ marginLeft: 8 }} />}
@@ -355,13 +348,13 @@ export default function LocationMapPicker({
             placeholder="Số nhà, tên đường, mốc nhận diện..."
             placeholderTextColor="#94A3B8"
             value={value?.addressText || ''}
-            onChangeText={(t) => onChange({ lat, lng, addressText: t })}
+            onChangeText={(t) => onChange({ lat: NaN, lng: NaN, addressText: t })}
           />
         </>
       ) : (
         <View style={styles.mapPlaceholder}>
-          <Ionicons name="map-outline" size={32} color="#CBD5E1" />
-          <Text style={styles.mapPlaceholderText}>Chọn Phường/Xã để hiển thị bản đồ</Text>
+          <Ionicons name="document-text-outline" size={32} color="#CBD5E1" />
+          <Text style={styles.mapPlaceholderText}>Chọn Phường/Xã rồi nhập địa chỉ chi tiết</Text>
         </View>
       )}
 

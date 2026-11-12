@@ -95,6 +95,14 @@ public class TripRequestController {
                 .build();
     }
 
+    @PostMapping("/invitations/{invitationId}/accept")
+    public ApiResponse<Void> acceptInvitation(@PathVariable String invitationId) {
+        tripRequestService.markInvitationAccepted(invitationId);
+        return ApiResponse.<Void>builder()
+                .message("Invitation accepted successfully.")
+                .build();
+    }
+
     // ----- DRIVER APIs -----
 
     @GetMapping("/marketplace")

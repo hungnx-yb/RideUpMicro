@@ -23,6 +23,9 @@ public class DriverResponse {
     String vehicleBrand;
     String vehicleModel;
     String vehicleId;
+    String plateNumber;
+    String vehicleColor;
     Integer seatCapacity;
+    Integer totalDriverRides;
 
 }

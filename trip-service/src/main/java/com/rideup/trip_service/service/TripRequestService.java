@@ -7,6 +7,7 @@ import com.rideup.trip_service.dto.request.TripRequestInvitationCreateDTO;
 import com.rideup.trip_service.dto.response.DriverResponse;
 import com.rideup.trip_service.dto.response.TripRequestInvitationResponse;
 import com.rideup.trip_service.dto.response.TripRequestResponse;
+import com.rideup.trip_service.dto.response.TripStopResponse;
 import com.rideup.trip_service.dto.response.UserResponse;
 import com.rideup.trip_service.dto.response.ProcessMarketplaceBookingResponse;
 import com.rideup.trip_service.dto.request.SeatReserveRequest;
@@ -212,10 +213,8 @@ public class TripRequestService {
                         .build());
             });
             invitationRepository.saveAll(pendingInvitations);
-            marketplaceEventProducer.publishTripRequestCancelledEvent(TripRequestCancelEvent.builder()
-                    .tripRequestId(request.getId())
-                    .passengerId(passengerId)
-                    .build());
+            // Lưu ý: Không bắn publishTripRequestCancelledEvent ở đây vì đây là hành vi tự động đóng yêu cầu khi khách đã chốt xe/đặt vé thành công.
+            // Tránh việc notification-service gửi popup thông báo "Bạn đã hủy yêu cầu thành công" gây hiểu lầm cho khách hàng vừa đặt chuyến.
         }
     }
 
@@ -225,6 +224,55 @@ public class TripRequestService {
         TripRequestInvitationResponse response = modelMapper.map(invitation, TripRequestInvitationResponse.class);
         response.setPassengerId(invitation.getTripRequest().getPassengerId());
         response.setSeatCount(invitation.getTripRequest().getSeatTotal());
+
+        try {
+            tripRepository.findById(invitation.getTripId()).ifPresent(trip -> {
+                response.setDepartureTime(trip.getDepartureTime());
+                response.setEstimatedArrivalTime(trip.getEstimatedArrivalTime());
+                response.setStartProvinceId(trip.getStartProvinceId());
+                response.setEndProvinceId(trip.getEndProvinceId());
+                response.setStartAddressText(trip.getStartAddressText());
+                response.setEndAddressText(trip.getEndAddressText());
+                response.setSeatAvailable(trip.getSeatAvailable());
+                response.setSeatTotal(trip.getSeatTotal());
+                response.setPricePerSeat(trip.getPriceVnd());
+                if (trip.getStops() != null) {
+                    response.setStops(trip.getStops().stream()
+                            .map(s -> modelMapper.map(s, TripStopResponse.class))
+                            .toList());
+                }
+                if (trip.getPriceVnd() != null && invitation.getTripRequest().getSeatTotal() != null) {
+                    response.setPrice(
+                            trip.getPriceVnd().multiply(BigDecimal.valueOf(invitation.getTripRequest().getSeatTotal())));
+                } else if (trip.getPriceVnd() != null) {
+                    response.setPrice(trip.getPriceVnd());
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Failed to get trip details for invitation {}", invitation.getId(), e);
+        }
+
+        try {
+            var driverResp = identityServiceClient.getDriverDetail(List.of(invitation.getDriverId()));
+            if (driverResp != null && driverResp.getResult() != null && !driverResp.getResult().isEmpty()) {
+                DriverResponse d = driverResp.getResult().get(0);
+                response.setDriver(d);
+                response.setDriverName(d.getFullName());
+                response.setDriverAvatar(d.getAvatarUrl());
+                response.setDriverPhone(d.getPhoneNumber());
+                response.setDriverRating(d.getDriverRating());
+                response.setPlateNumber(d.getPlateNumber());
+                response.setVehicleColor(d.getVehicleColor());
+                response.setTotalRides(d.getTotalDriverRides());
+                if (d.getVehicleBrand() != null) {
+                    response.setVehicleInfo(d.getVehicleBrand()
+                            + (d.getVehicleModel() != null ? " " + d.getVehicleModel() : ""));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get driver details for invitation {}", invitation.getId(), e);
+        }
+
         return response;
     }
 
@@ -256,11 +304,19 @@ public class TripRequestService {
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_REQUEST_INVITATION_NOT_FOUND));
 
         if (acceptedInv.getStatus() != InvitationStatus.PENDING) {
+            if (acceptedInv.getStatus() == InvitationStatus.ACCEPTED) {
+                log.info("Invitation {} is already ACCEPTED, skipping.", invitationId);
+                return;
+            }
             throw new AppException(ErrorCode.TRIP_REQUEST_INVITATION_NOT_FOUND);
         }
 
         TripRequest tripRequest = acceptedInv.getTripRequest();
         if (tripRequest.getStatus() != TripRequestStatus.OPEN) {
+            if (tripRequest.getStatus() == TripRequestStatus.ACCEPTED) {
+                log.info("TripRequest {} is already ACCEPTED, skipping.", tripRequest.getId());
+                return;
+            }
             throw new AppException(ErrorCode.REQUEST_NOT_OPEN);
         }
 
@@ -409,6 +465,20 @@ public class TripRequestService {
                         invResp.setTripRequestId(request.getId());
                         try {
                             tripRepository.findById(inv.getTripId()).ifPresent(trip -> {
+                                invResp.setDepartureTime(trip.getDepartureTime());
+                                invResp.setEstimatedArrivalTime(trip.getEstimatedArrivalTime());
+                                invResp.setStartProvinceId(trip.getStartProvinceId());
+                                invResp.setEndProvinceId(trip.getEndProvinceId());
+                                invResp.setStartAddressText(trip.getStartAddressText());
+                                invResp.setEndAddressText(trip.getEndAddressText());
+                                invResp.setSeatAvailable(trip.getSeatAvailable());
+                                invResp.setSeatTotal(trip.getSeatTotal());
+                                invResp.setPricePerSeat(trip.getPriceVnd());
+                                if (trip.getStops() != null) {
+                                    invResp.setStops(trip.getStops().stream()
+                                            .map(s -> modelMapper.map(s, TripStopResponse.class))
+                                            .toList());
+                                }
                                 if (trip.getPriceVnd() != null && request.getSeatTotal() != null) {
                                     invResp.setPrice(
                                             trip.getPriceVnd().multiply(BigDecimal.valueOf(request.getSeatTotal())));
@@ -417,7 +487,7 @@ public class TripRequestService {
                                 }
                             });
                         } catch (Exception e) {
-                            log.warn("Failed to get trip price for invitation {}", inv.getId(), e);
+                            log.warn("Failed to get trip details for invitation {}", inv.getId(), e);
                         }
                         return invResp;
                     })
@@ -442,7 +512,11 @@ public class TripRequestService {
                                 invResp.setDriver(d);
                                 invResp.setDriverName(d.getFullName());
                                 invResp.setDriverAvatar(d.getAvatarUrl());
+                                invResp.setDriverPhone(d.getPhoneNumber());
                                 invResp.setDriverRating(d.getDriverRating());
+                                invResp.setPlateNumber(d.getPlateNumber());
+                                invResp.setVehicleColor(d.getVehicleColor());
+                                invResp.setTotalRides(d.getTotalDriverRides());
                                 if (d.getVehicleBrand() != null) {
                                     invResp.setVehicleInfo(d.getVehicleBrand()
                                             + (d.getVehicleModel() != null ? " " + d.getVehicleModel() : ""));
