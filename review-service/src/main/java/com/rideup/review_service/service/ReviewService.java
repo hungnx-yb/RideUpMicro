@@ -5,6 +5,8 @@ import com.rideup.review_service.dto.event.DriverRatingUpdatedEvent;
 import com.rideup.review_service.dto.request.CreateReviewRequest;
 import com.rideup.review_service.dto.response.ReviewResponse;
 import com.rideup.review_service.entity.Review;
+import com.rideup.review_service.exception.AppException;
+import com.rideup.review_service.exception.ErrorCode;
 import com.rideup.review_service.kafka.producer.ReviewServicePublisher;
 import com.rideup.review_service.repository.ReviewRepository;
 import com.rideup.review_service.utils.SecurityUtils;
@@ -27,15 +29,30 @@ public class ReviewService {
     ReviewRepository reviewRepository;
     ReviewServicePublisher reviewServicePublisher;
     ModelMapper modelMapper;
+
     public ReviewResponse createReview(CreateReviewRequest request) {
         String customerId = SecurityUtils.getCurrentUserId();
-        log.info("Creating review for trip: {} by customer: {}", request.getTripId(), customerId);
+        log.info("Creating review for booking: {} trip: {} by customer: {}", request.getBookingId(), request.getTripId(), customerId);
+
+        if (request.getBookingId() != null && !request.getBookingId().isBlank()) {
+            if (reviewRepository.existsByBookingId(request.getBookingId())) {
+                log.warn("Booking {} has already been reviewed", request.getBookingId());
+                throw new AppException(ErrorCode.REVIEW_ALREADY_EXISTS);
+            }
+        }
 
         Review review = modelMapper.map(request, Review.class);
         review.setCustomerId(customerId);
+        review.setCreatedAt(LocalDateTime.now());
         Review savedReview = reviewRepository.save(review);
         updateDriverRating(savedReview.getDriverId());
-        return modelMapper.map(savedReview,  ReviewResponse.class);
+        return modelMapper.map(savedReview, ReviewResponse.class);
+    }
+
+    public ReviewResponse getReviewByBookingId(String bookingId) {
+        return reviewRepository.findByBookingId(bookingId)
+                .map(x -> modelMapper.map(x, ReviewResponse.class))
+                .orElse(null);
     }
 
     private void updateDriverRating(String driverId) {

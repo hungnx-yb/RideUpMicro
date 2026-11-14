@@ -7,11 +7,14 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ReviewRepository extends MongoRepository<Review, String> {
     List<Review> findByDriverId(String driverId);
     List<Review> findByTripId(String tripId);
+    Optional<Review> findByBookingId(String bookingId);
+    boolean existsByBookingId(String bookingId);
 
     @Aggregation(pipeline = {
         "{ '$match': { 'driverId': ?0 } }",

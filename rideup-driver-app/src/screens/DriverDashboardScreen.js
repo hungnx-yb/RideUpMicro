@@ -84,15 +84,12 @@ const calculateRevenueFromTrips = (tripsList) => {
     const status = (t.status || '').toUpperCase();
     const booked = Math.max((t.seatTotal || 0) - (t.seatAvailable || 0), 0);
 
-    // Tính doanh thu dựa trên số ghế đã được đặt
-    if (status === 'COMPLETED' || status === 'STARTED' || status === 'FULL') {
-      revenue += (t.priceVnd || 0) * booked;
-    } else if (status === 'OPEN' && booked > 0) {
+    // Chỉ tính doanh thu, số chuyến xong và số khách đã chở cho các chuyến ĐÃ HOÀN THÀNH (COMPLETED)
+    if (status === 'COMPLETED') {
+      completed++;
+      passengers += booked;
       revenue += (t.priceVnd || 0) * booked;
     }
-
-    if (status === 'COMPLETED') completed++;
-    passengers += booked;
   });
 
   return { revenue, completed, passengers };
@@ -125,6 +122,7 @@ export default function DriverDashboardScreen() {
   dateRangeRef.current = dateRange;
 
   const [upcomingTrips, setUpcomingTrips] = useState([]);
+  const [dashboardTripSeats, setDashboardTripSeats] = useState({});
   const [pendingRequests, setPendingRequests] = useState([]);
   const [pendingPage, setPendingPage] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
@@ -436,12 +434,16 @@ export default function DriverDashboardScreen() {
       // 2. Gọi song song các request booking và modification cho tất cả chuyến xe đang mở
       const activeTripsList = trips.filter(t => t.status === 'OPEN' || t.status === 'FULL');
       if (activeTripsList.length > 0) {
+        const tripBookedSeatsMap = {};
         const [bookingResponses, modResponses] = await Promise.all([
           Promise.all(
             activeTripsList.map(trip =>
               apiService.getBookingsByTripId(trip.id)
                 .then(bookingRes => {
                   const bookings = bookingRes?.data?.result || [];
+                  const approved = bookings.filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+                  const bookedSeats = approved.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+                  tripBookedSeatsMap[trip.id] = bookedSeats;
                   const waiting = bookings.filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
                   return waiting.map(b => ({ ...b, tripDetails: trip }));
                 })
@@ -459,9 +461,11 @@ export default function DriverDashboardScreen() {
             )
           )
         ]);
+        setDashboardTripSeats(tripBookedSeatsMap);
         setPendingRequests(bookingResponses.flat());
         setPendingModifications(modResponses.flat());
       } else {
+        setDashboardTripSeats({});
         setPendingRequests([]);
         setPendingModifications([]);
       }
@@ -594,14 +598,6 @@ export default function DriverDashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchDashboardData(true, dateRangeRef.current)} tintColor={COLORS.primary} />}
       >
-        {/* TRẠNG THÁI HOẠT ĐỘNG */}
-        <View style={styles.statusBanner}>
-          <View style={styles.statusDotWrapper}>
-            <View style={styles.statusDot} />
-            <View style={styles.statusPulse} />
-          </View>
-          <Text style={styles.statusText}>Bạn đang trực tuyến và sẵn sàng nhận chuyến</Text>
-        </View>
 
         {/* SMART FINANCIAL ALERT BANNERS (REQ-P3-04 & REQ-P3-06) */}
         {stripeStatus && stripeStatus.status !== 'ACTIVE' && (
@@ -797,7 +793,9 @@ export default function DriverDashboardScreen() {
                   <View style={styles.ticketMeta}>
                     <Text style={styles.ticketMetaLabel}>TÌNH TRẠNG</Text>
                     <Text style={styles.ticketMetaValue}>
-                      {Math.max((trip.seatTotal || 0) - (trip.seatAvailable || 0), 0)}/{trip.seatTotal || 0} ghế đã đặt
+                      {dashboardTripSeats[trip.id] !== undefined 
+                        ? dashboardTripSeats[trip.id] 
+                        : Math.max((trip.seatTotal || 0) - (trip.seatAvailable || 0), 0)}/{trip.seatTotal || 0} ghế đã đặt
                     </Text>
                   </View>
                   <TouchableOpacity style={styles.detailBtn} onPress={() => navigation.navigate('DriverTrips')}>

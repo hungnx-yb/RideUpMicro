@@ -129,6 +129,7 @@ app:
 booking:
   expire:
     fixed-delay-ms: 30000
+  cancellation-cutoff-hours: ${BOOKING_CANCELLATION_CUTOFF_HOURS:2}
 
 location:
   seeding:

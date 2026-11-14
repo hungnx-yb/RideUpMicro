@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, ScrollView, Dimensions, ActivityIndicator,
-  Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
+  Modal, TextInput, Alert, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import LocationMapPicker from '../components/LocationMapPicker';
@@ -132,10 +133,15 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const [booking, setBooking] = useState(initialBooking || {});
   const [trip, setTrip] = useState(initialBooking?.trip || null);
   const [loadingTrip, setLoadingTrip] = useState(false);
+  const [existingReview, setExistingReview] = useState(null);
   const [modifications, setModifications] = useState([]);
   const [loadingMods, setLoadingMods] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submittingMod, setSubmittingMod] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('Thay đổi kế hoạch cá nhân');
+  const [customCancelReason, setCustomCancelReason] = useState('');
+  const [submittingCancel, setSubmittingCancel] = useState(false);
   const [showPickupMap, setShowPickupMap] = useState(false);
   const [showDropoffMap, setShowDropoffMap] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -167,19 +173,22 @@ const BookingDetailScreen = ({ route, navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    if (booking?.id) {
-      apiService.getBookingDetail(booking.id)
-        .then(res => {
-          if (res?.data?.result) {
-            setBooking(prev => ({ ...prev, ...res.data.result }));
-          }
-        })
-        .catch(err => console.log('Fetch booking detail error in BookingDetail:', err));
-
-      fetchModifications(booking.id);
+  const fetchBooking = useCallback(async () => {
+    if (!booking?.id) return;
+    try {
+      const res = await apiService.getBookingDetail(booking.id);
+      if (res?.data?.result) {
+        setBooking(prev => ({ ...prev, ...res.data.result }));
+      }
+    } catch (err) {
+      console.log('Fetch booking detail error in BookingDetail:', err);
     }
+    fetchModifications(booking.id);
   }, [booking?.id, fetchModifications]);
+
+  useEffect(() => {
+    fetchBooking();
+  }, [fetchBooking]);
 
   useEffect(() => {
     if (booking?.tripId) {
@@ -194,6 +203,29 @@ const BookingDetailScreen = ({ route, navigation }) => {
         .finally(() => setLoadingTrip(false));
     }
   }, [booking?.tripId]);
+
+  useEffect(() => {
+    if (booking?.id) {
+      AsyncStorage.getItem(`@review_${booking.id}`)
+        .then(cached => {
+          if (cached) {
+            setExistingReview(JSON.parse(cached));
+          }
+        })
+        .catch(() => {});
+
+      if (booking?.status === 'COMPLETED') {
+        apiService.getReviewByBookingId(booking.id)
+          .then(res => {
+            if (res?.data?.result) {
+              setExistingReview(res.data.result);
+              AsyncStorage.setItem(`@review_${booking.id}`, JSON.stringify(res.data.result)).catch(() => {});
+            }
+          })
+          .catch(err => console.log('Check existing review error:', err));
+      }
+    }
+  }, [booking?.id, booking?.status]);
 
   if (!booking || !booking.id) {
     return (
@@ -233,6 +265,63 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const pastMods = modifications.filter(m => m.status !== 'PENDING_DRIVER');
   const approvedCount = modifications.filter(m => m.status === 'APPROVED').length;
   const canModify = ['CONFIRMED', 'WAITING_DRIVER_APPROVAL'].includes(booking.status) && !pendingMod && approvedCount < 2;
+
+  // ── Cancellation Calculations (REQ: Cho phép khách huỷ trước X giờ) ──
+  const canCancel = ['CONFIRMED', 'WAITING_DRIVER_APPROVAL', 'PENDING_PAYMENT'].includes(booking.status);
+  const tripDepTime = booking.trip?.departureTime || trip?.departureTime;
+  const hoursUntilDep = tripDepTime
+    ? (new Date(tripDepTime).getTime() - new Date().getTime()) / (1000 * 60 * 60)
+    : 999;
+  const isPastCutoff = tripDepTime && hoursUntilDep < 2; // Cấu hình giới hạn trước 2 tiếng
+
+  // ── Driver Details Resolution ──
+  const resolvedDriverName = trip?.driverName || booking.trip?.driverName || booking.driverName || 'Tài xế';
+  const resolvedDriverPhone = trip?.driverPhone || booking.trip?.driverPhone || booking.driverPhone || '';
+  const resolvedDriverAvatar = trip?.avatarUrl || booking.trip?.driverAvatar || null;
+  const resolvedDriverRating = trip?.driverRating || booking.trip?.driverRating || 0;
+  const resolvedVehicleInfo = [trip?.vehicleBrand, trip?.vehicleModel].filter(Boolean).join(' ') 
+    || booking.trip?.vehicleType 
+    || (booking.trip?.vehiclePlate ? `Xe ${booking.trip.vehiclePlate}` : '')
+    || '';
+  const hasDriverInfo = !!(trip?.driverName || booking.trip?.driverName || booking.driverName || trip?.driverId || booking.driverId);
+
+  const handleOpenCancelModal = () => {
+    if (booking.status === 'CONFIRMED' && isPastCutoff) {
+      Alert.alert(
+        'Không thể hủy vé',
+        'Theo chính sách của RideUp, chỉ được phép hủy vé trước giờ khởi hành tối thiểu 2 tiếng. Hiện chuyến xe đã quá cận giờ chạy.'
+      );
+      return;
+    }
+    setCancelReason('Thay đổi kế hoạch cá nhân');
+    setCustomCancelReason('');
+    setIsCancelModalOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    const finalReason = cancelReason === 'Khác' ? customCancelReason.trim() : cancelReason;
+    if (cancelReason === 'Khác' && !finalReason) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập lý do hủy chuyến.');
+      return;
+    }
+
+    setSubmittingCancel(true);
+    try {
+      await apiService.cancelBooking(booking.id, finalReason);
+      setIsCancelModalOpen(false);
+      Alert.alert(
+        'Đã hủy vé thành công',
+        'Vé của bạn đã được hủy. Tiền cọc/thanh toán (nếu có) sẽ được xử lý hoàn lại theo chính sách của RideUp.',
+        [{ text: 'Đồng ý', onPress: () => fetchBooking() }]
+      );
+    } catch (err) {
+      console.log('Error cancelling booking:', err);
+      const msg = err?.response?.data?.message || 'Có lỗi xảy ra khi hủy vé. Vui lòng thử lại.';
+      Alert.alert('Không thể hủy vé', msg);
+    } finally {
+      setSubmittingCancel(false);
+    }
+  };
 
   const pickupWards = trip?.stops?.filter(s => s.stopType === 'PICKUP').map(s => ({ id: String(s.wardId), name: s.addressText })) || [];
   const dropoffWards = trip?.stops?.filter(s => s.stopType === 'DROPOFF').map(s => ({ id: String(s.wardId), name: s.addressText })) || [];
@@ -653,24 +742,28 @@ const BookingDetailScreen = ({ route, navigation }) => {
         )}
 
         {/* ═══ DRIVER INFO ═══ */}
-        {(booking.trip?.driverName || booking.driverName) && (
+        {hasDriverInfo && (
           <View style={s.card}>
             <Text style={s.sectionTitle}>Tài xế</Text>
             <View style={s.driverRow}>
-              <View style={s.avatarCircle}>
-                <Ionicons name="person" size={26} color={COLORS.primary} />
+              <View style={[s.avatarCircle, resolvedDriverAvatar && { overflow: 'hidden' }]}>
+                {resolvedDriverAvatar ? (
+                  <Image source={{ uri: resolvedDriverAvatar }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                ) : (
+                  <Ionicons name="person" size={26} color={COLORS.primary} />
+                )}
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={s.driverName}>{booking.trip?.driverName || booking.driverName || 'Tài xế'}</Text>
-                {(booking.trip?.vehicleType || booking.trip?.vehiclePlate) && (
+                <Text style={s.driverName}>{resolvedDriverName}</Text>
+                {!!resolvedVehicleInfo && (
                   <Text style={s.driverSub}>
-                    {booking.trip?.vehicleType}{booking.trip?.vehiclePlate ? ` • ${booking.trip.vehiclePlate}` : ''}
+                    {resolvedVehicleInfo}
                   </Text>
                 )}
-                {booking.trip?.driverRating > 0 && (
+                {resolvedDriverRating > 0 && (
                   <View style={s.ratingRow}>
                     <Ionicons name="star" size={14} color="#f59e0b" />
-                    <Text style={s.ratingText}>{booking.trip.driverRating}/5 sao</Text>
+                    <Text style={s.ratingText}>{resolvedDriverRating}/5 sao</Text>
                   </View>
                 )}
               </View>
@@ -680,9 +773,12 @@ const BookingDetailScreen = ({ route, navigation }) => {
                   activeOpacity={0.7}
                   onPress={() => navigation.navigate('BookingChat', {
                     bookingId: booking.id,
-                    driverName: booking.trip?.driverName || booking.driverName || 'Tài xế',
-                    driverAvatar: booking.trip?.driverAvatar,
-                    vehicleInfo: booking.trip?.vehicleType || 'Xe',
+                    tripId: booking.tripId || trip?.id,
+                    driverId: trip?.driverId || booking.driverId,
+                    driverName: resolvedDriverName,
+                    driverPhone: resolvedDriverPhone,
+                    driverAvatar: resolvedDriverAvatar,
+                    vehicleInfo: resolvedVehicleInfo,
                   })}
                 >
                   <Ionicons name="chatbubble-ellipses" size={18} color={COLORS.primary} />
@@ -711,9 +807,12 @@ const BookingDetailScreen = ({ route, navigation }) => {
               activeOpacity={0.8}
               onPress={() => navigation.navigate('BookingChat', {
                 bookingId: booking.id,
-                driverName: booking.trip?.driverName || booking.driverName || 'Tài xế',
-                driverAvatar: booking.trip?.driverAvatar,
-                vehicleInfo: booking.trip?.vehicleType || 'Xe',
+                tripId: booking.tripId || trip?.id,
+                driverId: trip?.driverId || booking.driverId,
+                driverName: resolvedDriverName,
+                driverPhone: resolvedDriverPhone,
+                driverAvatar: resolvedDriverAvatar,
+                vehicleInfo: resolvedVehicleInfo,
               })}
             >
               <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
@@ -723,15 +822,43 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
           {showRate && (
             <TouchableOpacity
-              style={s.btnPrimary}
+              style={existingReview ? s.btnOutline : s.btnPrimary}
               activeOpacity={0.8}
               onPress={() => navigation.navigate('Rating', {
                 bookingId: booking.id,
-                driverName: booking.trip?.driverName || booking.driverName || 'Tài xế',
+                tripId: booking.tripId || trip?.id,
+                driverId: trip?.driverId || booking.driverId,
+                driverName: resolvedDriverName,
+                driverPhone: resolvedDriverPhone,
+                driverAvatar: resolvedDriverAvatar,
+                driverRating: resolvedDriverRating,
+                vehicleInfo: resolvedVehicleInfo,
+                existingReview: existingReview,
               })}
             >
-              <Ionicons name="star" size={18} color="#fff" />
-              <Text style={s.btnPrimaryText}>Đánh giá chuyến đi</Text>
+              <Ionicons name="star" size={18} color={existingReview ? "#f59e0b" : "#fff"} />
+              <Text style={existingReview ? s.btnOutlineText : s.btnPrimaryText}>
+                {existingReview ? `Xem đánh giá của bạn (${existingReview.rating}⭐)` : 'Đánh giá chuyến đi'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {canCancel && (
+            <TouchableOpacity
+              style={[s.btnCancelBooking, isPastCutoff && booking.status === 'CONFIRMED' && s.btnCancelDisabled]}
+              activeOpacity={0.8}
+              onPress={handleOpenCancelModal}
+            >
+              <Ionicons 
+                name="close-circle-outline" 
+                size={18} 
+                color={isPastCutoff && booking.status === 'CONFIRMED' ? COLORS.textMuted : COLORS.red} 
+              />
+              <Text style={[s.btnCancelText, isPastCutoff && booking.status === 'CONFIRMED' && { color: COLORS.textMuted }]}>
+                {isPastCutoff && booking.status === 'CONFIRMED'
+                  ? 'Hết hạn hủy (Dưới 2 tiếng trước giờ chạy)'
+                  : 'Hủy vé chuyến đi'}
+              </Text>
             </TouchableOpacity>
           )}
 
@@ -1046,6 +1173,111 @@ const BookingDetailScreen = ({ route, navigation }) => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {/* ═══ MODAL HỦY VÉ CHUYẾN ĐI ═══ */}
+      <Modal
+        visible={isCancelModalOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setIsCancelModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={s.modalOverlay}
+        >
+          <View style={[s.modalCard, { maxHeight: '85%' }]}>
+            <View style={s.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="alert-circle" size={24} color={COLORS.red} />
+                <Text style={[s.modalTitle, { color: COLORS.red }]}>HỦY VÉ CHUYẾN ĐI</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsCancelModalOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+              {/* Box cảnh báo & quy định */}
+              <View style={s.cancelWarningCard}>
+                <Ionicons name="time-outline" size={18} color="#991B1B" style={{ marginTop: 2 }} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={s.cancelWarningTitle}>Quy định hủy chuyến RideUp</Text>
+                  <Text style={s.cancelWarningDesc}>
+                    • Chỉ áp dụng hủy vé trước giờ khởi hành tối thiểu 2 tiếng.{"\n"}
+                    • Số tiền đã thanh toán/đặt cọc (nếu có) sẽ được xử lý hoàn trả theo chính sách.{"\n"}
+                    • Vé sau khi hủy sẽ giải phóng ghế và không thể hoàn tác.
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={s.cancelReasonLabel}>Chọn lý do hủy vé:</Text>
+              {[
+                'Thay đổi kế hoạch cá nhân',
+                'Tìm được phương tiện di chuyển khác',
+                'Thời gian đón/trả không phù hợp',
+                'Tài xế yêu cầu hủy / không liên lạc được',
+                'Khác',
+              ].map((item) => {
+                const isSelected = cancelReason === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[s.cancelReasonRow, isSelected && s.cancelReasonRowSelected]}
+                    activeOpacity={0.7}
+                    onPress={() => setCancelReason(item)}
+                  >
+                    <Ionicons
+                      name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={isSelected ? COLORS.red : COLORS.textMuted}
+                    />
+                    <Text style={[s.cancelReasonText, isSelected && s.cancelReasonTextSelected]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {cancelReason === 'Khác' && (
+                <View style={{ marginTop: 10 }}>
+                  <TextInput
+                    style={s.cancelCustomInput}
+                    placeholder="Nhập lý do hủy chuyến cụ thể..."
+                    placeholderTextColor={COLORS.textMuted}
+                    value={customCancelReason}
+                    onChangeText={setCustomCancelReason}
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={s.modalActionRow}>
+              <TouchableOpacity
+                style={s.modalBtnCancel}
+                onPress={() => setIsCancelModalOpen(false)}
+                disabled={submittingCancel}
+              >
+                <Text style={s.modalBtnCancelText}>Giữ lại vé</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtnDanger, submittingCancel && { opacity: 0.7 }]}
+                onPress={handleConfirmCancel}
+                disabled={submittingCancel}
+              >
+                {submittingCancel ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="trash-outline" size={16} color="#fff" />
+                    <Text style={s.modalBtnDangerText}>Xác nhận hủy</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1316,6 +1548,106 @@ const s = StyleSheet.create({
   modalBtnCancelText: { fontSize: 15, fontWeight: '700', color: COLORS.textSec },
   modalBtnSubmit: { flex: 2, flexDirection: 'row', paddingVertical: 14, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', gap: 8 },
   modalBtnSubmitText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+
+  // Cancel Booking
+  btnCancelBooking: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    gap: 8,
+    marginTop: 10,
+  },
+  btnCancelDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    opacity: 0.7,
+  },
+  btnCancelText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.red,
+  },
+  cancelWarningCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  cancelWarningTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#991B1B',
+    marginBottom: 4,
+  },
+  cancelWarningDesc: {
+    fontSize: 12,
+    color: '#7F1D1D',
+    lineHeight: 18,
+  },
+  cancelReasonLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 10,
+  },
+  cancelReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    marginBottom: 8,
+    gap: 10,
+  },
+  cancelReasonRowSelected: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+  },
+  cancelReasonText: {
+    fontSize: 14,
+    color: COLORS.textSec,
+    fontWeight: '500',
+  },
+  cancelReasonTextSelected: {
+    color: '#991B1B',
+    fontWeight: '700',
+  },
+  cancelCustomInput: {
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.text,
+    minHeight: 60,
+    textAlignVertical: 'top',
+    backgroundColor: '#FAFAFA',
+  },
+  modalBtnDanger: {
+    flex: 2,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  modalBtnDangerText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#fff',
+  },
 });
 
 export default BookingDetailScreen;

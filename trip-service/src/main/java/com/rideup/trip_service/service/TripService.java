@@ -154,7 +154,28 @@ public class TripService {
 
     public TripResponse getDetail(String id) {
         Trip trip = tripRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
-        return modelMapper.map(trip, TripResponse.class);
+        TripResponse response = modelMapper.map(trip, TripResponse.class);
+
+        if (trip.getDriverId() != null) {
+            try {
+                var driverResult = identityServiceClient.getDriverDetail(List.of(trip.getDriverId()));
+                if (driverResult != null && driverResult.getResult() != null && !driverResult.getResult().isEmpty()) {
+                    DriverResponse driver = driverResult.getResult().get(0);
+                    response.setDriverName(driver.getFullName());
+                    response.setDriverPhone(driver.getPhoneNumber());
+                    response.setDriverEmail(driver.getEmail());
+                    response.setAvatarUrl(driver.getAvatarUrl());
+                    response.setDriverRating(driver.getDriverRating());
+                    response.setVehicleImage(driver.getVehicleImage());
+                    response.setVehicleModel(driver.getVehicleModel());
+                    response.setVehicleBrand(driver.getVehicleBrand());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enrich driver detail for trip {}: {}", id, e.getMessage());
+            }
+        }
+
+        return response;
     }
 
 

@@ -56,6 +56,10 @@ public class BookingService {
     @Value("${expiryTime:3600}")
     long expirySeconds;
 
+    @NonFinal
+    @Value("${booking.cancellation-cutoff-hours:2}")
+    int cancellationCutoffHours;
+
     public void checkDuplicateBooking(String tripId) {
         String currentCustomerId = SecurityUtils.getCurrentUserId();
         List<BookingStatus> activeStatuses = List.of(
@@ -111,6 +115,8 @@ public class BookingService {
             // Khách chấp nhận lời mời từ tài xế -> Đã được tài xế chủ động mời nên chuyển thẳng CONFIRMED
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setExpiresAt(null);
+            // Trừ ghế trực tiếp trên trip-service để số ghế hiển thị đồng bộ chính xác
+            reserveTripSeats(request.getTripId(), request.getSeatCount());
         } else {
             booking.setStatus(
                     (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid)
@@ -471,7 +477,30 @@ public class BookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId != null && !currentUserId.equals(booking.getCustomerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
         ensureCancelableStatus(booking);
+
+        // Kiểm tra thời gian khởi hành của chuyến đi (chỉ cho phép hủy trước x giờ)
+        try {
+            var tripResponse = tripServiceClient.getTripById(booking.getTripId());
+            if (tripResponse != null && tripResponse.getResult() != null) {
+                var trip = tripResponse.getResult();
+                if (trip.getDepartureTime() != null) {
+                    LocalDateTime cutoff = trip.getDepartureTime().minusHours(cancellationCutoffHours);
+                    if (LocalDateTime.now().isAfter(cutoff)) {
+                        throw new AppException(ErrorCode.CANCELLATION_CUTOFF_EXCEEDED);
+                    }
+                }
+            }
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Could not check trip departure time for cancellation: {}", e.getMessage());
+        }
 
         BookingStatus oldStatus = booking.getStatus();
         booking.setStatus(BookingStatus.CANCELLED_USER);

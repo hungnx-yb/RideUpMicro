@@ -198,6 +198,7 @@ export default function DriverTripsScreen({ navigation }) {
   // Booking Modal state
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [tripBookingStats, setTripBookingStats] = useState({});
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [actionLoading, setActionLoading] = useState(null); // track which action is loading
   const [bookingFilterTab, setBookingFilterTab] = useState('ACTIVE'); // 'ACTIVE' or 'CANCELLED'
@@ -311,6 +312,30 @@ export default function DriverTripsScreen({ navigation }) {
       }
 
       setTrips(list);
+
+      // Đồng bộ số ghế đã đặt thực tế từ booking-service cho toàn bộ danh sách chuyến xe
+      if (list.length > 0) {
+        try {
+          const statsMap = {};
+          await Promise.all(
+            list.map(async (t) => {
+              try {
+                const bRes = await apiService.getBookingsByTripId(t.id);
+                const bList = bRes?.data?.result || [];
+                const approved = bList.filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+                const bookedSeats = approved.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+                statsMap[t.id] = {
+                  seatsBooked: bookedSeats,
+                  approvedCount: approved.length,
+                };
+              } catch (_) {}
+            })
+          );
+          setTripBookingStats(prev => ({ ...prev, ...statsMap }));
+        } catch (syncErr) {
+          console.log('Error syncing trip booking stats:', syncErr);
+        }
+      }
     } catch (e) {
       console.log(e);
       setTrips([]);
@@ -339,10 +364,21 @@ export default function DriverTripsScreen({ navigation }) {
         apiService.getBookingsByTripId(trip.id),
         apiService.getTripDetail(trip.id).catch(() => null)
       ]);
-      setBookings(res?.data?.result || []);
+      const currentBookings = res?.data?.result || [];
+      setBookings(currentBookings);
       if (tRes?.data?.result) {
         setSelectedTrip(tRes.data.result);
       }
+      // Đồng bộ ngay thống kê ghế cho thẻ chuyến xe bên ngoài
+      const approved = currentBookings.filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+      const bookedSeats = approved.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+      setTripBookingStats(prev => ({
+        ...prev,
+        [trip.id]: {
+          seatsBooked: bookedSeats,
+          approvedCount: approved.length,
+        }
+      }));
     } catch (e) {
       console.log(e);
     } finally {
@@ -358,10 +394,20 @@ export default function DriverTripsScreen({ navigation }) {
         apiService.getBookingsByTripId(selectedTrip.id),
         apiService.getTripDetail(selectedTrip.id).catch(() => null)
       ]);
-      setBookings(res?.data?.result || []);
+      const currentBookings = res?.data?.result || [];
+      setBookings(currentBookings);
       if (tRes?.data?.result) {
         setSelectedTrip(tRes.data.result);
       }
+      const approved = currentBookings.filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+      const bookedSeats = approved.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+      setTripBookingStats(prev => ({
+        ...prev,
+        [selectedTrip.id]: {
+          seatsBooked: bookedSeats,
+          approvedCount: approved.length,
+        }
+      }));
       fetchTrips();
     } catch (e) {
       console.log(e);
@@ -638,7 +684,10 @@ export default function DriverTripsScreen({ navigation }) {
   const displayTrips = trips;
 
   const renderTripItem = ({ item }) => {
-    const seatsBooked = Math.max((item.seatTotal || 0) - (item.seatAvailable || 0), 0);
+    const stats = tripBookingStats[item.id];
+    const seatsBooked = stats?.seatsBooked !== undefined
+      ? stats.seatsBooked
+      : Math.max((item.seatTotal || 0) - (item.seatAvailable || 0), 0);
     const revenue = (item.priceVnd || 0) * seatsBooked;
     const sColor = getStatusColor(item.status);
     const { time, date } = formatDate(item.departureTime);

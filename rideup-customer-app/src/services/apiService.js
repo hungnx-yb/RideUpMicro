@@ -73,7 +73,16 @@ export const apiService = {
     return await apiClient.get('/api/booking/bookings/my-bookings');
   },
   rateTrip: async (bookingId, payload) => {
-    return await apiClient.post(`/api/booking/bookings/${bookingId}/rate`, payload);
+    return await apiClient.post('/api/review/reviews', { ...payload, bookingId });
+  },
+  createReview: async (payload) => {
+    return await apiClient.post('/api/review/reviews', payload);
+  },
+  getReviewByBookingId: async (bookingId) => {
+    return await apiClient.get(`/api/review/reviews/booking/${bookingId}`);
+  },
+  getDriverReviews: async (driverId) => {
+    return await apiClient.get(`/api/review/reviews/driver/${driverId}`);
   },
   requestBookingModification: async (bookingId, payload) => {
     return await apiClient.post(`/api/booking/bookings/${bookingId}/modify`, payload);
@@ -102,6 +111,9 @@ export const apiService = {
   },
   getBookingDetail: async (bookingId) => {
     return await apiClient.get(`/api/booking/bookings/${bookingId}`);
+  },
+  cancelBooking: async (bookingId, reason) => {
+    return await apiClient.post(`/api/booking/bookings/${bookingId}/cancel`, { reason });
   },
 
   // --- MARKETPLACE (CHỢ NHU CẦU) ---

@@ -31,42 +31,41 @@ const ChatVideoItem = ({ videoUri }) => {
 };
 
 const BookingChatScreen = ({ route, navigation }) => {
-  const { bookingId, driverName, driverPhone, driverAvatar, vehicleInfo } = route.params || {};
+  const { bookingId, tripId: paramTripId, driverId: paramDriverId, driverName: paramDriverName, driverPhone: paramDriverPhone, driverAvatar: paramDriverAvatar, vehicleInfo: paramVehicleInfo } = route.params || {};
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [conversation, setConversation] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(true);
   const [uploading, setUploading] = useState(false);
   const flatListRef = useRef(null);
 
   useEffect(() => {
     loadConversationAndConnect();
-  }, []);
+  }, [bookingId]);
 
   const loadConversationAndConnect = async () => {
     try {
-      console.log('Customer App: Calling createConversationByBookingId for bookingId =', bookingId);
-      // 1. Lấy hoặc tạo Conversation — backend trả về ApiResponse<ConversationResponse>, lấy .data.result
+      setLoadingMessages(true);
+      // 1. Lấy hoặc tạo Conversation
       const convoRes = await apiService.createConversationByBookingId(bookingId);
       const convo = convoRes?.data?.result;
       setConversation(convo);
 
-      // 2. Lấy lịch sử tin nhắn — backend trả về ApiResponse<List<MessageResponse>>, lấy .data.result
+      // 2. Lấy lịch sử tin nhắn
       if (convo && convo.id) {
         const historyRes = await apiService.listConversationMessages(convo.id, 0, 50);
-        const messages = historyRes?.data?.result || [];
-        // Backend trả về cũ trước mới sau (ascending) — giữ nguyên là đúng
-        setMessages(messages);
+        const fetchedMessages = historyRes?.data?.result || [];
+        setMessages(fetchedMessages);
       }
 
-      // 3. Kết nối WebSocket toàn cục nếu chưa connect
+      // 3. Kết nối WebSocket toàn cục nếu chưa kết nối
       if (!chatSocket.isConnected) {
-        await chatSocket.connect();
+        chatSocket.connect().catch(err => console.log('Chat socket connect error:', err));
       }
     } catch (err) {
       console.log('Customer Chat Setup Error:', err);
     } finally {
-      setLoading(false);
+      setLoadingMessages(false);
     }
   };
 
@@ -85,7 +84,7 @@ const BookingChatScreen = ({ route, navigation }) => {
             return newArr;
           }
           if (prev.find(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg]; // Thêm vào cuối — hiển ở dưới cùng
+          return [...prev, newMsg];
         });
       }
     });
@@ -96,22 +95,29 @@ const BookingChatScreen = ({ route, navigation }) => {
   }, [conversation]);
 
   const sendMessage = () => {
-    if (inputMessage.trim() && conversation) {
-      chatSocket.sendMessage(conversation.id, inputMessage.trim(), 'TEXT');
-      
-      // Optimistic UI: Hiển thị tin nhắn ngay lập tức
-      const tempMsg = {
-        id: `temp-${Date.now()}`,
-        conversationId: conversation.id,
-        senderId: 'ME', 
-        content: inputMessage.trim(),
-        type: 'TEXT',
-        createdAt: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, tempMsg]); // Thêm vào cuối — hiển ở dưới cùng
-      
-      setInputMessage('');
+    const textToSend = inputMessage.trim();
+    if (!textToSend) return;
+
+    if (!conversation?.id) {
+      Alert.alert('Chưa sẵn sàng', 'Hệ thống đang kết nối phòng trò chuyện, vui lòng thử lại sau giây lát.');
+      return;
     }
+
+    // Gửi qua WebSocket STOMP
+    chatSocket.sendMessage(conversation.id, textToSend, 'TEXT');
+
+    // Optimistic UI: Hiển thị tin nhắn ngay lập tức
+    const tempMsg = {
+      id: `temp-${Date.now()}`,
+      conversationId: conversation.id,
+      senderId: 'ME', 
+      content: textToSend,
+      type: 'TEXT',
+      createdAt: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, tempMsg]);
+
+    setInputMessage('');
   };
 
   const handlePickMedia = () => {
@@ -173,7 +179,7 @@ const BookingChatScreen = ({ route, navigation }) => {
         senderId: 'ME',
         content: '',
         type: msgType,
-        mediaUrl: asset.uri, // dùng local URI tạm
+        mediaUrl: asset.uri,
         createdAt: new Date().toISOString()
       };
       setMessages(prev => [...prev, tempMsg]);
@@ -194,10 +200,10 @@ const BookingChatScreen = ({ route, navigation }) => {
       <View style={[styles.messageWrapper, isMyMessage ? styles.myMessageWrapper : styles.otherMessageWrapper]}>
         {!isMyMessage && (
           <View style={styles.avatarMini}>
-            {conversation?.otherUser?.avatarUrl || driverAvatar ? (
-              <Image source={{ uri: conversation?.otherUser?.avatarUrl || driverAvatar }} style={styles.avatarMiniImage} />
+            {conversation?.otherUser?.avatarUrl || paramDriverAvatar ? (
+              <Image source={{ uri: conversation?.otherUser?.avatarUrl || paramDriverAvatar }} style={styles.avatarMiniImage} />
             ) : (
-              <Text style={styles.avatarMiniText}>{(conversation?.otherUser?.fullName || driverName || 'T').charAt(0).toUpperCase()}</Text>
+              <Text style={styles.avatarMiniText}>{(conversation?.otherUser?.fullName || paramDriverName || 'T').charAt(0).toUpperCase()}</Text>
             )}
           </View>
         )}
@@ -223,18 +229,16 @@ const BookingChatScreen = ({ route, navigation }) => {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ color: COLORS.textMuted, marginTop: 12, fontSize: 14 }}>Đang kết nối cuộc trò chuyện...</Text>
-      </View>
-    );
-  }
-
-  const displayDriverName = conversation?.otherUser?.fullName || (driverName && driverName !== 'Tài xế' ? driverName : null) || 'Tài xế';
-  const displayDriverAvatar = conversation?.otherUser?.avatarUrl || driverAvatar;
-  const displayDriverPhone = conversation?.otherUser?.phoneNumber || driverPhone || '0987654321';
+  const displayDriverName = conversation?.otherUser?.fullName 
+    || (paramDriverName && paramDriverName !== 'Tài xế' ? paramDriverName : '') 
+    || 'Tài xế';
+  const displayDriverAvatar = conversation?.otherUser?.avatarUrl 
+    || paramDriverAvatar 
+    || null;
+  const displayDriverPhone = conversation?.otherUser?.phoneNumber 
+    || paramDriverPhone 
+    || '0987654321';
+  const displayVehicleInfo = paramVehicleInfo || '';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -252,11 +256,10 @@ const BookingChatScreen = ({ route, navigation }) => {
                   <Text style={styles.avatarText}>{displayDriverName.charAt(0).toUpperCase()}</Text>
                 </View>
               )}
-
             </View>
-            <View>
-              <Text style={styles.headerTitle}>{displayDriverName}</Text>
-              {vehicleInfo ? <Text style={styles.headerSubTitle}>{vehicleInfo}</Text> : null}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{displayDriverName}</Text>
+              {displayVehicleInfo ? <Text style={styles.headerSubTitle} numberOfLines={1}>{displayVehicleInfo}</Text> : null}
             </View>
           </View>
           <TouchableOpacity
@@ -268,16 +271,23 @@ const BookingChatScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
 
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-          renderItem={renderMessage}
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', padding: 16, paddingBottom: 24 }}
-          showsVerticalScrollIndicator={true}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-        />
+        {loadingMessages && messages.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={{ color: COLORS.textMuted, marginTop: 8, fontSize: 13 }}>Đang tải tin nhắn...</Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+            renderItem={renderMessage}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', padding: 16, paddingBottom: 24 }}
+            showsVerticalScrollIndicator={true}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          />
+        )}
 
         <View style={styles.inputContainer}>
           <TouchableOpacity style={styles.attachBtn} onPress={handlePickMedia} disabled={uploading}>
