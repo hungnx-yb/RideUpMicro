@@ -124,9 +124,11 @@ public class BookingService {
                             : BookingStatus.PENDING_PAYMENT
             );
         }
-        booking.setPaymentStatus(PaymentStatus.PENDING);
         if (isStripePrePaid) {
+            booking.setPaymentStatus(PaymentStatus.HOLDING);
             booking.setPaymentId(request.getPaymentIntentId());
+        } else {
+            booking.setPaymentStatus(PaymentStatus.PENDING);
         }
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
         booking.setReservedAt(now);
@@ -515,9 +517,22 @@ public class BookingService {
                 ? "Cancelled by user"
                 : saved.getCancelReason();
 
-        // Chỉ release ghế trên trip-service nếu đơn đã từng được duyệt (CONFIRMED)
+        // Release seats trên trip-service nếu đơn đã từng được duyệt (CONFIRMED)
         if (oldStatus == BookingStatus.CONFIRMED) {
             publishBookingCancelled(saved, correlationId, cancelReason);
+        } else if (oldStatus == BookingStatus.WAITING_DRIVER_APPROVAL) {
+            // Thông báo cho tài xế biết khách đã hủy đơn trong khi đang chờ duyệt
+            // Gửi seatCount = 0 để trip-service không hoàn ghế chưa từng được trừ
+            BookingCancelledEvent event = BookingCancelledEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .correlationId(correlationId)
+                    .bookingId(saved.getId())
+                    .tripId(saved.getTripId())
+                    .seatCount(0)
+                    .reason(cancelReason)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            bookingServicePublisher.publishBookingCancelled(event);
         }
 
         // Luôn gửi yêu cầu hoàn tiền / huỷ giữ cọc qua payment-service

@@ -98,7 +98,7 @@ public class NotificationConsumer {
 		}
 
 		String title = "Đặt chỗ đã bị hủy";
-		String reason = event.getReason() == null ? "" : (" Lý do: " + event.getReason());
+		String reason = event.getReason() == null || event.getReason().isBlank() ? "" : (" Lý do: " + event.getReason());
 		String message = String.format("Đặt chỗ %s đã bị hủy.%s",
 				booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode(),
 				reason);
@@ -109,6 +109,24 @@ public class NotificationConsumer {
 				NotificationType.BOOKING_CANCELLED,
 				buildMetadata("bookingId", event.getBookingId(), "tripId", booking.getTripId(), "type", "BOOKING_CANCELLED")
 		);
+
+		// Thông báo cho tài xế khi hành khách hủy đặt chỗ / chuyến
+		String tripId = booking.getTripId() == null ? event.getTripId() : booking.getTripId();
+		TripResponse trip = tripId == null ? null : resolveTrip(tripId);
+		String driverId = trip == null ? null : trip.getDriverId();
+		if (driverId != null && !driverId.equals(booking.getCustomerId())) {
+			String driverTitle = "Hành khách đã hủy chuyến";
+			String driverMessage = String.format("Hành khách vừa hủy đặt chỗ %s trên chuyến đi của bạn.%s",
+					booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode(),
+					reason);
+			notificationService.createNotification(
+					driverId,
+					driverTitle,
+					driverMessage,
+					NotificationType.BOOKING_CANCELLED,
+					buildMetadata("bookingId", event.getBookingId(), "tripId", tripId, "type", "BOOKING_CANCELLED")
+			);
+		}
 		ack.acknowledge();
 	}
 

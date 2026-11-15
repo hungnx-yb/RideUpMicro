@@ -25,7 +25,18 @@ const formatMoney = (val) => {
 };
 
 // ---- Dropdown Component ----
-const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled, loading = false, onRetry }) => {
+const DropdownSelect = ({
+  label,
+  placeholder,
+  value,
+  options,
+  onSelect,
+  disabled,
+  disabledIds = [],
+  disabledLabel = 'Đã chọn',
+  loading = false,
+  onRetry
+}) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -171,6 +182,7 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
                 )}
                 renderItem={({ item }) => {
                   const isSelected = String(item?.id) === String(value);
+                  const isDisabledItem = Array.isArray(disabledIds) && disabledIds.some(id => String(id) === String(item?.id));
                   return (
                     <TouchableOpacity
                       style={[
@@ -182,30 +194,56 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
                           borderRadius: 12,
                           paddingHorizontal: 16,
                           borderBottomWidth: 1
+                        },
+                        isDisabledItem && {
+                          opacity: 0.45,
+                          backgroundColor: '#F8FAFC'
                         }
                       ]}
                       onPress={() => {
+                        if (isDisabledItem) return;
                         onSelect(item.id);
                         handleClose();
                       }}
-                      activeOpacity={0.7}
+                      disabled={isDisabledItem}
+                      activeOpacity={isDisabledItem ? 1 : 0.7}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-                        <View style={[styles.modalItemIconWrap, isSelected && { backgroundColor: `${COLORS.primary}20` }]}>
+                        <View style={[
+                          styles.modalItemIconWrap,
+                          isSelected && { backgroundColor: `${COLORS.primary}20` },
+                          isDisabledItem && { backgroundColor: '#E2E8F0' }
+                        ]}>
                           <Ionicons
-                            name={isSelected ? "location" : "location-outline"}
+                            name={isDisabledItem ? "ban-outline" : (isSelected ? "location" : "location-outline")}
                             size={18}
-                            color={isSelected ? COLORS.primary : COLORS.textMuted}
+                            color={isDisabledItem ? COLORS.textMuted : (isSelected ? COLORS.primary : COLORS.textMuted)}
                           />
                         </View>
-                        <Text
-                          style={[styles.modalItemText, isSelected && { color: COLORS.primary, fontWeight: '700' }]}
-                          numberOfLines={2}
-                        >
-                          {item?.name || '---'}
-                        </Text>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.modalItemText,
+                              isSelected && { color: COLORS.primary, fontWeight: '700' },
+                              isDisabledItem && { color: COLORS.textMuted, fontStyle: 'italic' }
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {item?.name || '---'}
+                          </Text>
+                          {isDisabledItem && (
+                            <Text style={{ fontSize: 11, color: COLORS.error, marginTop: 2, fontWeight: '600' }}>
+                              {disabledLabel}
+                            </Text>
+                          )}
+                        </View>
                       </View>
                       {isSelected && <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />}
+                      {isDisabledItem && (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: '#FEE2E2' }}>
+                          <Text style={{ fontSize: 10, color: COLORS.error, fontWeight: '700' }}>ĐÃ CHỌN</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   );
                 }}
@@ -395,6 +433,23 @@ export default function CreateTripScreen({ navigation }) {
     if (!form.startProvinceId || !form.endProvinceId || validPickups.length === 0 || validDropoffs.length === 0) {
       Alert.alert('Chưa đầy đủ', 'Vui lòng chọn ít nhất 1 điểm đón và 1 điểm trả.'); return;
     }
+    const pickupWardIds = validPickups.map(p => String(p.wardId));
+    if (new Set(pickupWardIds).size !== pickupWardIds.length) {
+      Alert.alert('Lộ trình không hợp lệ', 'Không được chọn các điểm đón trùng phường/xã trong cùng một tỉnh.');
+      return;
+    }
+    const dropoffWardIds = validDropoffs.map(d => String(d.wardId));
+    if (new Set(dropoffWardIds).size !== dropoffWardIds.length) {
+      Alert.alert('Lộ trình không hợp lệ', 'Không được chọn các điểm trả trùng phường/xã trong cùng một tỉnh.');
+      return;
+    }
+    if (String(form.startProvinceId) === String(form.endProvinceId)) {
+      const hasDuplicate = pickupWardIds.some(wId => dropoffWardIds.includes(wId));
+      if (hasDuplicate) {
+        Alert.alert('Lộ trình không hợp lệ', 'Trong cùng 1 tỉnh, điểm đón và điểm trả không được trùng phường/xã.');
+        return;
+      }
+    }
     if (!form.seatTotal || isNaN(form.seatTotal) || Number(form.seatTotal) < 1) {
       Alert.alert('Lỗi', 'Số ghế không hợp lệ.'); return;
     }
@@ -494,27 +549,47 @@ export default function CreateTripScreen({ navigation }) {
             <View style={{ marginBottom: 16 }}>
               <DropdownSelect
                 label="Tỉnh đi" placeholder="Chọn tỉnh xuất phát"
-                value={form.startProvinceId} options={provinces} onSelect={(val) => updateForm('startProvinceId', val)}
+                value={form.startProvinceId}
+                options={provinces}
+                onSelect={(val) => updateForm('startProvinceId', val)}
                 loading={loadingProvinces}
                 onRetry={fetchProvinces}
               />
               <View style={{ marginTop: 10 }}>
-                {form.pickups.map((p, index) => (
-                  <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <DropdownSelect
-                      label={`Điểm đón ${index + 1}`} placeholder="Chọn phường/xã"
-                      value={p.wardId} options={startWards} onSelect={(val) => updateStop('pickups', index, val)}
-                      disabled={!form.startProvinceId}
-                      loading={loadingStartWards}
-                      onRetry={() => fetchWards(form.startProvinceId, true)}
-                    />
-                    {index > 0 && (
-                      <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('pickups', index)}>
-                        <Ionicons name="trash-outline" size={20} color={COLORS.error} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                {form.pickups.map((p, index) => {
+                  const otherPickupWardIds = form.pickups
+                    .filter((_, idx) => idx !== index)
+                    .map(item => item.wardId)
+                    .filter(Boolean);
+                  const disabledWardIds = [...otherPickupWardIds];
+                  if (form.startProvinceId && form.endProvinceId && String(form.startProvinceId) === String(form.endProvinceId)) {
+                    form.dropoffs.forEach(d => {
+                      if (d.wardId && !disabledWardIds.includes(d.wardId)) {
+                        disabledWardIds.push(d.wardId);
+                      }
+                    });
+                  }
+                  return (
+                    <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <DropdownSelect
+                        label={`Điểm đón ${index + 1}`} placeholder="Chọn phường/xã"
+                        value={p.wardId}
+                        options={startWards}
+                        disabledIds={disabledWardIds}
+                        disabledLabel="Phường/xã đã được chọn"
+                        onSelect={(val) => updateStop('pickups', index, val)}
+                        disabled={!form.startProvinceId}
+                        loading={loadingStartWards}
+                        onRetry={() => fetchWards(form.startProvinceId, true)}
+                      />
+                      {index > 0 && (
+                        <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('pickups', index)}>
+                          <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
                 <TouchableOpacity style={styles.addStopBtn} onPress={() => addStop('pickups')}>
                   <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
                   <Text style={styles.addStopText}>Thêm điểm đón</Text>
@@ -528,27 +603,47 @@ export default function CreateTripScreen({ navigation }) {
             <View style={{ marginTop: 16 }}>
               <DropdownSelect
                 label="Tỉnh đến" placeholder="Chọn tỉnh kết thúc"
-                value={form.endProvinceId} options={provinces} onSelect={(val) => updateForm('endProvinceId', val)}
+                value={form.endProvinceId}
+                options={provinces}
+                onSelect={(val) => updateForm('endProvinceId', val)}
                 loading={loadingProvinces}
                 onRetry={fetchProvinces}
               />
               <View style={{ marginTop: 10 }}>
-                {form.dropoffs.map((d, index) => (
-                  <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <DropdownSelect
-                      label={`Điểm trả ${index + 1}`} placeholder="Chọn phường/xã"
-                      value={d.wardId} options={endWards} onSelect={(val) => updateStop('dropoffs', index, val)}
-                      disabled={!form.endProvinceId}
-                      loading={loadingEndWards}
-                      onRetry={() => fetchWards(form.endProvinceId, false)}
-                    />
-                    {index > 0 && (
-                      <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('dropoffs', index)}>
-                        <Ionicons name="trash-outline" size={20} color={COLORS.error} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                {form.dropoffs.map((d, index) => {
+                  const otherDropoffWardIds = form.dropoffs
+                    .filter((_, idx) => idx !== index)
+                    .map(item => item.wardId)
+                    .filter(Boolean);
+                  const disabledWardIds = [...otherDropoffWardIds];
+                  if (form.startProvinceId && form.endProvinceId && String(form.startProvinceId) === String(form.endProvinceId)) {
+                    form.pickups.forEach(p => {
+                      if (p.wardId && !disabledWardIds.includes(p.wardId)) {
+                        disabledWardIds.push(p.wardId);
+                      }
+                    });
+                  }
+                  return (
+                    <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <DropdownSelect
+                        label={`Điểm trả ${index + 1}`} placeholder="Chọn phường/xã"
+                        value={d.wardId}
+                        options={endWards}
+                        disabledIds={disabledWardIds}
+                        disabledLabel="Phường/xã đã được chọn"
+                        onSelect={(val) => updateStop('dropoffs', index, val)}
+                        disabled={!form.endProvinceId}
+                        loading={loadingEndWards}
+                        onRetry={() => fetchWards(form.endProvinceId, false)}
+                      />
+                      {index > 0 && (
+                        <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('dropoffs', index)}>
+                          <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
                 <TouchableOpacity style={[styles.addStopBtn, { borderColor: `${COLORS.error}44` }]} onPress={() => addStop('dropoffs')}>
                   <Ionicons name="add-circle-outline" size={16} color={COLORS.error} />
                   <Text style={[styles.addStopText, { color: COLORS.error }]}>Thêm điểm trả</Text>

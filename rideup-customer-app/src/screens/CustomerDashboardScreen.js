@@ -68,6 +68,8 @@ const getStatusBadge = (status) => {
       return { label: 'Đang di chuyển', bg: 'rgba(16,185,129,0.15)', color: '#059669', icon: 'car-sport' };
     case 'RESERVED':
       return { label: 'Đang giữ chỗ', bg: 'rgba(139,92,246,0.12)', color: '#7C3AED', icon: 'bookmark' };
+    case 'COMPLETED':
+      return { label: 'Hoàn thành', bg: 'rgba(16,185,129,0.12)', color: '#10B981', icon: 'checkmark-done' };
     default:
       return { label: status || 'Đang xử lý', bg: '#F1F5F9', color: '#64748B', icon: 'ellipse' };
   }
@@ -374,10 +376,10 @@ const CustomerDashboardScreen = ({ navigation }) => {
 
           {upcomingBookings.length > 0 ? (
             <View style={{ gap: 12 }}>
-              {upcomingBookings.map(({ booking: bk, trip: tr }) => {
+              {upcomingBookings.map(({ booking: bk, trip: tr }, idx) => {
                 const badge = getStatusBadge(bk.status);
                 return (
-                  <View key={bk.id} style={styles.activeBookingCard}>
+                  <View key={`booking-${bk?.id || idx}-${idx}`} style={styles.activeBookingCard}>
                     {/* Card Header */}
                     <View style={styles.activeBookingHeader}>
                       <View style={styles.timeTag}>
@@ -516,9 +518,9 @@ const CustomerDashboardScreen = ({ navigation }) => {
 
           {availableTrips.length > 0 ? (
             <View style={styles.routesGrid}>
-              {availableTrips.map(trip => (
+              {availableTrips.map((trip, idx) => (
                 <TouchableOpacity
-                  key={trip.id}
+                  key={`trip-${trip?.id || idx}-${idx}`}
                   style={styles.tripCard}
                   activeOpacity={0.88}
                   onPress={() => navigation.navigate('SearchRide', { directTrip: trip })}

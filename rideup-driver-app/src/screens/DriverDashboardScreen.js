@@ -164,8 +164,12 @@ export default function DriverDashboardScreen() {
     navigation.navigate('Dashboard');
     setLoading(true);
     try {
-      if (!msg.metadata) return fetchDashboardData(true);
-      const meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+      let meta = {};
+      if (msg && msg.metadata) {
+        meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+      } else if (msg) {
+        meta = msg;
+      }
 
       if (meta.bookingId && meta.tripId) {
         // Đợi thêm 1 chút phòng hờ DB chưa commit xong
@@ -182,7 +186,7 @@ export default function DriverDashboardScreen() {
         if (bookingData) {
           const enrichedBooking = { ...bookingData, tripDetails };
           setPendingRequests(prev => {
-            if (prev.find(b => b.id === enrichedBooking.id)) return prev;
+            if (prev.some(b => String(b.id) === String(enrichedBooking.id))) return prev;
             return [enrichedBooking, ...prev];
           });
         } else {
@@ -206,8 +210,20 @@ export default function DriverDashboardScreen() {
       await notificationSocket.connect();
 
       unsubscribe = notificationSocket.subscribe((msg) => {
-        const titleLower = (msg.title || '').toLowerCase();
-        if (titleLower.includes('đặt') || titleLower.includes('booking') || titleLower.includes('khẩn')) {
+        let meta = {};
+        try {
+          meta = typeof msg?.metadata === 'string' ? JSON.parse(msg.metadata) : (msg?.metadata || {});
+        } catch (e) {}
+
+        const notiType = (meta.type || msg?.type || '').toUpperCase();
+        const titleLower = (msg?.title || '').toLowerCase();
+
+        // 1. Chỉ hiện popup "CÓ YÊU CẦU ĐẶT XE!" khi THỰC SỰ là đơn mới đang CHỜ DUYỆT (BOOKING_WAITING_APPROVAL)
+        // Tuyệt đối không hiển thị popup này khi tài xế vừa duyệt xong (BOOKING_CONFIRMED) hoặc thông báo khác
+        const isWaitingApproval = notiType === 'BOOKING_WAITING_APPROVAL' ||
+          (titleLower.includes('yêu cầu đặt xe mới') && notiType !== 'BOOKING_CONFIRMED');
+
+        if (isWaitingApproval) {
           Alert.alert(
             "🚀 CÓ YÊU CẦU ĐẶT XE!",
             "Bạn vừa nhận được một yêu cầu đặt chỗ mới từ khách hàng. Vui lòng kiểm tra ngay!",
@@ -222,7 +238,7 @@ export default function DriverDashboardScreen() {
               }
             ]
           );
-        } else if (titleLower.includes('đổi') || titleLower.includes('lộ trình') || titleLower.includes('chỉnh sửa')) {
+        } else if (notiType === 'BOOKING_MODIFICATION_REQUESTED' || titleLower.includes('đổi') || titleLower.includes('lộ trình') || titleLower.includes('chỉnh sửa')) {
           Alert.alert(
             "🔔 YÊU CẦU ĐỔI LỘ TRÌNH!",
             "Khách hàng vừa gửi yêu cầu đổi điểm đón/trả. Vui lòng kiểm tra và phản hồi trong 15 phút.",
@@ -232,8 +248,9 @@ export default function DriverDashboardScreen() {
             ]
           );
         } else {
-          // Nếu thông báo khác, đợi 1 chút để đảm bảo DB đã sync xong
-          setTimeout(() => fetchDashboardData(true), 1500);
+          // Các thông báo khác (đã duyệt thành công, hủy, cập nhật chuyến xe...)
+          // Không hiện popup phiền nhiễu, chỉ âm thầm đồng bộ lại dữ liệu
+          setTimeout(() => fetchDashboardData(true), 1200);
         }
       });
     };
@@ -418,9 +435,19 @@ export default function DriverDashboardScreen() {
       const rawTrips = res?.data?.result;
       const trips = Array.isArray(rawTrips) ? rawTrips : (rawTrips?.content || []);
 
+      // De-duplicate trips list to avoid duplicate keys and duplicate queries
+      const uniqueTrips = [];
+      const seenTripIds = new Set();
+      for (const t of trips) {
+        if (t && t.id && !seenTripIds.has(String(t.id))) {
+          seenTripIds.add(String(t.id));
+          uniqueTrips.push(t);
+        }
+      }
+
       const now = new Date();
       // Lấy tối đa 3 chuyến đi sắp tới gần nhất (sắp xếp tăng dần theo giờ khởi hành)
-      const validUpcomingTrips = trips
+      const validUpcomingTrips = uniqueTrips
         .filter(t => {
           const status = (t.status || '').toUpperCase();
           const tripDate = new Date(t.departureTime);
@@ -432,7 +459,7 @@ export default function DriverDashboardScreen() {
       setUpcomingTrips(validUpcomingTrips);
 
       // 2. Gọi song song các request booking và modification cho tất cả chuyến xe đang mở
-      const activeTripsList = trips.filter(t => t.status === 'OPEN' || t.status === 'FULL');
+      const activeTripsList = uniqueTrips.filter(t => t.status === 'OPEN' || t.status === 'FULL');
       if (activeTripsList.length > 0) {
         const tripBookedSeatsMap = {};
         const [bookingResponses, modResponses] = await Promise.all([
@@ -462,8 +489,28 @@ export default function DriverDashboardScreen() {
           )
         ]);
         setDashboardTripSeats(tripBookedSeatsMap);
-        setPendingRequests(bookingResponses.flat());
-        setPendingModifications(modResponses.flat());
+
+        // De-duplicate bookings list by id
+        const uniqueBookings = [];
+        const seenBookingIds = new Set();
+        for (const b of bookingResponses.flat()) {
+          if (b && b.id && !seenBookingIds.has(String(b.id))) {
+            seenBookingIds.add(String(b.id));
+            uniqueBookings.push(b);
+          }
+        }
+        setPendingRequests(uniqueBookings);
+
+        // De-duplicate modifications list by id
+        const uniqueMods = [];
+        const seenModIds = new Set();
+        for (const m of modResponses.flat()) {
+          if (m && m.id && !seenModIds.has(String(m.id))) {
+            seenModIds.add(String(m.id));
+            uniqueMods.push(m);
+          }
+        }
+        setPendingModifications(uniqueMods);
       } else {
         setDashboardTripSeats({});
         setPendingRequests([]);
@@ -741,7 +788,7 @@ export default function DriverDashboardScreen() {
         {/* CHUYẾN ĐI TIẾP THEO (TỐI ĐA 3 CHUYẾN) */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
-            Chuyến đi tiếp theo {upcomingTrips.length > 0 ? `(${upcomingTrips.length})` : ''}
+            Chuyến đi tiếp theo
           </Text>
           <TouchableOpacity onPress={() => navigation.navigate('DriverTrips')}>
             <Text style={styles.seeAllText}>Tất cả</Text>
@@ -749,14 +796,14 @@ export default function DriverDashboardScreen() {
         </View>
 
         {upcomingTrips.length > 0 ? (
-          upcomingTrips.map((trip) => {
+          upcomingTrips.map((trip, idx) => {
             const tripDate = new Date(trip.departureTime);
             const timeStr = tripDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
             const dateStr = tripDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
             const isStarted = (trip.status || '').toUpperCase() === 'STARTED';
 
             return (
-              <View key={trip.id} style={styles.ticketCard}>
+              <View key={`upcoming-${trip.id || idx}-${idx}`} style={styles.ticketCard}>
                 <View style={styles.ticketHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Ionicons name="time" size={16} color={COLORS.text} />
@@ -793,8 +840,8 @@ export default function DriverDashboardScreen() {
                   <View style={styles.ticketMeta}>
                     <Text style={styles.ticketMetaLabel}>TÌNH TRẠNG</Text>
                     <Text style={styles.ticketMetaValue}>
-                      {dashboardTripSeats[trip.id] !== undefined 
-                        ? dashboardTripSeats[trip.id] 
+                      {dashboardTripSeats[trip.id] !== undefined
+                        ? dashboardTripSeats[trip.id]
                         : Math.max((trip.seatTotal || 0) - (trip.seatAvailable || 0), 0)}/{trip.seatTotal || 0} ghế đã đặt
                     </Text>
                   </View>
@@ -826,12 +873,12 @@ export default function DriverDashboardScreen() {
               <Text style={styles.pendingModTitle}>YÊU CẦU ĐỔI LỘ TRÌNH ({pendingModifications.length})</Text>
             </View>
 
-            {pendingModifications.map(mod => {
+            {pendingModifications.map((mod, idx) => {
               const expireDate = mod.expiresAt ? new Date(mod.expiresAt) : null;
               const expireText = expireDate ? expireDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '15 phút';
 
               return (
-                <View key={mod.id} style={styles.pendingModCard}>
+                <View key={`mod-${mod.id || idx}-${idx}`} style={styles.pendingModCard}>
                   {/* Header */}
                   <View style={styles.pendingModHeader}>
                     <View style={styles.modTimerRow}>
@@ -971,8 +1018,8 @@ export default function DriverDashboardScreen() {
                 </View>
               )}
             </View>
-            {currentPendingRequests.map(req => (
-              <View key={req.id} style={styles.pendingCard}>
+            {currentPendingRequests.map((req, idx) => (
+              <View key={`pending-${req.id || idx}-${idx}`} style={styles.pendingCard}>
                 <View style={styles.pendingHeader}>
                   <Text style={styles.pendingTimer}>
                     ⏱️ {formatExpireTime(req.expiresAt, req.tripDetails?.departureTime)}
@@ -1423,7 +1470,7 @@ const styles = StyleSheet.create({
   avatarContainer: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 3 },
   avatar: { width: '100%', height: '100%', borderRadius: 22 },
   avatarLetter: { color: COLORS.primary, fontSize: 18, fontWeight: 'bold' },
-  
+
   notificationBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   notificationBadge: { position: 'absolute', top: 10, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.error, borderWidth: 1, borderColor: COLORS.surface },
 

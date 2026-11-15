@@ -313,18 +313,24 @@ export default function WalletScreen({ navigation }) {
             <View>
               <Text style={styles.commissionSubLabel}>Hoa hồng áp dụng hiện tại:</Text>
               <Text style={styles.commissionRateValue}>
-                {reputation?.effectiveRate ? (reputation.effectiveRate * 100).toFixed(1) : '18.0'}%
+                {reputation?.effectiveRate
+                  ? (Number(reputation.effectiveRate) * 100).toFixed(1)
+                  : reputation?.baseRate
+                    ? (Number(reputation.baseRate) * 100).toFixed(1)
+                    : '18.0'}%
               </Text>
             </View>
-            {reputation?.discount > 0 ? (
+            {reputation?.discount && Number(reputation.discount) > 0 ? (
               <View style={styles.discountBadge}>
                 <Ionicons name="trending-down" size={14} color={COLORS.success} />
                 <Text style={styles.discountBadgeText}>
-                  Giảm {(reputation.discount * 100).toFixed(1)}% phí sàn
+                  Giảm {(Number(reputation.discount) * 100).toFixed(1)}% phí sàn
                 </Text>
               </View>
             ) : (
-              <Text style={{ fontSize: 12, color: COLORS.textMuted }}>Mức gốc: 18.0%</Text>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted }}>
+                Mức gốc: {reputation?.baseRate ? (Number(reputation.baseRate) * 100).toFixed(1) : '18.0'}%
+              </Text>
             )}
           </View>
 
@@ -494,7 +500,7 @@ export default function WalletScreen({ navigation }) {
                 </View>
                 <View style={styles.breakdownRow}>
                   <Text style={styles.breakdownLabel}>
-                    Hoa hồng sàn ({((tx.commissionRate || 0.18) * 100).toFixed(0)}%):
+                    Hoa hồng sàn ({((Number(tx.commissionRate) || 0.18) * 100).toFixed(1)}%):
                   </Text>
                   <Text style={[styles.breakdownVal, { color: COLORS.danger }]}>
                     -{formatMoney(tx.commissionAmount)}

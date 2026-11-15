@@ -7,6 +7,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
+import { useStripe } from '@stripe/stripe-react-native';
 import InvitationCard from '../components/InvitationCard';
 
 const COLORS = {
@@ -367,7 +368,7 @@ const BookingCard = ({ item, trip, onPress, onChatPress }) => {
       if (item.paymentStatus === 'PAID') {
         return { label: 'Thẻ Stripe • Đã thanh toán', icon: 'card', bg: '#ECFDF5', color: '#059669', border: '#A7F3D0' };
       }
-      if (item.paymentStatus === 'HOLDING') {
+      if (item.paymentStatus === 'HOLDING' || (isStripe && item.paymentId?.startsWith('pi_'))) {
         return { label: 'Thẻ Stripe • Đã cọc giữ tiền', icon: 'shield-checkmark', bg: '#EFF6FF', color: '#2563EB', border: '#BFDBFE' };
       }
       if (item.paymentStatus === 'REFUNDED' || item.paymentStatus === 'VOIDED') {
@@ -530,9 +531,15 @@ const MyTripsScreen = ({ navigation, route }) => {
   const [requestActiveTab, setRequestActiveTab] = useState(null);
   const [page, setPage] = useState(0);
 
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
   // State cho Modal Xác nhận chốt chuyến từ lời mời
   const [selectedInviteData, setSelectedInviteData] = useState(null); // { invitation, tripRequest }
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [invitePaymentMethod, setInvitePaymentMethod] = useState('CASH');
+  const [isStripeAllowedForInvite, setIsStripeAllowedForInvite] = useState(true);
+  const [stripeDisabledReasonForInvite, setStripeDisabledReasonForInvite] = useState('');
+  const [checkingInvitePaymentOptions, setCheckingInvitePaymentOptions] = useState(false);
 
   // Filter states giống hệt màn Tìm kiếm
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
@@ -844,9 +851,31 @@ const MyTripsScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleAcceptInvitation = (invitation, tripRequest) => {
+  const handleAcceptInvitation = async (invitation, tripRequest) => {
     // Mở modal xác nhận chốt chuyến xe trực tiếp tại đây, không chuyển màn hình tránh nhiều popup
     setSelectedInviteData({ invitation, tripRequest });
+    setInvitePaymentMethod('CASH');
+    setIsStripeAllowedForInvite(true);
+    setStripeDisabledReasonForInvite('');
+    setCheckingInvitePaymentOptions(true);
+
+    try {
+      if (invitation?.tripId) {
+        const payRes = await apiService.getTripPaymentOptions(invitation.tripId);
+        if (payRes?.data?.result) {
+          const { stripeEnabled, message } = payRes.data.result;
+          setIsStripeAllowedForInvite(stripeEnabled);
+          if (!stripeEnabled) {
+            setStripeDisabledReasonForInvite(message || 'Tài xế chưa kích hoạt nhận thanh toán Stripe');
+            setInvitePaymentMethod('CASH');
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi kiểm tra phương thức thanh toán chuyến từ lời mời:', err);
+    } finally {
+      setCheckingInvitePaymentOptions(false);
+    }
   };
 
   const handleConfirmAcceptInvitation = async () => {
@@ -863,7 +892,7 @@ const MyTripsScreen = ({ navigation, route }) => {
       const payload = {
         tripId: invitation.tripId,
         seatCount: tripRequest.seatTotal || 1,
-        paymentMethod: 'CASH',
+        paymentMethod: invitePaymentMethod,
         pickupLat: 0,
         pickupLng: 0,
         pickupWardId: tripRequest.startWardId || '',
@@ -876,6 +905,47 @@ const MyTripsScreen = ({ navigation, route }) => {
         invitationId: invitation.id,
       };
 
+      if (invitePaymentMethod === 'STRIPE') {
+        const totalAmount = Number(invitation.price || 0);
+        // 1. Tạo Stripe Payment Intent trên payment-service
+        const res = await apiService.createPaymentIntent({
+          amount: totalAmount,
+          tripId: invitation.tripId,
+        });
+
+        const intentData = res?.data?.result;
+        if (!intentData?.clientSecret) {
+          Alert.alert('Lỗi khởi tạo', 'Không thể tạo thông tin thanh toán Stripe. Vui lòng thử lại.');
+          setIsSubmittingBooking(false);
+          return;
+        }
+
+        // 2. Khởi tạo Stripe PaymentSheet
+        const { error: initError } = await initPaymentSheet({
+          merchantDisplayName: 'RideUp',
+          paymentIntentClientSecret: intentData.clientSecret,
+        });
+
+        if (initError) {
+          Alert.alert('Lỗi khởi tạo', initError.message);
+          setIsSubmittingBooking(false);
+          return;
+        }
+
+        // 3. Hiển thị PaymentSheet để người dùng thanh toán
+        const { error: presentError } = await presentPaymentSheet();
+        if (presentError) {
+          if (presentError.code !== 'Canceled') {
+            Alert.alert('Thanh toán thất bại', presentError.message || 'Giao dịch chưa hoàn thành');
+          }
+          setIsSubmittingBooking(false);
+          return;
+        }
+
+        // 4. Thanh toán thành công! Gắn paymentIntentId vào booking
+        payload.paymentIntentId = intentData.paymentIntentId;
+      }
+
       const res = await apiService.createBooking(payload, idempotencyKey);
       if (res?.data?.code === 1000) {
         try {
@@ -885,7 +955,9 @@ const MyTripsScreen = ({ navigation, route }) => {
         setSelectedInviteData(null);
         Alert.alert(
           'Chốt chuyến thành công! 🎉',
-          'Bạn đã đồng ý lời mời và đặt chỗ thành công. Tài xế đã nhận được thông tin chuyến đi của bạn.',
+          invitePaymentMethod === 'STRIPE'
+            ? 'Thanh toán trực tuyến an toàn thành công và vé đã được chốt. Chúc bạn có một hành trình vui vẻ!'
+            : 'Bạn đã đồng ý lời mời và đặt chỗ thành công. Tài xế đã nhận được thông tin chuyến đi của bạn.',
           [
             {
               text: 'Xem vé đã đặt',
@@ -1464,6 +1536,89 @@ const MyTripsScreen = ({ navigation, route }) => {
                 </View>
               </View>
 
+              {/* Payment Method Selector */}
+              <View style={styles.confirmSectionBox}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={styles.confirmSectionTitle}>HÌNH THỨC THANH TOÁN</Text>
+                  {checkingInvitePaymentOptions && (
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                  )}
+                </View>
+
+                {/* Option 1: Tiền mặt */}
+                <TouchableOpacity
+                  style={[
+                    styles.invitePaymentCard,
+                    invitePaymentMethod === 'CASH' && styles.invitePaymentCardActive,
+                  ]}
+                  onPress={() => setInvitePaymentMethod('CASH')}
+                  activeOpacity={0.8}
+                  disabled={isSubmittingBooking}
+                >
+                  <View style={[styles.invitePaymentIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                    <Ionicons name="cash-outline" size={20} color="#10B981" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.invitePaymentTitle}>Tiền mặt trực tiếp</Text>
+                    <Text style={styles.invitePaymentSub}>Thanh toán cho tài xế sau khi chuyến đi hoàn tất</Text>
+                  </View>
+                  <View style={[styles.inviteRadioCircle, invitePaymentMethod === 'CASH' && styles.inviteRadioCircleActive]}>
+                    {invitePaymentMethod === 'CASH' && <View style={styles.inviteRadioDot} />}
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option 2: Stripe */}
+                <TouchableOpacity
+                  style={[
+                    styles.invitePaymentCard,
+                    invitePaymentMethod === 'STRIPE' && styles.invitePaymentCardActive,
+                    !isStripeAllowedForInvite && styles.invitePaymentCardDisabled,
+                  ]}
+                  onPress={() => {
+                    if (isStripeAllowedForInvite) {
+                      setInvitePaymentMethod('STRIPE');
+                    } else {
+                      Alert.alert(
+                        'Cổng thẻ tạm khoá',
+                        stripeDisabledReasonForInvite || 'Tài xế chuyến xe này chưa liên kết tài khoản Stripe để nhận tiền tự động. Vui lòng chọn Tiền mặt.'
+                      );
+                    }
+                  }}
+                  activeOpacity={isStripeAllowedForInvite ? 0.8 : 1}
+                  disabled={isSubmittingBooking}
+                >
+                  <View style={[styles.invitePaymentIconWrap, { backgroundColor: isStripeAllowedForInvite ? '#E0F2FE' : '#F1F5F9' }]}>
+                    <Ionicons
+                      name={isStripeAllowedForInvite ? "card-outline" : "lock-closed-outline"}
+                      size={20}
+                      color={isStripeAllowedForInvite ? COLORS.primary : COLORS.textMuted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text style={[styles.invitePaymentTitle, !isStripeAllowedForInvite && { color: COLORS.textMuted }]}>
+                        Thẻ ATM / Visa / Mastercard
+                      </Text>
+                      <View style={styles.inviteEscrowBadge}>
+                        <Text style={styles.inviteEscrowBadgeText}>🛡️ Escrow</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.invitePaymentSub}>
+                      {isStripeAllowedForInvite
+                        ? 'Giữ tiền an toàn qua Stripe, hoàn tiền 100% nếu tài xế hủy'
+                        : (stripeDisabledReasonForInvite || 'Tài xế chưa kích hoạt Stripe. Vui lòng thanh toán tiền mặt.')}
+                    </Text>
+                  </View>
+                  <View style={[
+                    styles.inviteRadioCircle,
+                    invitePaymentMethod === 'STRIPE' && styles.inviteRadioCircleActive,
+                    !isStripeAllowedForInvite && { borderColor: '#CBD5E1' }
+                  ]}>
+                    {invitePaymentMethod === 'STRIPE' && <View style={styles.inviteRadioDot} />}
+                  </View>
+                </TouchableOpacity>
+              </View>
+
               {/* Payment & Price Summary */}
               <View style={styles.confirmPriceBox}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1473,10 +1628,16 @@ const MyTripsScreen = ({ navigation, route }) => {
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={{ fontSize: 13, color: COLORS.textMuted }}>Hình thức</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.textMuted }}>Hình thức chọn</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Ionicons name="cash-outline" size={15} color={COLORS.green} />
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.green }}>Tiền mặt khi lên xe</Text>
+                    <Ionicons
+                      name={invitePaymentMethod === 'STRIPE' ? 'card-outline' : 'cash-outline'}
+                      size={15}
+                      color={invitePaymentMethod === 'STRIPE' ? COLORS.primary : COLORS.green}
+                    />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: invitePaymentMethod === 'STRIPE' ? COLORS.primary : COLORS.green }}>
+                      {invitePaymentMethod === 'STRIPE' ? 'Thẻ Stripe Escrow' : 'Tiền mặt khi lên xe'}
+                    </Text>
                   </View>
                 </View>
                 <View style={styles.confirmDivider} />
@@ -2002,6 +2163,74 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  invitePaymentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 8,
+  },
+  invitePaymentCardActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(14, 165, 233, 0.04)',
+  },
+  invitePaymentCardDisabled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.65,
+  },
+  invitePaymentIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  invitePaymentTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  invitePaymentSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 15,
+  },
+  inviteEscrowBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  inviteEscrowBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  inviteRadioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  inviteRadioCircleActive: {
+    borderColor: COLORS.primary,
+  },
+  inviteRadioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
   },
 });
 

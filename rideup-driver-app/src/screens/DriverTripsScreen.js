@@ -882,7 +882,7 @@ export default function DriverTripsScreen({ navigation }) {
           const isStripe = item.paymentMethod === 'STRIPE' || (item.paymentMethod !== 'CASH' && (item.paymentStatus === 'HOLDING' || item.paymentId?.startsWith('pi_')));
           if (isStripe) {
             const isPaid = item.paymentStatus === 'PAID';
-            const isHolding = item.paymentStatus === 'HOLDING';
+            const isHolding = item.paymentStatus === 'HOLDING' || (item.paymentMethod === 'STRIPE' && item.paymentId?.startsWith('pi_'));
             const isRefunded = item.paymentStatus === 'REFUNDED' || item.paymentStatus === 'VOIDED';
             let label, subLabel, bg, borderCol, textCol, icon;
             if (isPaid) {

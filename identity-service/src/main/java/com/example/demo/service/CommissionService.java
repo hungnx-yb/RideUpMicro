@@ -193,7 +193,7 @@ public class CommissionService {
     }
 
     /**
-     * Lấy thông tin điểm uy tín của tài xế
+     * Lấy thông tin điểm uy tín của tài xế (kèm hoa hồng cá nhân hóa)
      */
     public DriverReputationResponse getDriverReputation(String driverId) {
         User user = userRepository.findById(driverId)
@@ -204,10 +204,19 @@ public class CommissionService {
             throw new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND);
         }
 
+        // Tính hoa hồng cá nhân hóa để frontend hiển thị chính xác
+        CommissionConfigResponse config = getCommissionConfig();
+        BigDecimal effectiveRate = calculateCommissionRate(profile);
+        BigDecimal discount = config.getBaseRate().subtract(effectiveRate)
+                .setScale(4, RoundingMode.HALF_UP);
+
         return DriverReputationResponse.builder()
                 .reputationScore(profile.getReputationScore())
                 .totalDriverRides(profile.getTotalDriverRides() != null ? profile.getTotalDriverRides() : 0)
                 .driverRating(profile.getDriverRating() != null ? profile.getDriverRating() : 5.0)
+                .effectiveRate(effectiveRate)
+                .discount(discount)
+                .baseRate(config.getBaseRate())
                 .build();
     }
 }

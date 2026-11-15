@@ -24,23 +24,23 @@ const COLORS = {
 
 // ===== STATUS CONFIG =====
 const STATUS_MAP = {
-  PENDING_PAYMENT:            { label: 'Chờ thanh toán',              color: COLORS.orange,  bg: COLORS.orangeBg, icon: 'time-outline' },
-  WAITING_DRIVER_APPROVAL:    { label: 'Đang chờ tài xế duyệt',      color: COLORS.yellow,  bg: COLORS.yellowBg, icon: 'hourglass-outline' },
-  CONFIRMED:                  { label: 'Đã xác nhận',                 color: COLORS.green,   bg: COLORS.greenBg,  icon: 'shield-checkmark-outline' },
-  COMPLETED:                  { label: 'Hoàn thành',                  color: COLORS.green,   bg: COLORS.greenBg,  icon: 'checkmark-done-outline' },
-  REJECTED_BY_DRIVER:         { label: 'Bị từ chối',                 color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
-  EXPIRED:                    { label: 'Hết hạn',                     color: COLORS.red,     bg: COLORS.redBg,    icon: 'time-outline' },
-  CANCELLED_USER:             { label: 'Đã huỷ',                      color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
-  CANCELLED_DRIVER:           { label: 'Tài xế huỷ chuyến',           color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
-  CANCELLED_PAYMENT_FAILED:   { label: 'Lỗi thanh toán',              color: COLORS.red,     bg: COLORS.redBg,    icon: 'alert-circle-outline' },
+  PENDING_PAYMENT: { label: 'Chờ thanh toán', color: COLORS.orange, bg: COLORS.orangeBg, icon: 'time-outline' },
+  WAITING_DRIVER_APPROVAL: { label: 'Đang chờ tài xế duyệt', color: COLORS.yellow, bg: COLORS.yellowBg, icon: 'hourglass-outline' },
+  CONFIRMED: { label: 'Đã xác nhận', color: COLORS.green, bg: COLORS.greenBg, icon: 'shield-checkmark-outline' },
+  COMPLETED: { label: 'Hoàn thành', color: COLORS.green, bg: COLORS.greenBg, icon: 'checkmark-done-outline' },
+  REJECTED_BY_DRIVER: { label: 'Bị từ chối', color: COLORS.red, bg: COLORS.redBg, icon: 'close-circle-outline' },
+  EXPIRED: { label: 'Hết hạn', color: COLORS.red, bg: COLORS.redBg, icon: 'time-outline' },
+  CANCELLED_USER: { label: 'Đã huỷ', color: COLORS.red, bg: COLORS.redBg, icon: 'close-circle-outline' },
+  CANCELLED_DRIVER: { label: 'Tài xế huỷ chuyến', color: COLORS.red, bg: COLORS.redBg, icon: 'close-circle-outline' },
+  CANCELLED_PAYMENT_FAILED: { label: 'Lỗi thanh toán', color: COLORS.red, bg: COLORS.redBg, icon: 'alert-circle-outline' },
 };
 const getStatus = (s) => STATUS_MAP[s] || { label: s || 'Không rõ', color: COLORS.textMuted, bg: '#f1f5f9', icon: 'ellipse-outline' };
 
 const MOD_STATUS_MAP = {
   PENDING_DRIVER: { label: 'Chờ tài xế duyệt', color: '#f59e0b', bg: '#FEF3C7', icon: 'time-outline' },
-  APPROVED:       { label: 'Tài xế đã duyệt',  color: '#10b981', bg: '#ECFDF5', icon: 'checkmark-circle-outline' },
-  REJECTED:       { label: 'Tài xế từ chối',   color: '#ef4444', bg: '#FEF2F2', icon: 'close-circle-outline' },
-  EXPIRED:        { label: 'Hết hạn duyệt',    color: '#64748b', bg: '#F1F5F9', icon: 'hourglass-outline' },
+  APPROVED: { label: 'Tài xế đã duyệt', color: '#10b981', bg: '#ECFDF5', icon: 'checkmark-circle-outline' },
+  REJECTED: { label: 'Tài xế từ chối', color: '#ef4444', bg: '#FEF2F2', icon: 'close-circle-outline' },
+  EXPIRED: { label: 'Hết hạn duyệt', color: '#64748b', bg: '#F1F5F9', icon: 'hourglass-outline' },
 };
 const getModStatus = (s) => MOD_STATUS_MAP[s] || { label: s || 'Chờ duyệt', color: '#64748b', bg: '#F1F5F9', icon: 'ellipse-outline' };
 
@@ -212,14 +212,14 @@ const BookingDetailScreen = ({ route, navigation }) => {
             setExistingReview(JSON.parse(cached));
           }
         })
-        .catch(() => {});
+        .catch(() => { });
 
       if (booking?.status === 'COMPLETED') {
         apiService.getReviewByBookingId(booking.id)
           .then(res => {
             if (res?.data?.result) {
               setExistingReview(res.data.result);
-              AsyncStorage.setItem(`@review_${booking.id}`, JSON.stringify(res.data.result)).catch(() => {});
+              AsyncStorage.setItem(`@review_${booking.id}`, JSON.stringify(res.data.result)).catch(() => { });
             }
           })
           .catch(err => console.log('Check existing review error:', err));
@@ -256,9 +256,9 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const dropoffDisplayDetail = rawDropoffParsed.detail;
 
   // ── Context‑aware actions ──
-  const showChat     = ['CONFIRMED', 'RESERVED', 'PENDING_PAYMENT', 'WAITING_DRIVER_APPROVAL'].includes(booking.status);
-  const showRate     = booking.status === 'COMPLETED';
-  const showRebook   = ['COMPLETED', 'CANCELLED_USER', 'CANCELLED_DRIVER', 'REJECTED_BY_DRIVER', 'EXPIRED', 'CANCELLED_PAYMENT_FAILED'].includes(booking.status);
+  const showChat = ['CONFIRMED', 'RESERVED', 'PENDING_PAYMENT', 'WAITING_DRIVER_APPROVAL'].includes(booking.status);
+  const showRate = booking.status === 'COMPLETED';
+  const showRebook = ['COMPLETED', 'CANCELLED_USER', 'CANCELLED_DRIVER', 'REJECTED_BY_DRIVER', 'EXPIRED', 'CANCELLED_PAYMENT_FAILED'].includes(booking.status);
 
   // ── Modification Calculations ──
   const pendingMod = modifications.find(m => m.status === 'PENDING_DRIVER');
@@ -279,8 +279,8 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const resolvedDriverPhone = trip?.driverPhone || booking.trip?.driverPhone || booking.driverPhone || '';
   const resolvedDriverAvatar = trip?.avatarUrl || booking.trip?.driverAvatar || null;
   const resolvedDriverRating = trip?.driverRating || booking.trip?.driverRating || 0;
-  const resolvedVehicleInfo = [trip?.vehicleBrand, trip?.vehicleModel].filter(Boolean).join(' ') 
-    || booking.trip?.vehicleType 
+  const resolvedVehicleInfo = [trip?.vehicleBrand, trip?.vehicleModel].filter(Boolean).join(' ')
+    || booking.trip?.vehicleType
     || (booking.trip?.vehiclePlate ? `Xe ${booking.trip.vehiclePlate}` : '')
     || '';
   const hasDriverInfo = !!(trip?.driverName || booking.trip?.driverName || booking.driverName || trip?.driverId || booking.driverId);
@@ -647,7 +647,7 @@ const BookingDetailScreen = ({ route, navigation }) => {
                 statusIcon = 'checkmark-circle';
                 statusBg = '#ECFDF5'; statusColor = '#059669';
                 guidanceText = 'Số tiền đã được thanh toán thành công qua thẻ. Bạn không cần trả thêm cho tài xế.';
-              } else if (booking.paymentStatus === 'HOLDING') {
+              } else if (booking.paymentStatus === 'HOLDING' || (isStripe && booking.paymentId?.startsWith('pi_'))) {
                 statusLabel = 'Đã giữ cọc qua thẻ';
                 statusIcon = 'shield-checkmark';
                 statusBg = '#EFF6FF'; statusColor = '#2563EB';
@@ -849,10 +849,10 @@ const BookingDetailScreen = ({ route, navigation }) => {
               activeOpacity={0.8}
               onPress={handleOpenCancelModal}
             >
-              <Ionicons 
-                name="close-circle-outline" 
-                size={18} 
-                color={isPastCutoff && booking.status === 'CONFIRMED' ? COLORS.textMuted : COLORS.red} 
+              <Ionicons
+                name="close-circle-outline"
+                size={18}
+                color={isPastCutoff && booking.status === 'CONFIRMED' ? COLORS.textMuted : COLORS.red}
               />
               <Text style={[s.btnCancelText, isPastCutoff && booking.status === 'CONFIRMED' && { color: COLORS.textMuted }]}>
                 {isPastCutoff && booking.status === 'CONFIRMED'
@@ -1184,7 +1184,7 @@ const BookingDetailScreen = ({ route, navigation }) => {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={s.modalOverlay}
         >
-          <View style={[s.modalCard, { maxHeight: '85%' }]}>
+          <View style={[s.modalContainer, { maxHeight: '85%' }]}>
             <View style={s.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name="alert-circle" size={24} color={COLORS.red} />

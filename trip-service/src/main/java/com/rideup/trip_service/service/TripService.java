@@ -77,6 +77,33 @@ public class TripService {
             }
         }
 
+        if (request.getStops() != null && !request.getStops().isEmpty()) {
+            long distinctPickups = request.getStops().stream()
+                    .filter(s -> s.getStopType() == com.rideup.trip_service.enums.StopType.PICKUP)
+                    .map(com.rideup.trip_service.dto.request.TripStopRequest::getWardId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .count();
+            long totalPickups = request.getStops().stream()
+                    .filter(s -> s.getStopType() == com.rideup.trip_service.enums.StopType.PICKUP)
+                    .count();
+            if (distinctPickups < totalPickups) {
+                throw new AppException(ErrorCode.INVALID_KEY);
+            }
+            long distinctDropoffs = request.getStops().stream()
+                    .filter(s -> s.getStopType() == com.rideup.trip_service.enums.StopType.DROPOFF)
+                    .map(com.rideup.trip_service.dto.request.TripStopRequest::getWardId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .count();
+            long totalDropoffs = request.getStops().stream()
+                    .filter(s -> s.getStopType() == com.rideup.trip_service.enums.StopType.DROPOFF)
+                    .count();
+            if (distinctDropoffs < totalDropoffs) {
+                throw new AppException(ErrorCode.INVALID_KEY);
+            }
+        }
+
         Trip trip = modelMapper.map(request, Trip.class);
         trip.setStops(null);
         trip.setDriverId(userResponse.getId());
