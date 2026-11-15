@@ -924,6 +924,7 @@ const MyTripsScreen = ({ navigation, route }) => {
         const { error: initError } = await initPaymentSheet({
           merchantDisplayName: 'RideUp',
           paymentIntentClientSecret: intentData.clientSecret,
+          returnURL: 'rideup://stripe-redirect',
         });
 
         if (initError) {

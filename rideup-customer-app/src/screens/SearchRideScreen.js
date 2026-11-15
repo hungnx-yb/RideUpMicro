@@ -829,6 +829,7 @@ export default function SearchRideScreen({ navigation, route }) {
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'RideUp',
         paymentIntentClientSecret: intentData.clientSecret,
+        returnURL: 'rideup://stripe-redirect',
       });
 
       if (initError) {
@@ -879,6 +880,7 @@ export default function SearchRideScreen({ navigation, route }) {
       }
     } catch (error) {
       console.error('Stripe direct pay error:', error);
+      console.error('Stripe error response data:', JSON.stringify(error?.response?.data));
       const errData = error?.response?.data;
       const errMsg = errData?.message || error?.message || 'Không thể hoàn tất thanh toán. Vui lòng thử lại.';
       Alert.alert('Lỗi thanh toán', errMsg);

@@ -98,6 +98,7 @@ export default function WalletScreen({ navigation }) {
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'RideUp Driver',
         paymentIntentClientSecret: paymentUrl,
+        returnURL: 'rideup://stripe-redirect',
         defaultBillingDetails: {
           name: 'Tài xế RideUp',
         }

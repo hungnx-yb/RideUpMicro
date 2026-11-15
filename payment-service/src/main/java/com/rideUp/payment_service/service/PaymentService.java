@@ -122,6 +122,9 @@ public class PaymentService {
 		} catch (StripeException e) {
 			log.error("Stripe error creating PaymentIntent: ", e);
 			throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+		} catch (Exception e) {
+			log.error("Unexpected error creating PaymentIntent: ", e);
+			throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
 		}
 	}
 
