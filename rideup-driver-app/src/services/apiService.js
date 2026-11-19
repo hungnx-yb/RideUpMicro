@@ -75,6 +75,13 @@ export const apiService = {
   getMyVehicle: async () => {
     return await apiClient.get('/api/identity/vehicles/me');
   },
+  updateMyVehicle: async (formData) => {
+    return await apiClient.put('/api/identity/vehicles/me', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   getMyWallet: async () => {
     return await apiClient.get('/api/identity/drivers/me/wallet');
   },

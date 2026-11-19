@@ -77,6 +77,9 @@ public class Vehicle {
     // Lý do từ chối
     String rejectionReason;
 
+    // Admin từ chối
+    String rejectedBy;
+
     // Tài xế sở hữu xe (1-1)
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_id", nullable = false, unique = true)

@@ -59,6 +59,8 @@ public class DriverResponse {
     String vehicleImage;
     String registrationImage;
     String insuranceImage;
+    Boolean isVehicleVerified;
+    Boolean isVehicleActive;
 
     public DriverResponse(
             String userId,
@@ -108,6 +110,36 @@ public class DriverResponse {
         this.vehicleBrand = vehicleBrand;
         this.vehicleModel = vehicleModel;
         this.seatCapacity = seatCapacity;
+    }
+
+    public DriverResponse(
+            String userId,
+            String fullName,
+            String email,
+            String phoneNumber,
+            String avatarUrl,
+            Double driverRating,
+            String vehicleId,
+            String vehicleImage,
+            String vehicleBrand,
+            String vehicleModel,
+            Integer seatCapacity,
+            Boolean isVehicleVerified,
+            Boolean isVehicleActive
+    ) {
+        this.userId = userId;
+        this.fullName = fullName;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+        this.avatarUrl = avatarUrl;
+        this.driverRating = driverRating;
+        this.vehicleId = vehicleId;
+        this.vehicleImage = vehicleImage;
+        this.vehicleBrand = vehicleBrand;
+        this.vehicleModel = vehicleModel;
+        this.seatCapacity = seatCapacity;
+        this.isVehicleVerified = isVehicleVerified;
+        this.isVehicleActive = isVehicleActive;
     }
 
 }

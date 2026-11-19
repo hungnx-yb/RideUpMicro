@@ -46,13 +46,13 @@ public class VehicleController {
                 .build();
     }
 
-//    @PutMapping("/me")
-//    public ApiResponse<VehicleResponse> updateMyVehicle(@Valid @RequestBody VehicleUpdateRequest request) {
-//        return ApiResponse.<VehicleResponse>builder()
-//                .result(vehicleService.updateMyVehicle(request))
-//                .message("Vehicle information updated successfully")
-//                .build();
-//    }
+    @PutMapping(value = "/me", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<VehicleResponse> updateMyVehicle(@Valid @ModelAttribute com.example.demo.dto.request.vehicle.VehicleUpdateRequest request) {
+        return ApiResponse.<VehicleResponse>builder()
+                .result(vehicleService.updateMyVehicle(request))
+                .message("Vehicle information updated successfully")
+                .build();
+    }
 
 //    @PutMapping("/me/documents")
 //    public ApiResponse<VehicleResponse> updateMyVehicleDocuments(@RequestBody VehicleDocumentsUpdateRequest request) {

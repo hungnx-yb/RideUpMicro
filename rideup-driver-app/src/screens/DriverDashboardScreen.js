@@ -430,7 +430,25 @@ export default function DriverDashboardScreen() {
             </View>
           </View>
         ) : (
-          <TouchableOpacity style={styles.emptyTicket} activeOpacity={0.8} onPress={() => navigation.navigate('CreateTrip')}>
+          <TouchableOpacity 
+            style={styles.emptyTicket} 
+            activeOpacity={0.8} 
+            onPress={() => {
+              const v = driverProfile?.vehicle;
+              if (!v || !v.isVerified || !v.isActive) {
+                Alert.alert(
+                  'Chưa thể tạo chuyến',
+                  'Phương tiện của bạn chưa được duyệt hoặc chưa kích hoạt hoạt động. Vui lòng kiểm tra lại trạng thái xe.',
+                  [
+                    { text: 'Đóng', style: 'cancel' },
+                    { text: 'Xem xe của tôi', onPress: () => navigation.navigate('Profile', { openVehicleModal: true }) }
+                  ]
+                );
+                return;
+              }
+              navigation.navigate('CreateTrip');
+            }}
+          >
             <View style={styles.emptyIconCircle}>
               <Ionicons name="add" size={32} color={COLORS.primary} />
             </View>

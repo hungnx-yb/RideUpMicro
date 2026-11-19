@@ -1043,7 +1043,29 @@ export default function DriverTripsScreen({ navigation }) {
                   : 'Lịch sử chuyến đi của bạn hiện đang trống.'}
               </Text>
               {(activeTab === 'ALL' || activeTab === 'OPEN') && (
-                <TouchableOpacity style={styles.createBtn} onPress={() => navigation.navigate('CreateTrip')}>
+                <TouchableOpacity 
+                  style={styles.createBtn} 
+                  onPress={async () => {
+                    try {
+                      const res = await apiService.getMyVehicle();
+                      const v = res?.data?.result;
+                      if (!v || !v.isVerified || !v.isActive) {
+                        Alert.alert(
+                          'Chưa thể tạo chuyến',
+                          'Phương tiện của bạn chưa được duyệt hoặc chưa kích hoạt hoạt động. Vui lòng kiểm tra lại trạng thái xe.',
+                          [
+                            { text: 'Đóng', style: 'cancel' },
+                            { text: 'Xem xe của tôi', onPress: () => navigation.navigate('Profile', { openVehicleModal: true }) }
+                          ]
+                        );
+                        return;
+                      }
+                    } catch (e) {
+                      console.log('Error checking vehicle:', e);
+                    }
+                    navigation.navigate('CreateTrip');
+                  }}
+                >
                   <Text style={styles.createBtnText}>Mở chuyến ngay</Text>
                 </TouchableOpacity>
               )}

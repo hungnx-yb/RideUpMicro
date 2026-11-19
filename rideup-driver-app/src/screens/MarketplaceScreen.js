@@ -860,7 +860,24 @@ export default function MarketplaceScreen({ navigation, route }) {
                   </Text>
                   <TouchableOpacity 
                     style={{ backgroundColor: COLORS.primary, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, alignSelf: 'flex-start' }}
-                    onPress={() => {
+                    onPress={async () => {
+                      try {
+                        const res = await apiService.getMyVehicle();
+                        const v = res?.data?.result;
+                        if (!v || !v.isVerified || !v.isActive) {
+                          Alert.alert(
+                            'Chưa thể tạo chuyến',
+                            'Phương tiện của bạn chưa được duyệt hoặc chưa kích hoạt hoạt động. Vui lòng kiểm tra lại trạng thái xe.',
+                            [
+                              { text: 'Đóng', style: 'cancel' },
+                              { text: 'Xem xe của tôi', onPress: () => { setSelectedRequest(null); navigation.navigate('Profile', { openVehicleModal: true }); } }
+                            ]
+                          );
+                          return;
+                        }
+                      } catch (e) {
+                        console.log('Error checking vehicle:', e);
+                      }
                       setSelectedRequest(null);
                       navigation.navigate('CreateTrip');
                     }}

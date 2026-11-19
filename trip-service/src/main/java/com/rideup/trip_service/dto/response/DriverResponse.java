@@ -24,5 +24,7 @@ public class DriverResponse {
     String vehicleModel;
     String vehicleId;
     Integer seatCapacity;
+    Boolean isVehicleVerified;
+    Boolean isVehicleActive;
 
 }

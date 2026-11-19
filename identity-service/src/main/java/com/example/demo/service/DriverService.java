@@ -318,6 +318,8 @@ public class DriverService {
             response.setVehicleImage(vehicle.getVehicleImage());
             response.setRegistrationImage(vehicle.getRegistrationImage());
             response.setInsuranceImage(vehicle.getInsuranceImage());
+            response.setIsVehicleVerified(vehicle.getIsVerified());
+            response.setIsVehicleActive(vehicle.getIsActive());
         }
 
         if (driverProfile.getGplxClasses() != null && !driverProfile.getGplxClasses().isBlank()) {

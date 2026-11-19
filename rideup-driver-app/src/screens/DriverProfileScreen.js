@@ -90,7 +90,7 @@ const MenuItem = ({ icon, title, subtitle, onPress, color = COLORS.text, isDestr
   </TouchableOpacity>
 );
 
-export default function DriverProfileScreen({ navigation }) {
+export default function DriverProfileScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,7 +101,7 @@ export default function DriverProfileScreen({ navigation }) {
   const [isDriverModalVisible, setIsDriverModalVisible] = useState(false);
   const [isFaceModalVisible, setIsFaceModalVisible] = useState(false);
   const [faceModalMode, setFaceModalMode] = useState('enroll');
-  
+
   const [user, setUser] = useState({
     username: '', email: '', fullName: '',
     phoneNumber: '', dateOfBirth: '', gender: '', avatarUrl: ''
@@ -114,9 +114,155 @@ export default function DriverProfileScreen({ navigation }) {
     fullName: '', phoneNumber: '', dateOfBirth: '', gender: ''
   });
 
+  const [isEditVehicleModalVisible, setIsEditVehicleModalVisible] = useState(false);
+  const [vehicleSaving, setVehicleSaving] = useState(false);
+  const [vehicleEditForm, setVehicleEditForm] = useState({
+    plateNumber: '',
+    vehicleBrand: '',
+    vehicleModel: '',
+    vehicleColor: '',
+    vehicleYear: '',
+    seatCapacity: '4',
+    vehicleType: 'CAR_4_SEAT',
+    vehicleImageUri: null,
+    registrationImageUri: null,
+    insuranceImageUri: null,
+    registrationExpiryDate: '',
+    insuranceExpiryDate: '',
+  });
+
+  const openEditVehicleModal = () => {
+    if (!vehicle) return;
+    setVehicleEditForm({
+      plateNumber: vehicle.plateNumber || '',
+      vehicleBrand: vehicle.vehicleBrand || '',
+      vehicleModel: vehicle.vehicleModel || '',
+      vehicleColor: vehicle.vehicleColor || '',
+      vehicleYear: vehicle.vehicleYear ? String(vehicle.vehicleYear) : '',
+      seatCapacity: vehicle.seatCapacity ? String(vehicle.seatCapacity) : '4',
+      vehicleType: vehicle.vehicleType || 'CAR_4_SEAT',
+      vehicleImageUri: null,
+      registrationImageUri: null,
+      insuranceImageUri: null,
+      registrationExpiryDate: formatDateToDisplay(vehicle.registrationExpiryDate) || '',
+      insuranceExpiryDate: formatDateToDisplay(vehicle.insuranceExpiryDate) || '',
+    });
+    // Đóng Modal Thông Tin Xe trước để Form Chỉnh Sửa hiển thị ngay lập tức (không bị đè layer)
+    setIsVehicleModalVisible(false);
+    setTimeout(() => {
+      setIsEditVehicleModalVisible(true);
+    }, 150);
+  };
+
+  const handlePickVehicleImage = async (field) => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Quyền", "Bạn cần cấp quyền truy cập thư viện ảnh!");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images', allowsEditing: true, quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setVehicleEditForm(prev => ({ ...prev, [field]: result.assets[0].uri }));
+      }
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể chọn ảnh lúc này');
+    }
+  };
+
+  const handleUpdateVehicle = async () => {
+    if (!vehicleEditForm.plateNumber?.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập biển số xe');
+      return;
+    }
+    if (!vehicleEditForm.vehicleBrand?.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập thương hiệu xe');
+      return;
+    }
+    if (!vehicleEditForm.vehicleModel?.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập dòng xe');
+      return;
+    }
+
+    setVehicleSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append('plateNumber', vehicleEditForm.plateNumber.trim());
+      formData.append('vehicleBrand', vehicleEditForm.vehicleBrand.trim());
+      formData.append('vehicleModel', vehicleEditForm.vehicleModel.trim());
+      if (vehicleEditForm.vehicleColor?.trim()) {
+        formData.append('vehicleColor', vehicleEditForm.vehicleColor.trim());
+      }
+      if (vehicleEditForm.vehicleYear) {
+        formData.append('vehicleYear', vehicleEditForm.vehicleYear);
+      }
+      if (vehicleEditForm.seatCapacity) {
+        formData.append('seatCapacity', vehicleEditForm.seatCapacity);
+      }
+      if (vehicleEditForm.vehicleType) {
+        formData.append('vehicleType', vehicleEditForm.vehicleType);
+      }
+      if (vehicleEditForm.registrationExpiryDate) {
+        const regIso = formatDateToIso(vehicleEditForm.registrationExpiryDate);
+        if (regIso) formData.append('registrationExpiryDate', regIso);
+      }
+      if (vehicleEditForm.insuranceExpiryDate) {
+        const insIso = formatDateToIso(vehicleEditForm.insuranceExpiryDate);
+        if (insIso) formData.append('insuranceExpiryDate', insIso);
+      }
+
+      if (vehicleEditForm.vehicleImageUri) {
+        formData.append('vehicleImage', {
+          uri: vehicleEditForm.vehicleImageUri,
+          name: 'vehicle.jpg',
+          type: 'image/jpeg',
+        });
+      }
+      if (vehicleEditForm.registrationImageUri) {
+        formData.append('registrationImage', {
+          uri: vehicleEditForm.registrationImageUri,
+          name: 'registration.jpg',
+          type: 'image/jpeg',
+        });
+      }
+      if (vehicleEditForm.insuranceImageUri) {
+        formData.append('insuranceImage', {
+          uri: vehicleEditForm.insuranceImageUri,
+          name: 'insurance.jpg',
+          type: 'image/jpeg',
+        });
+      }
+
+      const res = await apiService.updateMyVehicle(formData);
+      if (res?.data?.result) {
+        setVehicle(res.data.result);
+      }
+      setIsEditVehicleModalVisible(false);
+      Alert.alert(
+        'Đã gửi cập nhật',
+        'Thông tin phương tiện đã được lưu thành công và chuyển sang trạng thái CHỜ DUYỆT để ban quản trị phê duyệt lại.'
+      );
+      fetchProfileData();
+    } catch (error) {
+      console.log('Update vehicle error:', error);
+      Alert.alert('Thất bại', error.response?.data?.message || 'Có lỗi xảy ra khi cập nhật phương tiện.');
+    } finally {
+      setVehicleSaving(false);
+    }
+  };
+
   useEffect(() => {
     fetchProfileData();
   }, []);
+
+  useEffect(() => {
+    if (route?.params?.openVehicleModal) {
+      setIsVehicleModalVisible(true);
+      navigation.setParams({ openVehicleModal: false });
+    }
+  }, [route?.params?.openVehicleModal]);
 
   const fetchProfileData = async () => {
     try {
@@ -130,7 +276,12 @@ export default function DriverProfileScreen({ navigation }) {
 
       try {
         const vehicleRes = await apiService.getMyVehicle();
-        if (vehicleRes?.data?.result) setVehicle(vehicleRes.data.result);
+        if (vehicleRes?.data?.result) {
+          setVehicle(vehicleRes.data.result);
+          if (route?.params?.openVehicleModal) {
+            setIsVehicleModalVisible(true);
+          }
+        }
       } catch (e) { console.log('No vehicle registered yet'); }
 
     } catch (error) {
@@ -550,12 +701,41 @@ export default function DriverProfileScreen({ navigation }) {
 
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Trạng thái</Text>
-                    <View style={[styles.statusBadge, vehicle.isVerified ? { backgroundColor: 'rgba(16, 185, 129, 0.1)' } : { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-                      <Text style={[styles.statusText, vehicle.isVerified ? { color: COLORS.success } : { color: COLORS.warning }]}>
-                        {vehicle.isVerified ? "ĐÃ DUYỆT" : "CHỜ DUYỆT"}
+                    {vehicle.rejectedAt ? (
+                      <View style={[styles.statusBadge, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                        <Text style={[styles.statusText, { color: COLORS.error }]}>BỊ TỪ CHỐI</Text>
+                      </View>
+                    ) : vehicle.isVerified ? (
+                      <View style={[styles.statusBadge, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                        <Text style={[styles.statusText, { color: COLORS.success }]}>ĐÃ DUYỆT</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.statusBadge, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
+                        <Text style={[styles.statusText, { color: COLORS.warning }]}>CHỜ DUYỆT</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Cảnh báo lý do từ chối xe */}
+                  {vehicle.rejectedAt && (
+                    <View style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                      borderColor: 'rgba(239, 68, 68, 0.25)',
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      padding: 12,
+                      marginTop: 4,
+                      marginBottom: 12
+                    }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Ionicons name="alert-circle" size={18} color={COLORS.error} style={{ marginRight: 6 }} />
+                        <Text style={{ color: COLORS.error, fontWeight: 'bold', fontSize: 13 }}>Lý do từ chối phê duyệt:</Text>
+                      </View>
+                      <Text style={{ color: COLORS.text, fontSize: 13, lineHeight: 18, marginLeft: 24 }}>
+                        {vehicle.rejectionReason || 'Hồ sơ phương tiện không hợp lệ. Vui lòng cập nhật lại thông tin/hình ảnh xe.'}
                       </Text>
                     </View>
-                  </View>
+                  )}
                   <View style={styles.divider} />
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Biển số xe</Text>
@@ -644,12 +824,295 @@ export default function DriverProfileScreen({ navigation }) {
             )}
 
             <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-              <TouchableOpacity style={styles.editButton} onPress={() => Alert.alert('Thông báo', 'Tính năng sửa thông tin xe đang được phát triển.')}>
+              <TouchableOpacity style={styles.editButton} onPress={openEditVehicleModal}>
                 <Ionicons name="create-outline" size={20} color={COLORS.background} style={{ marginRight: 8 }} />
-                <Text style={styles.editButtonText}>Cập nhật thông tin</Text>
+                <Text style={styles.editButtonText}>Cập nhật thông tin xe</Text>
               </TouchableOpacity>
             </View>
         </View>
+      </Modal>
+
+      {/* Edit Vehicle Modal (Full Screen) */}
+      <Modal visible={isEditVehicleModalVisible} animationType="slide" transparent={false}>
+        <KeyboardAvoidingView 
+          style={{ flex: 1, backgroundColor: COLORS.background }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={{ flex: 1, paddingTop: Math.max(insets.top, 40) }}>
+            <View style={styles.fullScreenHeader}>
+              <TouchableOpacity 
+                onPress={() => {
+                  setIsEditVehicleModalVisible(false);
+                  setTimeout(() => setIsVehicleModalVisible(true), 150);
+                }} 
+                style={{ padding: 4 }}
+              >
+                <Ionicons name="arrow-back" size={28} color={COLORS.text} />
+              </TouchableOpacity>
+              <Text style={styles.fullScreenTitle}>Chỉnh Sửa Thông Tin Xe</Text>
+              <View style={{ width: 36 }} />
+            </View>
+
+            <ScrollView 
+              showsVerticalScrollIndicator={false} 
+              contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                borderColor: 'rgba(245, 158, 11, 0.3)',
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: 20,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10
+              }}>
+                <Ionicons name="information-circle" size={22} color={COLORS.warning} />
+                <Text style={{ flex: 1, color: COLORS.text, fontSize: 13, lineHeight: 18 }}>
+                  Sau khi lưu thông tin, trạng thái xe sẽ chuyển về <Text style={{ fontWeight: 'bold', color: COLORS.warning }}>CHỜ DUYỆT</Text> để admin phê duyệt lại trước khi tạo chuyến.
+                </Text>
+              </View>
+
+              {/* Biển số xe */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Biển số xe *</Text>
+                <TextInput
+                  style={[styles.input, { textTransform: 'uppercase', fontWeight: 'bold' }]}
+                  placeholder="VD: 30A-12345"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={vehicleEditForm.plateNumber}
+                  onChangeText={t => setVehicleEditForm(prev => ({ ...prev, plateNumber: t }))}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              {/* Thương hiệu & Dòng xe */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Hãng xe *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="VD: Toyota"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={vehicleEditForm.vehicleBrand}
+                    onChangeText={t => setVehicleEditForm(prev => ({ ...prev, vehicleBrand: t }))}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Dòng xe *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="VD: Vios"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={vehicleEditForm.vehicleModel}
+                    onChangeText={t => setVehicleEditForm(prev => ({ ...prev, vehicleModel: t }))}
+                  />
+                </View>
+              </View>
+
+              {/* Màu sắc & Năm sản xuất */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Màu xe</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="VD: Trắng"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={vehicleEditForm.vehicleColor}
+                    onChangeText={t => setVehicleEditForm(prev => ({ ...prev, vehicleColor: t }))}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Năm sản xuất</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="VD: 2022"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={vehicleEditForm.vehicleYear}
+                    keyboardType="numeric"
+                    onChangeText={t => setVehicleEditForm(prev => ({ ...prev, vehicleYear: t }))}
+                  />
+                </View>
+              </View>
+
+              {/* Số ghế đăng ký & Loại xe */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Số ghế đăng ký *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="VD: 4"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={vehicleEditForm.seatCapacity}
+                    keyboardType="numeric"
+                    onChangeText={t => setVehicleEditForm(prev => ({ ...prev, seatCapacity: t }))}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Loại xe</Text>
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderBtn,
+                        vehicleEditForm.vehicleType === 'CAR_4_SEAT' && styles.genderBtnActive
+                      ]}
+                      onPress={() => setVehicleEditForm(prev => ({ ...prev, vehicleType: 'CAR_4_SEAT' }))}
+                    >
+                      <Text style={[
+                        styles.genderText,
+                        vehicleEditForm.vehicleType === 'CAR_4_SEAT' && styles.genderTextActive
+                      ]}>4 chỗ</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.genderBtn,
+                        vehicleEditForm.vehicleType === 'CAR_7_SEAT' && styles.genderBtnActive
+                      ]}
+                      onPress={() => setVehicleEditForm(prev => ({ ...prev, vehicleType: 'CAR_7_SEAT' }))}
+                    >
+                      <Text style={[
+                        styles.genderText,
+                        vehicleEditForm.vehicleType === 'CAR_7_SEAT' && styles.genderTextActive
+                      ]}>7 chỗ</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              {/* Hạn đăng kiểm & Bảo hiểm */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Hạn đăng kiểm</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="DD/MM/YYYY"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={vehicleEditForm.registrationExpiryDate}
+                    onChangeText={t => setVehicleEditForm(prev => ({ ...prev, registrationExpiryDate: t }))}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Hạn bảo hiểm</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="DD/MM/YYYY"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={vehicleEditForm.insuranceExpiryDate}
+                    onChangeText={t => setVehicleEditForm(prev => ({ ...prev, insuranceExpiryDate: t }))}
+                  />
+                </View>
+              </View>
+
+              {/* Ảnh phương tiện */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Ảnh phương tiện</Text>
+                <TouchableOpacity 
+                  style={{
+                    height: 140,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    borderStyle: 'dashed',
+                    backgroundColor: COLORS.surface,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    overflow: 'hidden'
+                  }}
+                  onPress={() => handlePickVehicleImage('vehicleImageUri')}
+                >
+                  {vehicleEditForm.vehicleImageUri ? (
+                    <Image source={{ uri: vehicleEditForm.vehicleImageUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  ) : vehicle?.vehicleImage ? (
+                    <Image 
+                      source={{ uri: vehicle.vehicleImage.startsWith('http') ? vehicle.vehicleImage : `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${vehicle.vehicleImage}` }} 
+                      style={{ width: '100%', height: '100%' }} 
+                      resizeMode="cover" 
+                    />
+                  ) : (
+                    <View style={{ alignItems: 'center' }}>
+                      <Ionicons name="camera-outline" size={32} color={COLORS.primary} />
+                      <Text style={{ marginTop: 6, color: COLORS.textMuted, fontSize: 13 }}>Nhấn để chọn ảnh xe mới</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Ảnh giấy tờ xe */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Ảnh giấy đăng ký / bảo hiểm (nếu muốn cập nhật lại)</Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity 
+                    style={{
+                      flex: 1,
+                      height: 100,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderStyle: 'dashed',
+                      backgroundColor: COLORS.surface,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      overflow: 'hidden'
+                    }}
+                    onPress={() => handlePickVehicleImage('registrationImageUri')}
+                  >
+                    {vehicleEditForm.registrationImageUri ? (
+                      <Image source={{ uri: vehicleEditForm.registrationImageUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : (
+                      <View style={{ alignItems: 'center', padding: 6 }}>
+                        <Ionicons name="document-attach-outline" size={24} color={COLORS.primary} />
+                        <Text style={{ marginTop: 4, color: COLORS.textMuted, fontSize: 11, textAlign: 'center' }}>Đăng ký xe</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={{
+                      flex: 1,
+                      height: 100,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderStyle: 'dashed',
+                      backgroundColor: COLORS.surface,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      overflow: 'hidden'
+                    }}
+                    onPress={() => handlePickVehicleImage('insuranceImageUri')}
+                  >
+                    {vehicleEditForm.insuranceImageUri ? (
+                      <Image source={{ uri: vehicleEditForm.insuranceImageUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : (
+                      <View style={{ alignItems: 'center', padding: 6 }}>
+                        <Ionicons name="shield-checkmark-outline" size={24} color={COLORS.primary} />
+                        <Text style={{ marginTop: 4, color: COLORS.textMuted, fontSize: 11, textAlign: 'center' }}>Bảo hiểm xe</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Nút lưu thay đổi */}
+              <TouchableOpacity 
+                style={[styles.saveBtn, { marginTop: 12 }]} 
+                onPress={handleUpdateVehicle} 
+                disabled={vehicleSaving}
+              >
+                {vehicleSaving ? (
+                  <ActivityIndicator color={COLORS.background} />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.background} />
+                    <Text style={styles.saveBtnText}>Gửi Duyệt Lại Phương Tiện</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Driver Profile Modal (Full Screen) */}

@@ -141,6 +141,7 @@ public class VehicleService {
         vehicle.setApprovedBy(approver.getEmail());
         vehicle.setRejectedAt(null);
         vehicle.setRejectionReason(null);
+        vehicle.setRejectedBy(null);
 
         vehicle = vehicleRepository.save(vehicle);
         return mapToVehicleResponse(vehicle);
@@ -155,10 +156,12 @@ public class VehicleService {
             throw new AppException(ErrorCode.VEHICLE_ALREADY_APPROVED);
         }
 
+        User rejecter = userService.getCurrentUser();
         vehicle.setIsVerified(false);
         vehicle.setIsActive(false);
         vehicle.setRejectedAt(LocalDateTime.now());
         vehicle.setRejectionReason(reason);
+        vehicle.setRejectedBy(rejecter.getEmail());
         vehicle.setApprovedAt(null);
         vehicle.setApprovedBy(null);
 
@@ -181,7 +184,6 @@ public class VehicleService {
                 throw new AppException(ErrorCode.PLATE_NUMBER_ALREADY_USED);
             }
             vehicle.setPlateNumber(request.getPlateNumber());
-            vehicle.setIsVerified(false);
         }
 
         if (request.getVehicleBrand() != null) {
@@ -209,12 +211,11 @@ public class VehicleService {
         }
 
         if (request.getVehicleImage() != null) {
-            vehicle.setVehicleImage(fileService.upload(request.getVehicleImage(),"vehicles/images"));
+            vehicle.setVehicleImage(fileService.upload(request.getVehicleImage(), "vehicles/images"));
         }
 
         if (request.getRegistrationImage() != null) {
-            vehicle.setRegistrationImage("vehicles/documents");
-            vehicle.setIsVerified(false); // Requires re-verification
+            vehicle.setRegistrationImage(fileService.upload(request.getRegistrationImage(), "vehicles/documents"));
         }
 
         if (request.getRegistrationExpiryDate() != null) {
@@ -225,7 +226,7 @@ public class VehicleService {
         }
 
         if (request.getInsuranceImage() != null) {
-            vehicle.setInsuranceImage("vehicles/documents");
+            vehicle.setInsuranceImage(fileService.upload(request.getInsuranceImage(), "vehicles/documents"));
         }
 
         if (request.getInsuranceExpiryDate() != null) {
@@ -235,9 +236,18 @@ public class VehicleService {
             vehicle.setInsuranceExpiryDate(request.getInsuranceExpiryDate());
         }
 
+        // Đổi trạng thái phương tiện về CHỜ DUYỆT để admin phê duyệt lại
+        vehicle.setIsVerified(false);
+        vehicle.setIsActive(false);
+        vehicle.setRejectedAt(null);
+        vehicle.setRejectionReason(null);
+        vehicle.setRejectedBy(null);
+        vehicle.setApprovedAt(null);
+        vehicle.setApprovedBy(null);
+
         vehicle = vehicleRepository.save(vehicle);
 
-        log.info("Vehicle {} updated by driver {}", vehicle.getId(), driverProfile.getId());
+        log.info("Vehicle {} updated by driver {} and waiting for admin review", vehicle.getId(), driverProfile.getId());
 
         return mapToVehicleResponse(vehicle);
     }

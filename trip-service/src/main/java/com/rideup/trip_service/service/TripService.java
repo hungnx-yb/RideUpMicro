@@ -71,7 +71,11 @@ public class TripService {
                                 Function.identity()
                         ));
         DriverResponse driver = driverMap.get(userResponse.getId());
-        if (driver != null && driver.getSeatCapacity() != null && request.getSeatTotal() != null) {
+        if (driver == null || !Boolean.TRUE.equals(driver.getIsVehicleVerified()) || !Boolean.TRUE.equals(driver.getIsVehicleActive())) {
+            throw new AppException(ErrorCode.VEHICLE_NOT_VERIFIED);
+        }
+
+        if (driver.getSeatCapacity() != null && request.getSeatTotal() != null) {
             if (request.getSeatTotal() > driver.getSeatCapacity()) {
                 throw new AppException(ErrorCode.SEAT_EXCEEDS_CAPACITY);
             }

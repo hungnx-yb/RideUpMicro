@@ -240,6 +240,7 @@ export default function CreateTripScreen({ navigation }) {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [vehicle, setVehicle] = useState(null);
+  const [checkingVehicle, setCheckingVehicle] = useState(true);
 
   const resetForm = () => {
     const defaultSeat = vehicle?.seatCapacity ? String(Math.min(4, Number(vehicle.seatCapacity))) : '4';
@@ -255,6 +256,7 @@ export default function CreateTripScreen({ navigation }) {
   };
 
   const fetchVehicle = async () => {
+    setCheckingVehicle(true);
     try {
       const res = await apiService.getMyVehicle();
       if (res?.data?.result) {
@@ -270,9 +272,14 @@ export default function CreateTripScreen({ navigation }) {
             };
           });
         }
+      } else {
+        setVehicle(null);
       }
     } catch (e) {
       console.log('Error fetching vehicle:', e);
+      setVehicle(null);
+    } finally {
+      setCheckingVehicle(false);
     }
   };
 
@@ -374,6 +381,14 @@ export default function CreateTripScreen({ navigation }) {
   };
 
   const handleSubmit = async () => {
+    if (!vehicle || !vehicle.isVerified || !vehicle.isActive) {
+      Alert.alert(
+        'Chưa thể tạo chuyến',
+        'Phương tiện của bạn chưa được duyệt hoặc chưa kích hoạt hoạt động. Vui lòng kiểm tra lại trạng thái xe trong mục Phương tiện của tôi.'
+      );
+      return;
+    }
+
     const validPickups = form.pickups.filter(p => p.wardId);
     const validDropoffs = form.dropoffs.filter(d => d.wardId);
     if (!form.startProvinceId || !form.endProvinceId || validPickups.length === 0 || validDropoffs.length === 0) {
@@ -444,6 +459,8 @@ export default function CreateTripScreen({ navigation }) {
     } finally { setSubmitting(false); }
   };
 
+  const isVehicleReady = Boolean(vehicle && vehicle.isVerified && vehicle.isActive);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -456,8 +473,59 @@ export default function CreateTripScreen({ navigation }) {
         <Text style={styles.headerSub}>Thiết lập lộ trình để hành khách đặt chỗ</Text>
       </View>
 
-      {loading ? (
-        <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 50 }} />
+      {checkingVehicle || loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={{ marginTop: 12, color: COLORS.textMuted, fontSize: 14 }}>
+            Đang kiểm tra phương tiện...
+          </Text>
+        </View>
+      ) : !isVehicleReady ? (
+        <View style={styles.blockedContainer}>
+          <View style={styles.blockedCard}>
+            <View style={[
+              styles.blockedIconCircle,
+              vehicle?.rejectionReason 
+                ? { backgroundColor: 'rgba(239, 68, 68, 0.12)' }
+                : { backgroundColor: 'rgba(245, 158, 11, 0.12)' }
+            ]}>
+              <Ionicons 
+                name={vehicle?.rejectionReason ? 'alert-circle' : 'time-outline'} 
+                size={48} 
+                color={vehicle?.rejectionReason ? COLORS.error : COLORS.warning} 
+              />
+            </View>
+
+            <Text style={styles.blockedTitle}>
+              {!vehicle 
+                ? 'Chưa đăng ký phương tiện' 
+                : vehicle.rejectionReason 
+                ? 'Phương tiện bị từ chối' 
+                : !vehicle.isVerified 
+                ? 'Phương tiện đang chờ duyệt' 
+                : 'Phương tiện đang tạm khóa'}
+            </Text>
+
+            <Text style={styles.blockedDesc}>
+              {!vehicle 
+                ? 'Bạn cần đăng ký thông tin phương tiện trước khi có thể mở chuyến đón khách.'
+                : vehicle.rejectionReason 
+                ? `Lý do từ chối: "${vehicle.rejectionReason}". Vui lòng cập nhật lại hồ sơ xe để ban quản trị phê duyệt.`
+                : !vehicle.isVerified 
+                ? 'Hồ sơ phương tiện của bạn đang được ban quản trị xét duyệt. Bạn sẽ có thể tạo chuyến ngay khi xe được duyệt.'
+                : 'Phương tiện của bạn đang ở trạng thái tạm khóa hoạt động. Vui lòng kiểm tra lại mục Phương tiện.'}
+            </Text>
+
+            <TouchableOpacity 
+              style={styles.blockedBtn} 
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('Profile', { openVehicleModal: true })}
+            >
+              <Ionicons name="car-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.blockedBtnText}>Xem hồ sơ phương tiện</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingBottom: 80 + insets.bottom }]}>
 
@@ -689,7 +757,7 @@ export default function CreateTripScreen({ navigation }) {
       )}
 
       {/* === STICKY FOOTER === */}
-      {!loading && (
+      {!loading && !checkingVehicle && isVehicleReady && (
         <View style={styles.bottomFooter}>
           <View style={styles.footerLeft}>
             <Text style={styles.footerLabel}>Doanh thu ước tính</Text>
@@ -839,5 +907,14 @@ const styles = StyleSheet.create({
   successBtnText: { color: COLORS.surface, fontSize: 15, fontWeight: '600' },
 
   vehicleCapacityBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, gap: 4 },
-  vehicleCapacityText: { color: COLORS.primary, fontSize: 12, fontWeight: '700' }
+  vehicleCapacityText: { color: COLORS.primary, fontSize: 12, fontWeight: '700' },
+
+  // Blocked View Styles
+  blockedContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  blockedCard: { backgroundColor: COLORS.surface, borderRadius: 24, padding: 28, width: '100%', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 4 },
+  blockedIconCircle: { width: 90, height: 90, borderRadius: 45, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  blockedTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, textAlign: 'center', marginBottom: 12 },
+  blockedDesc: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24, paddingHorizontal: 8 },
+  blockedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, height: 48, borderRadius: 14, paddingHorizontal: 20, width: '100%', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
+  blockedBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' }
 });

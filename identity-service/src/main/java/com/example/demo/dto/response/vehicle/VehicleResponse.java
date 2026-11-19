@@ -33,6 +33,7 @@ public class VehicleResponse {
     String approvedBy;
     LocalDateTime rejectedAt;
     String rejectionReason;
+    String rejectedBy;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     
