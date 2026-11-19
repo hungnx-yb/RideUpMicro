@@ -6,6 +6,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -28,7 +29,22 @@ public class TripRequestInvitationResponse {
 
     String driverName;
     String driverAvatar;
+    String driverPhone;
     Double driverRating;
     String vehicleInfo;
+    String plateNumber;
+    String vehicleColor;
+    Integer totalRides;
     BigDecimal price;
+
+    LocalDateTime departureTime;
+    LocalDateTime estimatedArrivalTime;
+    String startProvinceId;
+    String endProvinceId;
+    String startAddressText;
+    String endAddressText;
+    Integer seatAvailable;
+    Integer seatTotal;
+    BigDecimal pricePerSeat;
+    List<TripStopResponse> stops;
 }

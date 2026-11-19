@@ -36,7 +36,7 @@ public class MessageService {
 	ModelMapper modelMapper;
 
 	public MessageResponse sendMessage(ChatSendMessageRequest request, Principal principal) {
-		String currentUserId = principal.getName();
+		String currentUserId = principal != null ? principal.getName() : SecurityUtils.getCurrentUserId();
 		if (request == null || request.getConversationId() == null || request.getConversationId().isBlank()) {
 			throw new AppException(ErrorCode.CHAT_MESSAGE_INVALID);
 		}

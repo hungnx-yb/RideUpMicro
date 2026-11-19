@@ -37,12 +37,14 @@ public class TripServiceConsumer {
         BookingCancelledEvent event = objectMapper.readValue(payload, BookingCancelledEvent.class);
         log.info("[BookingCancelledEvent] eventId={}, bookingId={}, tripId={}, correlationId={}",
                 event.getEventId(), event.getBookingId(), event.getTripId(), event.getCorrelationId());
-        tripService.releaseSeats(
-                SeatReleaseRequest.builder()
-                        .tripId(event.getTripId())
-                        .seatCount(event.getSeatCount())
-                        .build()
-        );
+        if (event.getSeatCount() != null && event.getSeatCount() > 0) {
+            tripService.releaseSeats(
+                    SeatReleaseRequest.builder()
+                            .tripId(event.getTripId())
+                            .seatCount(event.getSeatCount())
+                            .build()
+            );
+        }
         ack.acknowledge();
     }
 

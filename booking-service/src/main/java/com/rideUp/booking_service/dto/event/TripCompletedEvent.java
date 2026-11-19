@@ -8,16 +8,18 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDateTime;
+
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class BookingApprovedEvent {
+public class TripCompletedEvent {
     String eventId;
     String correlationId;
-    String bookingId;
-    String paymentId;
-    String transactionId;
+    String tripId;
+    String driverId;
+    LocalDateTime completedAt;
 }

@@ -68,17 +68,17 @@ public class ConversationController {
                 .build();
     }
 
-        @GetMapping("/{conversationId}/messages")
-        public ApiResponse<List<MessageResponse>> listMessages(
-            @PathVariable String conversationId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-        ) {
+    @GetMapping("/{conversationId}/messages")
+    public ApiResponse<List<MessageResponse>> listMessages(
+        @PathVariable String conversationId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
+    ) {
         log.info("API listMessages is called for conversationId: {}, page: {}, size: {}", conversationId, page, size);
         Page<MessageResponse> result = messageService.listMessages(conversationId, page, size);
         return ApiResponse.<List<MessageResponse>>builder()
                 .result(result.getContent())
                 .count(result.getTotalElements())
                 .build();
-        }
+    }
 }

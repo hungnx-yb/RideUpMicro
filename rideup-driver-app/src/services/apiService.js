@@ -11,8 +11,15 @@ const apiClient = axios.create({
 // 2. Tự động đính kèm Token vào Header trước khi gửi API
 apiClient.interceptors.request.use(
   async (config) => {
-    // Không đính kèm token nếu đang gọi API đăng nhập hoặc đăng ký
-    if (config.url && (config.url.includes('/auth/authentication') || config.url.includes('/auth/register'))) {
+    // Không đính kèm token nếu đang gọi API đăng nhập, đăng ký hoặc dữ liệu địa lý công khai
+    if (
+      config.url &&
+      (config.url.includes('/auth/authentication') ||
+        config.url.includes('/auth/register') ||
+        config.url.includes('/api/location/province') ||
+        config.url.includes('/api/location/ward') ||
+        config.url.includes('/config/max-distance'))
+    ) {
       return config;
     }
 
@@ -123,6 +130,18 @@ export const apiService = {
   completeBooking: async (bookingId) => {
     return await apiClient.post(`/api/booking/bookings/${bookingId}/complete`);
   },
+  getPendingModificationsByTrip: async (tripId) => {
+    return await apiClient.get(`/api/booking/bookings/trip/${tripId}/pending-modifications`);
+  },
+  approveBookingModification: async (modificationId) => {
+    return await apiClient.post(`/api/booking/bookings/modifications/${modificationId}/approve`);
+  },
+  rejectBookingModification: async (modificationId, reason) => {
+    return await apiClient.post(`/api/booking/bookings/modifications/${modificationId}/reject`, { reason });
+  },
+  getBookingModifications: async (bookingId) => {
+    return await apiClient.get(`/api/booking/bookings/${bookingId}/modifications`);
+  },
 
   // Payment Service
   getPaymentUrl: async (bookingId) => {
@@ -133,6 +152,22 @@ export const apiService = {
   },
   confirmDeposit: async (transactionId) => {
     return await apiClient.post(`/api/payment/payments/wallet/confirm?transactionId=${transactionId}`);
+  },
+  // Stripe Connect & Reputation (Giai đoạn 2 & 3)
+  getDriverReputation: async () => {
+    return await apiClient.get('/api/identity/drivers/me/reputation');
+  },
+  getStripeAccountStatus: async () => {
+    return await apiClient.get('/api/payment/payments/stripe/driver/account-status');
+  },
+  createStripeOnboardLink: async () => {
+    return await apiClient.post('/api/payment/payments/stripe/driver/onboard-link');
+  },
+  createStripeDashboardLink: async () => {
+    return await apiClient.post('/api/payment/payments/stripe/driver/dashboard-link');
+  },
+  getDriverPayouts: async () => {
+    return await apiClient.get('/api/payment/payments/stripe/driver/payouts');
   },
 
   // Trip Service
@@ -177,6 +212,9 @@ export const apiService = {
   },
   getWardById: async (wardId) => {
     return await apiClient.get(`/api/location/ward/${wardId}`);
+  },
+  getMaxDistanceConfig: async (provinceId) => {
+    return await apiClient.get('/api/location/config/max-distance', { params: provinceId ? { provinceId } : undefined });
   },
 
   // Notification Service

@@ -49,7 +49,11 @@ public enum ErrorCode {
     CALL_ALREADY_ACTIVE(8103, "User already has an active call", HttpStatus.CONFLICT),
     CALL_NOT_FOUND(8104, "Call not found", HttpStatus.NOT_FOUND),
     CALL_INVALID_STATE(8105, "Call is in invalid state", HttpStatus.BAD_REQUEST),
-    CALL_TARGET_NOT_FOUND(8106, "Call target not found", HttpStatus.BAD_REQUEST);
+    CALL_TARGET_NOT_FOUND(8106, "Call target not found", HttpStatus.BAD_REQUEST),
+
+    // Review related errors
+    REVIEW_ALREADY_EXISTS(9001, "Bạn đã đánh giá chuyến đi này rồi", HttpStatus.BAD_REQUEST),
+    REVIEW_NOT_FOUND(9002, "Không tìm thấy đánh giá cho chuyến đi này", HttpStatus.NOT_FOUND);
 
     private Integer code;
     private String message;

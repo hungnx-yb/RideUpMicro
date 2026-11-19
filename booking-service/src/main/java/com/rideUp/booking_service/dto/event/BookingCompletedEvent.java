@@ -18,5 +18,6 @@ public class BookingCompletedEvent {
     String driverId; // You might need this for the review UI
     String tripId;
     java.math.BigDecimal totalAmount;
+    String paymentMethod;
     LocalDateTime completedAt;
 }

@@ -28,6 +28,15 @@ public class ReviewController {
                 .build();
     }
 
+    @GetMapping("/booking/{bookingId}")
+    public ApiResponse<ReviewResponse> getReviewByBookingId(@PathVariable String bookingId) {
+        ReviewResponse review = reviewService.getReviewByBookingId(bookingId);
+        return ApiResponse.<ReviewResponse>builder()
+                .result(review)
+                .message(review != null ? "Review retrieved successfully" : "No review found for this booking")
+                .build();
+    }
+
     @GetMapping("/driver/{driverId}")
     public ApiResponse<List<ReviewResponse>> getDriverReviews(@PathVariable String driverId) {
         List<ReviewResponse> reviews = reviewService.getDriverReviews(driverId);

@@ -45,6 +45,9 @@ public class BookingResponse {
     String dropoffWardId;
     String dropoffAddressText;
 
+    String passengerName;
+    String passengerPhone;
+
     String userAvatar;
     String userName;
 

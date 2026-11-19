@@ -18,11 +18,13 @@ public class TripRequestCreate {
     @NotBlank(message = "Start province ID is required")
     String startProvinceId;
 
+    @NotBlank(message = "Start ward ID is required")
     String startWardId;
 
     @NotBlank(message = "End province ID is required")
     String endProvinceId;
 
+    @NotBlank(message = "End ward ID is required")
     String endWardId;
 
     @NotBlank(message = "Start address is required")

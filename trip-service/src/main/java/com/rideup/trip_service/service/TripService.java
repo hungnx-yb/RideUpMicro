@@ -81,6 +81,33 @@ public class TripService {
             }
         }
 
+        if (request.getStops() != null && !request.getStops().isEmpty()) {
+            long distinctPickups = request.getStops().stream()
+                    .filter(s -> s.getStopType() == com.rideup.trip_service.enums.StopType.PICKUP)
+                    .map(com.rideup.trip_service.dto.request.TripStopRequest::getWardId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .count();
+            long totalPickups = request.getStops().stream()
+                    .filter(s -> s.getStopType() == com.rideup.trip_service.enums.StopType.PICKUP)
+                    .count();
+            if (distinctPickups < totalPickups) {
+                throw new AppException(ErrorCode.INVALID_KEY);
+            }
+            long distinctDropoffs = request.getStops().stream()
+                    .filter(s -> s.getStopType() == com.rideup.trip_service.enums.StopType.DROPOFF)
+                    .map(com.rideup.trip_service.dto.request.TripStopRequest::getWardId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .count();
+            long totalDropoffs = request.getStops().stream()
+                    .filter(s -> s.getStopType() == com.rideup.trip_service.enums.StopType.DROPOFF)
+                    .count();
+            if (distinctDropoffs < totalDropoffs) {
+                throw new AppException(ErrorCode.INVALID_KEY);
+            }
+        }
+
         Trip trip = modelMapper.map(request, Trip.class);
         trip.setStops(null);
         trip.setDriverId(userResponse.getId());
@@ -140,12 +167,46 @@ public class TripService {
         }
 
         trip.setStatus(request.getStatus());
-        return modelMapper.map(tripRepository.save(trip), TripResponse.class);
+        Trip saved = tripRepository.save(trip);
+
+        if (request.getStatus() == TripStatus.COMPLETED) {
+            com.rideup.trip_service.dto.event.TripCompletedEvent completedEvent = com.rideup.trip_service.dto.event.TripCompletedEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .correlationId(UUID.randomUUID().toString())
+                    .tripId(saved.getId())
+                    .driverId(saved.getDriverId())
+                    .completedAt(LocalDateTime.now())
+                    .build();
+            tripServicePublisher.publishTripCompleted(completedEvent);
+        }
+
+        return modelMapper.map(saved, TripResponse.class);
     }
 
     public TripResponse getDetail(String id) {
         Trip trip = tripRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
-        return modelMapper.map(trip, TripResponse.class);
+        TripResponse response = modelMapper.map(trip, TripResponse.class);
+
+        if (trip.getDriverId() != null) {
+            try {
+                var driverResult = identityServiceClient.getDriverDetail(List.of(trip.getDriverId()));
+                if (driverResult != null && driverResult.getResult() != null && !driverResult.getResult().isEmpty()) {
+                    DriverResponse driver = driverResult.getResult().get(0);
+                    response.setDriverName(driver.getFullName());
+                    response.setDriverPhone(driver.getPhoneNumber());
+                    response.setDriverEmail(driver.getEmail());
+                    response.setAvatarUrl(driver.getAvatarUrl());
+                    response.setDriverRating(driver.getDriverRating());
+                    response.setVehicleImage(driver.getVehicleImage());
+                    response.setVehicleModel(driver.getVehicleModel());
+                    response.setVehicleBrand(driver.getVehicleBrand());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enrich driver detail for trip {}: {}", id, e.getMessage());
+            }
+        }
+
+        return response;
     }
 
 
@@ -273,5 +334,42 @@ public class TripService {
     public Page<TripResponse> searchDriveTrip(SearchTripDriveRequest request) {
         Page<Trip> page = tripRepository.searchDriveTrip(request);
         return page.map(trip -> modelMapper.map(trip, TripResponse.class));
+    }
+
+    public TripPaymentOptionsResponse getPaymentOptions(String tripId) {
+        Trip trip = tripRepository.findById(tripId).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
+
+        if (trip.getDriverId() == null || trip.getDriverId().isBlank()) {
+            return TripPaymentOptionsResponse.builder()
+                    .tripId(tripId)
+                    .driverId(null)
+                    .stripeEnabled(false)
+                    .cashEnabled(true)
+                    .message("Chuyến đi chỉ hỗ trợ thanh toán tiền mặt")
+                    .build();
+        }
+
+        boolean stripeEnabled = false;
+        try {
+            var profileRes = identityServiceClient.getDriverFinancialProfile(trip.getDriverId());
+            if (profileRes != null && profileRes.getResult() != null) {
+                var profile = profileRes.getResult();
+                boolean isActive = "ACTIVE".equalsIgnoreCase(profile.getStripeAccountStatus())
+                        || (profile.getStripeAccountStatus() != null && profile.getStripeAccountStatus().contains("ACTIVE"));
+                stripeEnabled = isActive && Boolean.TRUE.equals(profile.getStripePayoutsEnabled());
+            }
+        } catch (Exception e) {
+            log.warn("[TripService] Failed to check Stripe profile for driver {}: {}", trip.getDriverId(), e.getMessage());
+        }
+
+        return TripPaymentOptionsResponse.builder()
+                .tripId(tripId)
+                .driverId(trip.getDriverId())
+                .stripeEnabled(stripeEnabled)
+                .cashEnabled(true)
+                .message(stripeEnabled
+                        ? "Chuyến đi hỗ trợ thanh toán thẻ Stripe và tiền mặt"
+                        : "Tài xế chưa kích hoạt cổng Stripe, chuyến đi chỉ nhận tiền mặt")
+                .build();
     }
 }

@@ -20,5 +20,18 @@ public class SearchTripDriveRequest {
     String endProvinceId;
     String pickupAddress;
     String dropoffAddress;
+    String status;
+    Integer page;
+    Integer size;
     Pageable pageable;
+
+    public Pageable getPageable() {
+        if (this.pageable != null) {
+            return this.pageable;
+        }
+        if (this.page != null && this.size != null) {
+            return org.springframework.data.domain.PageRequest.of(this.page, this.size);
+        }
+        return null;
+    }
 }

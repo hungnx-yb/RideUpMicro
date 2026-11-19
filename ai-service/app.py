@@ -7,6 +7,14 @@ from typing import List, Optional
 
 import numpy as np
 import torch
+
+# Đảm bảo tương thích PyTorch 2.6+ trên Windows với weights_only=False cho mô hình đã lưu
+_orig_torch_load = torch.load
+def _safe_torch_load(*args, **kwargs):
+    kwargs.setdefault("weights_only", False)
+    return _orig_torch_load(*args, **kwargs)
+torch.load = _safe_torch_load
+
 from PIL import Image
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status

@@ -18,9 +18,16 @@ import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import com.example.demo.dto.response.driver.DriverCommissionRateResponse;
+import com.example.demo.dto.response.driver.DriverReputationResponse;
+import com.example.demo.service.CommissionService;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.demo.dto.request.driver.UpdateDriverStripeStatusRequest;
+import com.example.demo.dto.response.driver.DriverFinancialProfileResponse;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.math.BigDecimal;
 
 import java.util.List;
 
@@ -30,6 +37,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class DriverController {
     DriverService driverService;
+    CommissionService commissionService;
 
     @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<DriverResponse> registerDriver( @ModelAttribute DriverRegisterRequest request) {
@@ -179,6 +187,78 @@ public class DriverController {
         return ApiResponse.<List<DriverResponse>>builder()
                 .result(driverService.getDriversByOperatingProvinces(startProvinceId, endProvinceId))
                 .message("Drivers retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/{driverId}/commission-rate")
+    public ApiResponse<DriverCommissionRateResponse> getCommissionRate(@PathVariable String driverId) {
+        return ApiResponse.<DriverCommissionRateResponse>builder()
+                .result(commissionService.getDriverCommissionDetails(driverId))
+                .message("Driver commission rate retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/internal/{driverId}/commission-rate")
+    public ApiResponse<DriverCommissionRateResponse> getCommissionRateInternal(@PathVariable String driverId) {
+        return ApiResponse.<DriverCommissionRateResponse>builder()
+                .result(commissionService.getDriverCommissionDetails(driverId))
+                .message("Driver commission rate retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/me/reputation")
+    public ApiResponse<DriverReputationResponse> getMyReputation() {
+        String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+        return ApiResponse.<DriverReputationResponse>builder()
+                .result(commissionService.getDriverReputation(userId))
+                .message("Driver reputation retrieved successfully")
+                .build();
+    }
+
+    @GetMapping("/internal/{driverId}/financial-profile")
+    public ApiResponse<DriverFinancialProfileResponse> getFinancialProfileInternal(@PathVariable String driverId) {
+        return ApiResponse.<DriverFinancialProfileResponse>builder()
+                .result(driverService.getDriverFinancialProfile(driverId))
+                .message("Driver financial profile retrieved successfully")
+                .build();
+    }
+
+    @PutMapping("/internal/{driverId}/stripe-status")
+    public ApiResponse<Void> updateDriverStripeStatusInternal(
+            @PathVariable String driverId,
+            @Valid @RequestBody UpdateDriverStripeStatusRequest request) {
+        driverService.updateDriverStripeStatus(driverId, request);
+        return ApiResponse.<Void>builder()
+                .message("Driver Stripe status updated successfully")
+                .build();
+    }
+
+    @PutMapping("/internal/stripe-account/{stripeAccountId}/status")
+    public ApiResponse<Void> updateDriverStripeStatusByAccountIdInternal(
+            @PathVariable String stripeAccountId,
+            @Valid @RequestBody UpdateDriverStripeStatusRequest request) {
+        driverService.updateDriverStripeStatusByAccountId(stripeAccountId, request);
+        return ApiResponse.<Void>builder()
+                .message("Driver Stripe status updated successfully by stripeAccountId")
+                .build();
+    }
+
+    @PostMapping("/internal/{driverId}/deduct-debt")
+    public ApiResponse<Void> deductDebtInternal(
+            @PathVariable String driverId,
+            @RequestParam BigDecimal amount) {
+        driverService.deductDriverDebt(driverId, amount);
+        return ApiResponse.<Void>builder()
+                .message("Driver debt deducted successfully")
+                .build();
+    }
+
+    @GetMapping("/me/stripe-status")
+    public ApiResponse<DriverFinancialProfileResponse> getMyStripeStatus() {
+        String userId = SecurityContextHolder.getContext().getAuthentication().getName();
+        return ApiResponse.<DriverFinancialProfileResponse>builder()
+                .result(driverService.getDriverFinancialProfile(userId))
+                .message("Driver Stripe financial profile retrieved successfully")
                 .build();
     }
 }

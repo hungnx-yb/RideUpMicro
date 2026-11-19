@@ -62,6 +62,9 @@ public class Booking {
     Double dropoffLng;
     String dropoffAddressText;
 
+    String passengerName;
+    String passengerPhone;
+
     String note;
 
     LocalDateTime cancelledAt;

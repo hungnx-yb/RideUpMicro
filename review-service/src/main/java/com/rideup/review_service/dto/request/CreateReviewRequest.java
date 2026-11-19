@@ -11,6 +11,8 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateReviewRequest {
+    private String bookingId;
+
     @NotBlank(message = "Trip ID cannot be empty")
     private String tripId;
     

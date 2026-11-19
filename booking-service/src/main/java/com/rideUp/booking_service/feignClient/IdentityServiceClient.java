@@ -21,4 +21,7 @@ public interface IdentityServiceClient {
 
     @org.springframework.web.bind.annotation.GetMapping("/drivers/me/wallet")
     ApiResponse<java.math.BigDecimal> getMyWallet();
+
+    @org.springframework.web.bind.annotation.GetMapping("/drivers/internal/{driverId}/financial-profile")
+    ApiResponse<com.rideUp.booking_service.dto.response.DriverFinancialProfileResponse> getDriverFinancialProfile(@org.springframework.web.bind.annotation.PathVariable("driverId") String driverId);
 }

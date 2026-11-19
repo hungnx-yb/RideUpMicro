@@ -40,6 +40,9 @@ public class DriverProfile {
     String gplxClasses;
     Double driverRating;
     Integer totalDriverRides;
+    @Column(name = "reputation_score")
+    @Builder.Default
+    Integer reputationScore = 80;
     @Enumerated(EnumType.STRING)
     DriverStatus status;
     LocalDateTime approvedAt;
@@ -53,6 +56,18 @@ public class DriverProfile {
     @Column(name = "system_debt", precision = 15, scale = 2)
     @Builder.Default
     java.math.BigDecimal systemDebt = java.math.BigDecimal.ZERO;
+
+    @Column(name = "stripe_account_id", unique = true)
+    String stripeAccountId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "stripe_account_status")
+    @Builder.Default
+    com.example.demo.enums.StripeAccountStatus stripeAccountStatus = com.example.demo.enums.StripeAccountStatus.NOT_CONNECTED;
+
+    @Column(name = "stripe_payouts_enabled")
+    @Builder.Default
+    Boolean stripePayoutsEnabled = false;
 
     @UpdateTimestamp
     @Column(name = "updated_at")
@@ -101,5 +116,17 @@ public class DriverProfile {
 
     public void setGplxIssuePlace(String gplxIssuePlace) {
         this.gplxIssuePlace = gplxIssuePlace;
+    }
+
+    public Integer getReputationScore() {
+        return reputationScore != null ? reputationScore : 80;
+    }
+
+    public com.example.demo.enums.StripeAccountStatus getStripeAccountStatus() {
+        return stripeAccountStatus != null ? stripeAccountStatus : com.example.demo.enums.StripeAccountStatus.NOT_CONNECTED;
+    }
+
+    public Boolean getStripePayoutsEnabled() {
+        return stripePayoutsEnabled != null ? stripePayoutsEnabled : false;
     }
 }

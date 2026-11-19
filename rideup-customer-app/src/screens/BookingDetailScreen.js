@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, ScrollView, Dimensions, ActivityIndicator,
+  Modal, TextInput, Alert, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
+import LocationMapPicker from '../components/LocationMapPicker';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -21,17 +24,25 @@ const COLORS = {
 
 // ===== STATUS CONFIG =====
 const STATUS_MAP = {
-  PENDING_PAYMENT:            { label: 'Chờ thanh toán',              color: COLORS.orange,  bg: COLORS.orangeBg, icon: 'time-outline' },
-  WAITING_DRIVER_APPROVAL:    { label: 'Đang chờ tài xế duyệt',      color: COLORS.yellow,  bg: COLORS.yellowBg, icon: 'hourglass-outline' },
-  CONFIRMED:                  { label: 'Đã xác nhận',                 color: COLORS.green,   bg: COLORS.greenBg,  icon: 'shield-checkmark-outline' },
-  COMPLETED:                  { label: 'Hoàn thành',                  color: COLORS.green,   bg: COLORS.greenBg,  icon: 'checkmark-done-outline' },
-  REJECTED_BY_DRIVER:         { label: 'Bị từ chối',                 color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
-  EXPIRED:                    { label: 'Hết hạn',                     color: COLORS.red,     bg: COLORS.redBg,    icon: 'time-outline' },
-  CANCELLED_USER:             { label: 'Đã huỷ',                      color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
-  CANCELLED_DRIVER:           { label: 'Tài xế huỷ chuyến',           color: COLORS.red,     bg: COLORS.redBg,    icon: 'close-circle-outline' },
-  CANCELLED_PAYMENT_FAILED:   { label: 'Lỗi thanh toán',              color: COLORS.red,     bg: COLORS.redBg,    icon: 'alert-circle-outline' },
+  PENDING_PAYMENT: { label: 'Chờ thanh toán', color: COLORS.orange, bg: COLORS.orangeBg, icon: 'time-outline' },
+  WAITING_DRIVER_APPROVAL: { label: 'Đang chờ tài xế duyệt', color: COLORS.yellow, bg: COLORS.yellowBg, icon: 'hourglass-outline' },
+  CONFIRMED: { label: 'Đã xác nhận', color: COLORS.green, bg: COLORS.greenBg, icon: 'shield-checkmark-outline' },
+  COMPLETED: { label: 'Hoàn thành', color: COLORS.green, bg: COLORS.greenBg, icon: 'checkmark-done-outline' },
+  REJECTED_BY_DRIVER: { label: 'Bị từ chối', color: COLORS.red, bg: COLORS.redBg, icon: 'close-circle-outline' },
+  EXPIRED: { label: 'Hết hạn', color: COLORS.red, bg: COLORS.redBg, icon: 'time-outline' },
+  CANCELLED_USER: { label: 'Đã huỷ', color: COLORS.red, bg: COLORS.redBg, icon: 'close-circle-outline' },
+  CANCELLED_DRIVER: { label: 'Tài xế huỷ chuyến', color: COLORS.red, bg: COLORS.redBg, icon: 'close-circle-outline' },
+  CANCELLED_PAYMENT_FAILED: { label: 'Lỗi thanh toán', color: COLORS.red, bg: COLORS.redBg, icon: 'alert-circle-outline' },
 };
 const getStatus = (s) => STATUS_MAP[s] || { label: s || 'Không rõ', color: COLORS.textMuted, bg: '#f1f5f9', icon: 'ellipse-outline' };
+
+const MOD_STATUS_MAP = {
+  PENDING_DRIVER: { label: 'Chờ tài xế duyệt', color: '#f59e0b', bg: '#FEF3C7', icon: 'time-outline' },
+  APPROVED: { label: 'Tài xế đã duyệt', color: '#10b981', bg: '#ECFDF5', icon: 'checkmark-circle-outline' },
+  REJECTED: { label: 'Tài xế từ chối', color: '#ef4444', bg: '#FEF2F2', icon: 'close-circle-outline' },
+  EXPIRED: { label: 'Hết hạn duyệt', color: '#64748b', bg: '#F1F5F9', icon: 'hourglass-outline' },
+};
+const getModStatus = (s) => MOD_STATUS_MAP[s] || { label: s || 'Chờ duyệt', color: '#64748b', bg: '#F1F5F9', icon: 'ellipse-outline' };
 
 // ===== HELPERS =====
 const money = (v) => `${Number(v || 0).toLocaleString('vi-VN')}đ`;
@@ -45,24 +56,139 @@ const fTime = (iso) => {
   return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 };
 
+const removeDiacritics = (str) => {
+  if (!str) return '';
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+};
+
+/**
+ * Phân tách địa chỉ chuỗi thành { detail, ward, province }
+ * Đảm bảo ô 'detail' chỉ chứa số nhà, ngõ, tên đường (không chứa phường hay tỉnh)
+ */
+const parseAddressComponents = (fullText, wardName = '', provinceName = '') => {
+  if (!fullText) {
+    return { detail: '', ward: wardName || '', province: provinceName || '' };
+  }
+
+  const parts = fullText.split(',').map(p => p.trim()).filter(Boolean);
+  let detail = fullText;
+  let parsedWard = wardName || '';
+  let parsedProvince = provinceName || '';
+
+  if (parts.length >= 3) {
+    parsedProvince = provinceName || parts[parts.length - 1];
+    parsedWard = wardName || parts[parts.length - 2];
+    detail = parts.slice(0, -2).join(', ');
+  } else if (parts.length === 2) {
+    parsedProvince = provinceName || parts[1];
+    detail = parts[0];
+  }
+
+  // Tinh chỉnh nếu detail vẫn còn dính phần phường hoặc tỉnh
+  if (detail) {
+    const detailParts = detail.split(',').map(p => p.trim()).filter(Boolean);
+    const clean = [];
+    const normWard = removeDiacritics(parsedWard);
+    const normProv = removeDiacritics(parsedProvince);
+
+    for (const p of detailParts) {
+      const normP = removeDiacritics(p);
+      if (normWard && (normP === normWard || normP.includes(normWard))) continue;
+      if (normProv && (normP === normProv || normP.includes(normProv))) continue;
+      clean.push(p);
+    }
+    if (clean.length > 0) {
+      detail = clean.join(', ');
+    }
+  }
+
+  return {
+    detail: detail.trim(),
+    ward: parsedWard.trim(),
+    province: parsedProvince.trim(),
+  };
+};
+
+/**
+ * Ghép lại số nhà/đường với phường và tỉnh thành
+ */
+const buildFullAddress = (detail, ward, province) => {
+  const parts = [];
+  const cleanDetail = (detail || '').trim();
+  if (cleanDetail) parts.push(cleanDetail);
+
+  const normDetail = removeDiacritics(cleanDetail);
+  if (ward && (!cleanDetail || !normDetail.includes(removeDiacritics(ward)))) {
+    parts.push(ward.trim());
+  }
+  if (province && (!cleanDetail || !normDetail.includes(removeDiacritics(province)))) {
+    parts.push(province.trim());
+  }
+  return parts.join(', ');
+};
+
 // ──────────────────────────────── COMPONENT ────────────────────────────────
 const BookingDetailScreen = ({ route, navigation }) => {
   const { booking: initialBooking } = route.params || {};
   const [booking, setBooking] = useState(initialBooking || {});
   const [trip, setTrip] = useState(initialBooking?.trip || null);
   const [loadingTrip, setLoadingTrip] = useState(false);
+  const [existingReview, setExistingReview] = useState(null);
+  const [modifications, setModifications] = useState([]);
+  const [loadingMods, setLoadingMods] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [submittingMod, setSubmittingMod] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('Thay đổi kế hoạch cá nhân');
+  const [customCancelReason, setCustomCancelReason] = useState('');
+  const [submittingCancel, setSubmittingCancel] = useState(false);
+  const [showPickupMap, setShowPickupMap] = useState(false);
+  const [showDropoffMap, setShowDropoffMap] = useState(false);
+  const [editForm, setEditForm] = useState({
+    pickupDetailAddress: '',
+    pickupLat: null,
+    pickupLng: null,
+    pickupWardId: '',
+    dropoffDetailAddress: '',
+    dropoffLat: null,
+    dropoffLng: null,
+    dropoffWardId: '',
+    passengerName: '',
+    passengerPhone: '',
+    note: '',
+  });
+
+  const fetchModifications = useCallback(async (bookingId) => {
+    if (!bookingId) return;
+    setLoadingMods(true);
+    try {
+      const res = await apiService.getBookingModifications(bookingId);
+      if (res?.data?.result) {
+        setModifications(res.data.result);
+      }
+    } catch (err) {
+      console.log('Fetch modifications error:', err);
+    } finally {
+      setLoadingMods(false);
+    }
+  }, []);
+
+  const fetchBooking = useCallback(async () => {
+    if (!booking?.id) return;
+    try {
+      const res = await apiService.getBookingDetail(booking.id);
+      if (res?.data?.result) {
+        setBooking(prev => ({ ...prev, ...res.data.result }));
+      }
+    } catch (err) {
+      console.log('Fetch booking detail error in BookingDetail:', err);
+    }
+    fetchModifications(booking.id);
+  }, [booking?.id, fetchModifications]);
 
   useEffect(() => {
-    if (booking?.id) {
-      apiService.getBookingDetail(booking.id)
-        .then(res => {
-          if (res?.data?.result) {
-            setBooking(prev => ({ ...prev, ...res.data.result }));
-          }
-        })
-        .catch(err => console.log('Fetch booking detail error in BookingDetail:', err));
-    }
-  }, [booking?.id]);
+    fetchBooking();
+  }, [fetchBooking]);
 
   useEffect(() => {
     if (booking?.tripId) {
@@ -78,6 +204,29 @@ const BookingDetailScreen = ({ route, navigation }) => {
     }
   }, [booking?.tripId]);
 
+  useEffect(() => {
+    if (booking?.id) {
+      AsyncStorage.getItem(`@review_${booking.id}`)
+        .then(cached => {
+          if (cached) {
+            setExistingReview(JSON.parse(cached));
+          }
+        })
+        .catch(() => { });
+
+      if (booking?.status === 'COMPLETED') {
+        apiService.getReviewByBookingId(booking.id)
+          .then(res => {
+            if (res?.data?.result) {
+              setExistingReview(res.data.result);
+              AsyncStorage.setItem(`@review_${booking.id}`, JSON.stringify(res.data.result)).catch(() => { });
+            }
+          })
+          .catch(err => console.log('Check existing review error:', err));
+      }
+    }
+  }, [booking?.id, booking?.status]);
+
   if (!booking || !booking.id) {
     return (
       <SafeAreaView style={s.safe}>
@@ -89,16 +238,185 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const status = getStatus(booking.status);
   const shortCode = (booking.bookingCode || booking.id || '').toUpperCase();
 
-  // Location breakdown
+  // Location breakdown & phân tách địa chỉ chi tiết sạch
   const pickupWardName = trip?.stops?.find(s => String(s.wardId) === String(booking.pickupWardId))?.addressText || '';
   const dropoffWardName = trip?.stops?.find(s => String(s.wardId) === String(booking.dropoffWardId))?.addressText || '';
   const startProvinceName = trip?.startAddressText || '';
   const endProvinceName = trip?.endAddressText || '';
 
+  const rawPickupParsed = parseAddressComponents(booking.pickupAddressText, pickupWardName, startProvinceName);
+  const rawDropoffParsed = parseAddressComponents(booking.dropoffAddressText, dropoffWardName, endProvinceName);
+
+  const pickupDisplayProvince = startProvinceName || rawPickupParsed.province;
+  const pickupDisplayWard = pickupWardName || rawPickupParsed.ward;
+  const pickupDisplayDetail = rawPickupParsed.detail;
+
+  const dropoffDisplayProvince = endProvinceName || rawDropoffParsed.province;
+  const dropoffDisplayWard = dropoffWardName || rawDropoffParsed.ward;
+  const dropoffDisplayDetail = rawDropoffParsed.detail;
+
   // ── Context‑aware actions ──
-  const showChat     = ['CONFIRMED', 'RESERVED', 'PENDING_PAYMENT', 'WAITING_DRIVER_APPROVAL'].includes(booking.status);
-  const showRate     = booking.status === 'COMPLETED';
-  const showRebook   = ['COMPLETED', 'CANCELLED_USER', 'CANCELLED_DRIVER', 'REJECTED_BY_DRIVER', 'EXPIRED', 'CANCELLED_PAYMENT_FAILED'].includes(booking.status);
+  const showChat = ['CONFIRMED', 'RESERVED', 'PENDING_PAYMENT', 'WAITING_DRIVER_APPROVAL'].includes(booking.status);
+  const showRate = booking.status === 'COMPLETED';
+  const showRebook = ['COMPLETED', 'CANCELLED_USER', 'CANCELLED_DRIVER', 'REJECTED_BY_DRIVER', 'EXPIRED', 'CANCELLED_PAYMENT_FAILED'].includes(booking.status);
+
+  // ── Modification Calculations ──
+  const pendingMod = modifications.find(m => m.status === 'PENDING_DRIVER');
+  const pastMods = modifications.filter(m => m.status !== 'PENDING_DRIVER');
+  const approvedCount = modifications.filter(m => m.status === 'APPROVED').length;
+  const canModify = ['CONFIRMED', 'WAITING_DRIVER_APPROVAL'].includes(booking.status) && !pendingMod && approvedCount < 2;
+
+  // ── Cancellation Calculations (REQ: Cho phép khách huỷ trước X giờ) ──
+  const canCancel = ['CONFIRMED', 'WAITING_DRIVER_APPROVAL', 'PENDING_PAYMENT'].includes(booking.status);
+  const tripDepTime = booking.trip?.departureTime || trip?.departureTime;
+  const hoursUntilDep = tripDepTime
+    ? (new Date(tripDepTime).getTime() - new Date().getTime()) / (1000 * 60 * 60)
+    : 999;
+  const isPastCutoff = tripDepTime && hoursUntilDep < 2; // Cấu hình giới hạn trước 2 tiếng
+
+  // ── Driver Details Resolution ──
+  const resolvedDriverName = trip?.driverName || booking.trip?.driverName || booking.driverName || 'Tài xế';
+  const resolvedDriverPhone = trip?.driverPhone || booking.trip?.driverPhone || booking.driverPhone || '';
+  const resolvedDriverAvatar = trip?.avatarUrl || booking.trip?.driverAvatar || null;
+  const resolvedDriverRating = trip?.driverRating || booking.trip?.driverRating || 0;
+  const resolvedVehicleInfo = [trip?.vehicleBrand, trip?.vehicleModel].filter(Boolean).join(' ')
+    || booking.trip?.vehicleType
+    || (booking.trip?.vehiclePlate ? `Xe ${booking.trip.vehiclePlate}` : '')
+    || '';
+  const hasDriverInfo = !!(trip?.driverName || booking.trip?.driverName || booking.driverName || trip?.driverId || booking.driverId);
+
+  const handleOpenCancelModal = () => {
+    if (booking.status === 'CONFIRMED' && isPastCutoff) {
+      Alert.alert(
+        'Không thể hủy vé',
+        'Theo chính sách của RideUp, chỉ được phép hủy vé trước giờ khởi hành tối thiểu 2 tiếng. Hiện chuyến xe đã quá cận giờ chạy.'
+      );
+      return;
+    }
+    setCancelReason('Thay đổi kế hoạch cá nhân');
+    setCustomCancelReason('');
+    setIsCancelModalOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    const finalReason = cancelReason === 'Khác' ? customCancelReason.trim() : cancelReason;
+    if (cancelReason === 'Khác' && !finalReason) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập lý do hủy chuyến.');
+      return;
+    }
+
+    setSubmittingCancel(true);
+    try {
+      await apiService.cancelBooking(booking.id, finalReason);
+      setIsCancelModalOpen(false);
+      Alert.alert(
+        'Đã hủy vé thành công',
+        'Vé của bạn đã được hủy. Tiền cọc/thanh toán (nếu có) sẽ được xử lý hoàn lại theo chính sách của RideUp.',
+        [{ text: 'Đồng ý', onPress: () => fetchBooking() }]
+      );
+    } catch (err) {
+      console.log('Error cancelling booking:', err);
+      const msg = err?.response?.data?.message || 'Có lỗi xảy ra khi hủy vé. Vui lòng thử lại.';
+      Alert.alert('Không thể hủy vé', msg);
+    } finally {
+      setSubmittingCancel(false);
+    }
+  };
+
+  const pickupWards = trip?.stops?.filter(s => s.stopType === 'PICKUP').map(s => ({ id: String(s.wardId), name: s.addressText })) || [];
+  const dropoffWards = trip?.stops?.filter(s => s.stopType === 'DROPOFF').map(s => ({ id: String(s.wardId), name: s.addressText })) || [];
+
+  const handleOpenEditModal = () => {
+    // Chỉ lấy phần số nhà/tên đường vào ô chỉnh sửa chi tiết, loại bỏ phường/tỉnh
+    const parsedPickup = parseAddressComponents(booking.pickupAddressText, pickupDisplayWard, pickupDisplayProvince);
+    const parsedDropoff = parseAddressComponents(booking.dropoffAddressText, dropoffDisplayWard, dropoffDisplayProvince);
+
+    setEditForm({
+      pickupDetailAddress: parsedPickup.detail || '',
+      pickupLat: booking.pickupLat != null ? Number(booking.pickupLat) : 21.0285,
+      pickupLng: booking.pickupLng != null ? Number(booking.pickupLng) : 105.8542,
+      pickupWardId: String(booking.pickupWardId || ''),
+      dropoffDetailAddress: parsedDropoff.detail || '',
+      dropoffLat: booking.dropoffLat != null ? Number(booking.dropoffLat) : 20.8449,
+      dropoffLng: booking.dropoffLng != null ? Number(booking.dropoffLng) : 106.6881,
+      dropoffWardId: String(booking.dropoffWardId || ''),
+      passengerName: booking.passengerName || booking.userName || '',
+      passengerPhone: booking.passengerPhone || booking.userPhone || '',
+      note: booking.note || '',
+    });
+    setShowPickupMap(false);
+    setShowDropoffMap(false);
+    setIsModalOpen(true);
+  };
+
+  const handleSendModification = async () => {
+    if (!editForm.pickupDetailAddress.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ chi tiết (số nhà, tên đường) điểm đón.');
+      return;
+    }
+    if (!editForm.dropoffDetailAddress.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ chi tiết (số nhà, tên đường) điểm trả.');
+      return;
+    }
+
+    // Ghép số nhà đã sửa với Phường và Tỉnh cố định thành địa chỉ hoàn chỉnh gửi lên máy chủ
+    const fullPickup = buildFullAddress(
+      editForm.pickupDetailAddress,
+      pickupDisplayWard,
+      pickupDisplayProvince
+    );
+    const fullDropoff = buildFullAddress(
+      editForm.dropoffDetailAddress,
+      dropoffDisplayWard,
+      dropoffDisplayProvince
+    );
+
+    setSubmittingMod(true);
+    try {
+      const payload = {
+        pickupAddressText: fullPickup,
+        pickupLat: editForm.pickupLat != null ? Number(editForm.pickupLat) : 21.0285,
+        pickupLng: editForm.pickupLng != null ? Number(editForm.pickupLng) : 105.8542,
+        pickupWardId: String(editForm.pickupWardId || booking.pickupWardId || '0'),
+        dropoffAddressText: fullDropoff,
+        dropoffLat: editForm.dropoffLat != null ? Number(editForm.dropoffLat) : 20.8449,
+        dropoffLng: editForm.dropoffLng != null ? Number(editForm.dropoffLng) : 106.6881,
+        dropoffWardId: String(editForm.dropoffWardId || booking.dropoffWardId || '0'),
+        passengerName: editForm.passengerName.trim(),
+        passengerPhone: editForm.passengerPhone.trim(),
+        note: editForm.note.trim(),
+      };
+      const res = await apiService.requestBookingModification(booking.id, payload);
+      setIsModalOpen(false);
+
+      const isAutoUpdated = booking.status === 'WAITING_DRIVER_APPROVAL' || res?.data?.result?.status === 'APPROVED';
+      if (isAutoUpdated) {
+        Alert.alert(
+          'Đã cập nhật thành công',
+          'Chuyến đi đang chờ tài xế duyệt nên thông tin đón/trả và người đi đã được tự động cập nhật ngay vào vé.',
+          [{ text: 'Đã hiểu' }]
+        );
+      } else {
+        Alert.alert(
+          'Đã gửi yêu cầu thành công',
+          'Yêu cầu sửa đổi lộ trình đã được gửi tới tài xế. Tài xế có tối đa 15 phút để phản hồi.',
+          [{ text: 'Đã hiểu' }]
+        );
+      }
+      fetchModifications(booking.id);
+      apiService.getBookingDetail(booking.id).then(res => {
+        if (res?.data?.result) {
+          setBooking(prev => ({ ...prev, ...res.data.result }));
+        }
+      });
+    } catch (err) {
+      console.log('Modify booking error:', err);
+      const errMsg = err?.response?.data?.message || 'Không thể gửi yêu cầu chỉnh sửa lúc này. Vui lòng thử lại sau.';
+      Alert.alert('Không thể chỉnh sửa', errMsg);
+    } finally {
+      setSubmittingMod(false);
+    }
+  };
 
   return (
     <SafeAreaView style={s.safe}>
@@ -122,6 +440,60 @@ const BookingDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
 
+        {/* ═══ PENDING MODIFICATION ALERT ═══ */}
+        {pendingMod && (
+          <View style={s.modPendingCard}>
+            <View style={s.modPendingHeader}>
+              <View style={s.modPendingHeaderLeft}>
+                <Ionicons name="time" size={18} color="#D97706" />
+                <Text style={s.modPendingTitle}>YÊU CẦU ĐỔI LỘ TRÌNH ĐANG CHỜ DUYỆT</Text>
+              </View>
+              <View style={s.modPendingBadge}>
+                <Text style={s.modPendingBadgeText}>TỐI ĐA 15 PHÚT</Text>
+              </View>
+            </View>
+
+            <Text style={s.modPendingDesc}>
+              Bạn đã đề xuất điều chỉnh thông tin đón/trả. Lộ trình mới sẽ được áp dụng ngay khi tài xế nhấn chấp thuận.
+            </Text>
+
+            <View style={s.modPendingDiff}>
+              <View style={s.modDiffRow}>
+                <Ionicons name="location" size={14} color={COLORS.primary} style={{ marginTop: 2, marginRight: 6 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modDiffLabel}>Điểm đón đề xuất:</Text>
+                  <Text style={s.modDiffValue}>{pendingMod.newPickupAddressText}</Text>
+                </View>
+              </View>
+
+              <View style={[s.modDiffRow, { marginTop: 8 }]}>
+                <Ionicons name="flag" size={14} color={COLORS.orange} style={{ marginTop: 2, marginRight: 6 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modDiffLabel}>Điểm đến đề xuất:</Text>
+                  <Text style={s.modDiffValue}>{pendingMod.newDropoffAddressText}</Text>
+                </View>
+              </View>
+
+              {!!pendingMod.newNote && (
+                <View style={[s.modDiffRow, { marginTop: 8 }]}>
+                  <Ionicons name="chatbubble-outline" size={14} color={COLORS.textSec} style={{ marginTop: 2, marginRight: 6 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.modDiffLabel}>Lý do / Ghi chú:</Text>
+                    <Text style={s.modDiffValue}>{pendingMod.newNote}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <View style={s.modPendingFooter}>
+              <Ionicons name="information-circle-outline" size={14} color="#D97706" style={{ marginRight: 4 }} />
+              <Text style={s.modPendingFooterText}>
+                Hết hạn duyệt: {fTime(pendingMod.expiresAt)} • {fDate(pendingMod.expiresAt)}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* ═══ ROUTE CARD ═══ */}
         <View style={s.card}>
           <Text style={s.sectionTitle}>Lộ trình đón trả</Text>
@@ -138,26 +510,26 @@ const BookingDetailScreen = ({ route, navigation }) => {
               {/* Pickup */}
               <View style={s.routeBlock}>
                 <Text style={s.routeTag}>ĐIỂM ĐÓN</Text>
-                {startProvinceName ? (
+                {pickupDisplayProvince ? (
                   <View style={s.addrBreakdown}>
                     <View style={s.addrItemRow}>
                       <Ionicons name="map-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
                       <Text style={s.addrAreaText}>
-                        <Text style={{ fontWeight: '700', color: COLORS.primary }}>Tỉnh/Thành: </Text>{startProvinceName}
+                        <Text style={{ fontWeight: '700', color: COLORS.primary }}>Tỉnh/Thành: </Text>{pickupDisplayProvince}
                       </Text>
                     </View>
-                    {!!pickupWardName && (
+                    {!!pickupDisplayWard && (
                       <View style={s.addrItemRow}>
                         <Ionicons name="business-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
                         <Text style={s.addrAreaText}>
-                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{pickupWardName}
+                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{pickupDisplayWard}
                         </Text>
                       </View>
                     )}
                     <View style={s.addrItemRow}>
                       <Ionicons name="navigate-outline" size={13} color={COLORS.primary} style={{ marginRight: 4, marginTop: 2 }} />
                       <Text style={s.addrDetailText}>
-                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{booking.pickupAddressText || 'Không rõ'}
+                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{pickupDisplayDetail || 'Số nhà / điểm hẹn'}
                       </Text>
                     </View>
                   </View>
@@ -169,26 +541,26 @@ const BookingDetailScreen = ({ route, navigation }) => {
               {/* Dropoff */}
               <View style={[s.routeBlock, { marginTop: 20 }]}>
                 <Text style={[s.routeTag, { color: COLORS.orange }]}>ĐIỂM ĐẾN</Text>
-                {endProvinceName ? (
+                {dropoffDisplayProvince ? (
                   <View style={s.addrBreakdown}>
                     <View style={s.addrItemRow}>
                       <Ionicons name="map-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
                       <Text style={s.addrAreaText}>
-                        <Text style={{ fontWeight: '700', color: COLORS.orange }}>Tỉnh/Thành: </Text>{endProvinceName}
+                        <Text style={{ fontWeight: '700', color: COLORS.orange }}>Tỉnh/Thành: </Text>{dropoffDisplayProvince}
                       </Text>
                     </View>
-                    {!!dropoffWardName && (
+                    {!!dropoffDisplayWard && (
                       <View style={s.addrItemRow}>
                         <Ionicons name="business-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
                         <Text style={s.addrAreaText}>
-                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{dropoffWardName}
+                          <Text style={{ fontWeight: '700', color: COLORS.text }}>Phường/Xã: </Text>{dropoffDisplayWard}
                         </Text>
                       </View>
                     )}
                     <View style={s.addrItemRow}>
                       <Ionicons name="navigate-outline" size={13} color={COLORS.orange} style={{ marginRight: 4, marginTop: 2 }} />
                       <Text style={s.addrDetailText}>
-                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{booking.dropoffAddressText || booking.dropoffLocation || 'Không rõ'}
+                        <Text style={{ fontWeight: '700', color: COLORS.text }}>Địa chỉ chi tiết: </Text>{dropoffDisplayDetail || 'Số nhà / điểm đến'}
                       </Text>
                     </View>
                   </View>
@@ -198,6 +570,28 @@ const BookingDetailScreen = ({ route, navigation }) => {
               </View>
             </View>
           </View>
+        </View>
+
+        {/* ═══ NOTE CARD ═══ */}
+        <View style={s.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+            <Text style={s.sectionTitle}>Ghi chú chuyến đi</Text>
+          </View>
+          <View style={s.noteDisplayBox}>
+            <Text style={booking.note ? s.noteDisplayText : s.noteDisplayEmptyText}>
+              {booking.note ? booking.note : 'Không có ghi chú nào cho chuyến đi này.'}
+            </Text>
+          </View>
+          {!!pendingMod?.newNote && pendingMod.newNote !== booking.note && (
+            <View style={s.notePendingDiffBox}>
+              <Ionicons name="time-outline" size={14} color="#D97706" style={{ marginRight: 6, marginTop: 1 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.notePendingDiffLabel}>Ghi chú mới đang chờ duyệt:</Text>
+                <Text style={s.notePendingDiffText}>{pendingMod.newNote}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* ═══ TRIP INFO ═══ */}
@@ -253,7 +647,7 @@ const BookingDetailScreen = ({ route, navigation }) => {
                 statusIcon = 'checkmark-circle';
                 statusBg = '#ECFDF5'; statusColor = '#059669';
                 guidanceText = 'Số tiền đã được thanh toán thành công qua thẻ. Bạn không cần trả thêm cho tài xế.';
-              } else if (booking.paymentStatus === 'HOLDING') {
+              } else if (booking.paymentStatus === 'HOLDING' || (isStripe && booking.paymentId?.startsWith('pi_'))) {
                 statusLabel = 'Đã giữ cọc qua thẻ';
                 statusIcon = 'shield-checkmark';
                 statusBg = '#EFF6FF'; statusColor = '#2563EB';
@@ -317,25 +711,59 @@ const BookingDetailScreen = ({ route, navigation }) => {
           })()}
         </View>
 
+        {/* ═══ MODIFICATION HISTORY ═══ */}
+        {pastMods.length > 0 && (
+          <View style={s.card}>
+            <Text style={s.sectionTitle}>Lịch sử đổi lộ trình ({pastMods.length})</Text>
+            {pastMods.map((item, idx) => {
+              const mStatus = getModStatus(item.status);
+              return (
+                <View key={item.id || idx} style={[s.modHistoryItem, idx > 0 && s.modHistoryBorder]}>
+                  <View style={s.modHistoryTop}>
+                    <View style={[s.modStatusChip, { backgroundColor: mStatus.bg }]}>
+                      <Ionicons name={mStatus.icon} size={13} color={mStatus.color} style={{ marginRight: 4 }} />
+                      <Text style={[s.modStatusChipText, { color: mStatus.color }]}>{mStatus.label}</Text>
+                    </View>
+                    <Text style={s.modHistoryTime}>{fTime(item.resolvedAt || item.createdAt)} • {fDate(item.resolvedAt || item.createdAt)}</Text>
+                  </View>
+                  <Text style={s.modHistoryRoute} numberOfLines={2}>
+                    <Text style={{ fontWeight: '700' }}>Đón: </Text>{item.newPickupAddressText}
+                  </Text>
+                  <Text style={s.modHistoryRoute} numberOfLines={2}>
+                    <Text style={{ fontWeight: '700' }}>Trả: </Text>{item.newDropoffAddressText}
+                  </Text>
+                  {!!item.rejectionReason && (
+                    <Text style={s.modRejectReason}>Lý do từ chối: {item.rejectionReason}</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* ═══ DRIVER INFO ═══ */}
-        {(booking.trip?.driverName || booking.driverName) && (
+        {hasDriverInfo && (
           <View style={s.card}>
             <Text style={s.sectionTitle}>Tài xế</Text>
             <View style={s.driverRow}>
-              <View style={s.avatarCircle}>
-                <Ionicons name="person" size={26} color={COLORS.primary} />
+              <View style={[s.avatarCircle, resolvedDriverAvatar && { overflow: 'hidden' }]}>
+                {resolvedDriverAvatar ? (
+                  <Image source={{ uri: resolvedDriverAvatar }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                ) : (
+                  <Ionicons name="person" size={26} color={COLORS.primary} />
+                )}
               </View>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={s.driverName}>{booking.trip?.driverName || booking.driverName || 'Tài xế'}</Text>
-                {(booking.trip?.vehicleType || booking.trip?.vehiclePlate) && (
+                <Text style={s.driverName}>{resolvedDriverName}</Text>
+                {!!resolvedVehicleInfo && (
                   <Text style={s.driverSub}>
-                    {booking.trip?.vehicleType}{booking.trip?.vehiclePlate ? ` • ${booking.trip.vehiclePlate}` : ''}
+                    {resolvedVehicleInfo}
                   </Text>
                 )}
-                {booking.trip?.driverRating > 0 && (
+                {resolvedDriverRating > 0 && (
                   <View style={s.ratingRow}>
                     <Ionicons name="star" size={14} color="#f59e0b" />
-                    <Text style={s.ratingText}>{booking.trip.driverRating}/5 sao</Text>
+                    <Text style={s.ratingText}>{resolvedDriverRating}/5 sao</Text>
                   </View>
                 )}
               </View>
@@ -345,9 +773,12 @@ const BookingDetailScreen = ({ route, navigation }) => {
                   activeOpacity={0.7}
                   onPress={() => navigation.navigate('BookingChat', {
                     bookingId: booking.id,
-                    driverName: booking.trip?.driverName || booking.driverName || 'Tài xế',
-                    driverAvatar: booking.trip?.driverAvatar,
-                    vehicleInfo: booking.trip?.vehicleType || 'Xe',
+                    tripId: booking.tripId || trip?.id,
+                    driverId: trip?.driverId || booking.driverId,
+                    driverName: resolvedDriverName,
+                    driverPhone: resolvedDriverPhone,
+                    driverAvatar: resolvedDriverAvatar,
+                    vehicleInfo: resolvedVehicleInfo,
                   })}
                 >
                   <Ionicons name="chatbubble-ellipses" size={18} color={COLORS.primary} />
@@ -359,15 +790,29 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
         {/* ═══ ACTION BUTTONS ═══ */}
         <View style={s.actions}>
+          {canModify && (
+            <TouchableOpacity
+              style={s.btnSecondary}
+              activeOpacity={0.8}
+              onPress={handleOpenEditModal}
+            >
+              <Ionicons name="create-outline" size={18} color={COLORS.primary} />
+              <Text style={s.btnSecondaryText}>Sửa điểm đón / trả (Còn {2 - approvedCount}/2 lần)</Text>
+            </TouchableOpacity>
+          )}
+
           {showChat && (
             <TouchableOpacity
               style={s.btnPrimary}
               activeOpacity={0.8}
               onPress={() => navigation.navigate('BookingChat', {
                 bookingId: booking.id,
-                driverName: booking.trip?.driverName || booking.driverName || 'Tài xế',
-                driverAvatar: booking.trip?.driverAvatar,
-                vehicleInfo: booking.trip?.vehicleType || 'Xe',
+                tripId: booking.tripId || trip?.id,
+                driverId: trip?.driverId || booking.driverId,
+                driverName: resolvedDriverName,
+                driverPhone: resolvedDriverPhone,
+                driverAvatar: resolvedDriverAvatar,
+                vehicleInfo: resolvedVehicleInfo,
               })}
             >
               <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
@@ -377,15 +822,43 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
           {showRate && (
             <TouchableOpacity
-              style={s.btnPrimary}
+              style={existingReview ? s.btnOutline : s.btnPrimary}
               activeOpacity={0.8}
               onPress={() => navigation.navigate('Rating', {
                 bookingId: booking.id,
-                driverName: booking.trip?.driverName || booking.driverName || 'Tài xế',
+                tripId: booking.tripId || trip?.id,
+                driverId: trip?.driverId || booking.driverId,
+                driverName: resolvedDriverName,
+                driverPhone: resolvedDriverPhone,
+                driverAvatar: resolvedDriverAvatar,
+                driverRating: resolvedDriverRating,
+                vehicleInfo: resolvedVehicleInfo,
+                existingReview: existingReview,
               })}
             >
-              <Ionicons name="star" size={18} color="#fff" />
-              <Text style={s.btnPrimaryText}>Đánh giá chuyến đi</Text>
+              <Ionicons name="star" size={18} color={existingReview ? "#f59e0b" : "#fff"} />
+              <Text style={existingReview ? s.btnOutlineText : s.btnPrimaryText}>
+                {existingReview ? `Xem đánh giá của bạn (${existingReview.rating}⭐)` : 'Đánh giá chuyến đi'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {canCancel && (
+            <TouchableOpacity
+              style={[s.btnCancelBooking, isPastCutoff && booking.status === 'CONFIRMED' && s.btnCancelDisabled]}
+              activeOpacity={0.8}
+              onPress={handleOpenCancelModal}
+            >
+              <Ionicons
+                name="close-circle-outline"
+                size={18}
+                color={isPastCutoff && booking.status === 'CONFIRMED' ? COLORS.textMuted : COLORS.red}
+              />
+              <Text style={[s.btnCancelText, isPastCutoff && booking.status === 'CONFIRMED' && { color: COLORS.textMuted }]}>
+                {isPastCutoff && booking.status === 'CONFIRMED'
+                  ? 'Hết hạn hủy (Dưới 2 tiếng trước giờ chạy)'
+                  : 'Hủy vé chuyến đi'}
+              </Text>
             </TouchableOpacity>
           )}
 
@@ -403,6 +876,408 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* ═══ MODAL CHỈNH SỬA LỘ TRÌNH ═══ */}
+      <Modal
+        visible={isModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={s.modalOverlay}
+        >
+          <View style={s.modalContainer}>
+            {/* Header */}
+            <View style={s.modalHeader}>
+              <View>
+                <Text style={s.modalTitle}>Sửa điểm đón / trả</Text>
+                <Text style={s.modalSubtitle}>Thay đổi thông tin đón trả có kiểm soát</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsModalOpen(false)}
+                style={s.modalCloseBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.modalForm}>
+              {/* Notice Policy */}
+              <View style={s.modalNoticeBox}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.primary} style={{ marginRight: 8, marginTop: 2 }} />
+                <Text style={s.modalNoticeText}>
+                  {booking.status === 'WAITING_DRIVER_APPROVAL'
+                    ? 'Vé đang chờ tài xế duyệt: Bạn có thể cập nhật lại điểm đón/trả và thông tin người đi, hệ thống sẽ tự động cập nhật ngay vào vé mà không cần chờ tài xế duyệt lại.'
+                    : 'Chính sách: Bạn được chỉnh sửa tối đa 2 lần và phải thực hiện trước giờ xuất phát ít nhất 2 tiếng. Tài xế có 15 phút để phản hồi xác nhận.'}
+                </Text>
+              </View>
+
+              {/* ── KHỐI ĐIỂM ĐÓN MỚI ── */}
+              <View style={s.sectionCardBlock}>
+                <View style={s.sectionCardHeader}>
+                  <Ionicons name="location" size={16} color={COLORS.primary} />
+                  <Text style={s.sectionCardTitle}>ĐIỂM ĐÓN CỦA BẠN</Text>
+                </View>
+
+                {/* Thanh Tỉnh/Thành (Disable) */}
+                <View style={s.formGroupDisabled}>
+                  <View style={s.disabledFieldHeader}>
+                    <Text style={s.disabledLabel}>TỈNH / THÀNH PHỐ</Text>
+                    <View style={s.disabledBadge}>
+                      <Ionicons name="lock-closed" size={10} color={COLORS.textMuted} />
+                      <Text style={s.disabledBadgeText}>Cố định theo tuyến</Text>
+                    </View>
+                  </View>
+                  <View style={s.disabledInputBox}>
+                    <Ionicons name="map-outline" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={s.disabledInputText} numberOfLines={1}>{pickupDisplayProvince || 'Không xác định'}</Text>
+                  </View>
+                </View>
+
+                {/* Thanh Phường/Xã (Disable) */}
+                <View style={s.formGroupDisabled}>
+                  <View style={s.disabledFieldHeader}>
+                    <Text style={s.disabledLabel}>PHƯỜNG / XÃ</Text>
+                    <View style={s.disabledBadge}>
+                      <Ionicons name="lock-closed" size={10} color={COLORS.textMuted} />
+                      <Text style={s.disabledBadgeText}>Cố định</Text>
+                    </View>
+                  </View>
+                  <View style={s.disabledInputBox}>
+                    <Ionicons name="business-outline" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={s.disabledInputText} numberOfLines={1}>{pickupDisplayWard || 'Không xác định'}</Text>
+                  </View>
+                </View>
+
+                {/* Thanh Địa chỉ chi tiết (Được phép sửa) */}
+                <View style={s.formGroup}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={s.formLabel}>
+                      ĐỊA CHỈ CHI TIẾT (SỐ NHÀ, TÊN ĐƯỜNG) <Text style={{ color: COLORS.red }}>*</Text>
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowPickupMap(prev => !prev)}
+                      style={s.mapToggleBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name={showPickupMap ? "chevron-up" : "map-outline"} size={13} color={COLORS.primary} />
+                      <Text style={s.mapToggleBtnText}>{showPickupMap ? "Đóng bản đồ" : "Chọn trên bản đồ"}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {showPickupMap && (
+                    <View style={{ marginBottom: 12 }}>
+                      <LocationMapPicker
+                        title="Ghim vị trí điểm đón"
+                        wardOptions={pickupWards.length > 0 ? pickupWards : (booking.pickupWardId ? [{ id: String(booking.pickupWardId), name: pickupWardName || 'Khu vực đón' }] : [])}
+                        wardId={String(editForm.pickupWardId || '')}
+                        onWardChange={(id) => setEditForm(p => ({ ...p, pickupWardId: id }))}
+                        value={{
+                          lat: editForm.pickupLat,
+                          lng: editForm.pickupLng,
+                          addressText: editForm.pickupDetailAddress
+                        }}
+                        onChange={(loc) => {
+                          const parsed = parseAddressComponents(loc.addressText, pickupDisplayWard, pickupDisplayProvince);
+                          setEditForm(p => ({
+                            ...p,
+                            pickupLat: loc.lat,
+                            pickupLng: loc.lng,
+                            pickupDetailAddress: parsed.detail || loc.addressText || p.pickupDetailAddress
+                          }));
+                        }}
+                        accentColor={COLORS.primary}
+                      />
+                    </View>
+                  )}
+
+                  <TextInput
+                    style={s.formInput}
+                    placeholder="Nhập số nhà, ngõ, tên đường (Ví dụ: Số 5, ngõ 12...)"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={editForm.pickupDetailAddress}
+                    onChangeText={(text) => setEditForm(p => ({ ...p, pickupDetailAddress: text }))}
+                    multiline
+                  />
+                  <View style={s.previewAddrWrap}>
+                    <Text style={s.previewAddrLabel}>Địa chỉ đầy đủ sẽ lưu:</Text>
+                    <Text style={s.previewAddrText} numberOfLines={2}>
+                      {buildFullAddress(editForm.pickupDetailAddress, pickupDisplayWard, pickupDisplayProvince) || '...'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* ── KHỐI ĐIỂM TRẢ MỚI ── */}
+              <View style={[s.sectionCardBlock, { borderColor: '#FED7AA' }]}>
+                <View style={s.sectionCardHeader}>
+                  <Ionicons name="flag" size={16} color={COLORS.orange} />
+                  <Text style={[s.sectionCardTitle, { color: COLORS.orange }]}>ĐIỂM TRẢ CỦA BẠN</Text>
+                </View>
+
+                {/* Thanh Tỉnh/Thành (Disable) */}
+                <View style={s.formGroupDisabled}>
+                  <View style={s.disabledFieldHeader}>
+                    <Text style={[s.disabledLabel, { color: COLORS.orange }]}>TỈNH / THÀNH PHỐ</Text>
+                    <View style={s.disabledBadge}>
+                      <Ionicons name="lock-closed" size={10} color={COLORS.textMuted} />
+                      <Text style={s.disabledBadgeText}>Cố định theo tuyến</Text>
+                    </View>
+                  </View>
+                  <View style={s.disabledInputBox}>
+                    <Ionicons name="map-outline" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={s.disabledInputText} numberOfLines={1}>{dropoffDisplayProvince || 'Không xác định'}</Text>
+                  </View>
+                </View>
+
+                {/* Thanh Phường/Xã (Disable) */}
+                <View style={s.formGroupDisabled}>
+                  <View style={s.disabledFieldHeader}>
+                    <Text style={[s.disabledLabel, { color: COLORS.orange }]}>PHƯỜNG / XÃ</Text>
+                    <View style={s.disabledBadge}>
+                      <Ionicons name="lock-closed" size={10} color={COLORS.textMuted} />
+                      <Text style={s.disabledBadgeText}>Cố định</Text>
+                    </View>
+                  </View>
+                  <View style={s.disabledInputBox}>
+                    <Ionicons name="business-outline" size={16} color={COLORS.textMuted} style={{ marginRight: 8 }} />
+                    <Text style={s.disabledInputText} numberOfLines={1}>{dropoffDisplayWard || 'Không xác định'}</Text>
+                  </View>
+                </View>
+
+                {/* Thanh Địa chỉ chi tiết (Được phép sửa) */}
+                <View style={s.formGroup}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[s.formLabel, { color: COLORS.orange }]}>
+                      ĐỊA CHỈ CHI TIẾT (SỐ NHÀ, TÊN ĐƯỜNG) <Text style={{ color: COLORS.red }}>*</Text>
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowDropoffMap(prev => !prev)}
+                      style={[s.mapToggleBtn, { borderColor: COLORS.orange, backgroundColor: '#FFF7ED' }]}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name={showDropoffMap ? "chevron-up" : "map-outline"} size={13} color={COLORS.orange} />
+                      <Text style={[s.mapToggleBtnText, { color: COLORS.orange }]}>{showDropoffMap ? "Đóng bản đồ" : "Chọn trên bản đồ"}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {showDropoffMap && (
+                    <View style={{ marginBottom: 12 }}>
+                      <LocationMapPicker
+                        title="Ghim vị trí điểm trả"
+                        wardOptions={dropoffWards.length > 0 ? dropoffWards : (booking.dropoffWardId ? [{ id: String(booking.dropoffWardId), name: dropoffWardName || 'Khu vực trả' }] : [])}
+                        wardId={String(editForm.dropoffWardId || '')}
+                        onWardChange={(id) => setEditForm(p => ({ ...p, dropoffWardId: id }))}
+                        value={{
+                          lat: editForm.dropoffLat,
+                          lng: editForm.dropoffLng,
+                          addressText: editForm.dropoffDetailAddress
+                        }}
+                        onChange={(loc) => {
+                          const parsed = parseAddressComponents(loc.addressText, dropoffDisplayWard, dropoffDisplayProvince);
+                          setEditForm(p => ({
+                            ...p,
+                            dropoffLat: loc.lat,
+                            dropoffLng: loc.lng,
+                            dropoffDetailAddress: parsed.detail || loc.addressText || p.dropoffDetailAddress
+                          }));
+                        }}
+                        accentColor={COLORS.orange}
+                      />
+                    </View>
+                  )}
+
+                  <TextInput
+                    style={s.formInput}
+                    placeholder="Nhập số nhà, ngõ, tên đường (Ví dụ: Số 123 đường ABC...)"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={editForm.dropoffDetailAddress}
+                    onChangeText={(text) => setEditForm(p => ({ ...p, dropoffDetailAddress: text }))}
+                    multiline
+                  />
+                  <View style={s.previewAddrWrap}>
+                    <Text style={s.previewAddrLabel}>Địa chỉ đầy đủ sẽ lưu:</Text>
+                    <Text style={s.previewAddrText} numberOfLines={2}>
+                      {buildFullAddress(editForm.dropoffDetailAddress, dropoffDisplayWard, dropoffDisplayProvince) || '...'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Input Hành Khách */}
+              <View style={s.formRow}>
+                <View style={[s.formGroup, { flex: 1, marginRight: 8 }]}>
+                  <Text style={s.formLabel}>TÊN HÀNH KHÁCH</Text>
+                  <TextInput
+                    style={s.formInputSingle}
+                    placeholder="Tên người đi"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={editForm.passengerName}
+                    onChangeText={(text) => setEditForm(p => ({ ...p, passengerName: text }))}
+                  />
+                </View>
+                <View style={[s.formGroup, { flex: 1 }]}>
+                  <Text style={s.formLabel}>SỐ ĐIỆN THOẠI</Text>
+                  <TextInput
+                    style={s.formInputSingle}
+                    placeholder="SĐT liên hệ"
+                    keyboardType="phone-pad"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={editForm.passengerPhone}
+                    onChangeText={(text) => setEditForm(p => ({ ...p, passengerPhone: text }))}
+                  />
+                </View>
+              </View>
+
+              {/* Input Ghi chú */}
+              <View style={s.formGroup}>
+                <Text style={s.formLabel}>LÝ DO / GHI CHÚ CHO TÀI XẾ</Text>
+                <TextInput
+                  style={[s.formInput, { height: 70 }]}
+                  placeholder="Ví dụ: Đổi sang cổng đối diện, em mang thêm 1 vali nhỏ..."
+                  placeholderTextColor={COLORS.textMuted}
+                  value={editForm.note}
+                  onChangeText={(text) => setEditForm(p => ({ ...p, note: text }))}
+                  multiline
+                />
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={s.modalActionRow}>
+              <TouchableOpacity
+                style={s.modalBtnCancel}
+                onPress={() => setIsModalOpen(false)}
+                disabled={submittingMod}
+              >
+                <Text style={s.modalBtnCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtnSubmit, submittingMod && { opacity: 0.7 }]}
+                onPress={handleSendModification}
+                disabled={submittingMod}
+              >
+                {submittingMod ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="paper-plane" size={16} color="#fff" />
+                    <Text style={s.modalBtnSubmitText}>Gửi cho tài xế</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+      {/* ═══ MODAL HỦY VÉ CHUYẾN ĐI ═══ */}
+      <Modal
+        visible={isCancelModalOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setIsCancelModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={s.modalOverlay}
+        >
+          <View style={[s.modalContainer, { maxHeight: '85%' }]}>
+            <View style={s.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="alert-circle" size={24} color={COLORS.red} />
+                <Text style={[s.modalTitle, { color: COLORS.red }]}>HỦY VÉ CHUYẾN ĐI</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsCancelModalOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+              {/* Box cảnh báo & quy định */}
+              <View style={s.cancelWarningCard}>
+                <Ionicons name="time-outline" size={18} color="#991B1B" style={{ marginTop: 2 }} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={s.cancelWarningTitle}>Quy định hủy chuyến RideUp</Text>
+                  <Text style={s.cancelWarningDesc}>
+                    • Chỉ áp dụng hủy vé trước giờ khởi hành tối thiểu 2 tiếng.{"\n"}
+                    • Số tiền đã thanh toán/đặt cọc (nếu có) sẽ được xử lý hoàn trả theo chính sách.{"\n"}
+                    • Vé sau khi hủy sẽ giải phóng ghế và không thể hoàn tác.
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={s.cancelReasonLabel}>Chọn lý do hủy vé:</Text>
+              {[
+                'Thay đổi kế hoạch cá nhân',
+                'Tìm được phương tiện di chuyển khác',
+                'Thời gian đón/trả không phù hợp',
+                'Tài xế yêu cầu hủy / không liên lạc được',
+                'Khác',
+              ].map((item) => {
+                const isSelected = cancelReason === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[s.cancelReasonRow, isSelected && s.cancelReasonRowSelected]}
+                    activeOpacity={0.7}
+                    onPress={() => setCancelReason(item)}
+                  >
+                    <Ionicons
+                      name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={isSelected ? COLORS.red : COLORS.textMuted}
+                    />
+                    <Text style={[s.cancelReasonText, isSelected && s.cancelReasonTextSelected]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {cancelReason === 'Khác' && (
+                <View style={{ marginTop: 10 }}>
+                  <TextInput
+                    style={s.cancelCustomInput}
+                    placeholder="Nhập lý do hủy chuyến cụ thể..."
+                    placeholderTextColor={COLORS.textMuted}
+                    value={customCancelReason}
+                    onChangeText={setCustomCancelReason}
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={s.modalActionRow}>
+              <TouchableOpacity
+                style={s.modalBtnCancel}
+                onPress={() => setIsCancelModalOpen(false)}
+                disabled={submittingCancel}
+              >
+                <Text style={s.modalBtnCancelText}>Giữ lại vé</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtnDanger, submittingCancel && { opacity: 0.7 }]}
+                onPress={handleConfirmCancel}
+                disabled={submittingCancel}
+              >
+                {submittingCancel ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="trash-outline" size={16} color="#fff" />
+                    <Text style={s.modalBtnDangerText}>Xác nhận hủy</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -485,6 +1360,294 @@ const s = StyleSheet.create({
   payStatusText: { fontSize: 12, fontWeight: '700' },
   payGuidanceBox: { flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderRadius: 10, borderWidth: 1, marginTop: 8 },
   payGuidanceText: { flex: 1, fontSize: 12, fontWeight: '500', lineHeight: 18 },
+
+  // Pending Modification Card
+  modPendingCard: { backgroundColor: '#FFFBEB', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#F59E0B', shadowColor: '#D97706', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
+  modPendingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  modPendingHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  modPendingTitle: { fontSize: 13, fontWeight: '800', color: '#B45309' },
+  modPendingBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#FDE68A' },
+  modPendingBadgeText: { fontSize: 10, fontWeight: '800', color: '#B45309' },
+  modPendingDesc: { fontSize: 12, color: '#92400E', lineHeight: 18, marginBottom: 12 },
+  modPendingDiff: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FDE68A', marginBottom: 10 },
+  modDiffRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  modDiffLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textSec },
+  modDiffValue: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginTop: 2, lineHeight: 18 },
+  modPendingFooter: { flexDirection: 'row', alignItems: 'center' },
+  modPendingFooterText: { fontSize: 12, color: '#B45309', fontWeight: '600' },
+
+  // Modification History
+  modHistoryItem: { paddingVertical: 12 },
+  modHistoryBorder: { borderTopWidth: 1, borderTopColor: COLORS.divider },
+  modHistoryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  modStatusChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  modStatusChipText: { fontSize: 11, fontWeight: '700' },
+  modHistoryTime: { fontSize: 11, color: COLORS.textMuted },
+  modHistoryRoute: { fontSize: 13, color: COLORS.textSec, lineHeight: 19, marginTop: 2 },
+  modRejectReason: { fontSize: 12, color: COLORS.red, fontStyle: 'italic', marginTop: 4 },
+
+  // Secondary Button
+  btnSecondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F9FF', paddingVertical: 15, borderRadius: 14, gap: 10, borderWidth: 1.5, borderColor: COLORS.primary },
+  btnSecondaryText: { color: COLORS.primaryDark, fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' },
+  modalContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: SCREEN_W > 400 ? '90%' : '95%', paddingBottom: 24 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  modalSubtitle: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
+  modalCloseBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  modalForm: { padding: 20 },
+  modalNoticeBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BAE6FD', marginBottom: 16 },
+  modalNoticeText: { flex: 1, fontSize: 12, color: '#0369A1', lineHeight: 18 },
+
+  // Block Section Card
+  sectionCardBlock: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+  },
+  sectionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sectionCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.primaryDark,
+    letterSpacing: 0.5,
+  },
+
+  // Disabled Field
+  formGroupDisabled: {
+    marginBottom: 10,
+  },
+  disabledFieldHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  disabledLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.textMuted,
+    letterSpacing: 0.3,
+  },
+  disabledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  disabledBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  disabledInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+  },
+  disabledInputText: {
+    fontSize: 13.5,
+    color: '#64748B',
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  // Preview Addr
+  previewAddrWrap: {
+    marginTop: 6,
+    padding: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  previewAddrLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+  },
+  previewAddrText: {
+    fontSize: 12,
+    color: COLORS.text,
+    fontWeight: '600',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+
+  // Note Display Box
+  noteDisplayBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  noteDisplayText: {
+    fontSize: 13.5,
+    color: COLORS.text,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  noteDisplayEmptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+  notePendingDiffBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    marginTop: 8,
+  },
+  notePendingDiffLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  notePendingDiffText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#78350F',
+    marginTop: 2,
+  },
+
+  formGroup: { marginBottom: 14 },
+  formRow: { flexDirection: 'row' },
+  formLabel: { fontSize: 12, fontWeight: '800', color: COLORS.textSec, marginBottom: 6, letterSpacing: 0.3 },
+  mapToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: COLORS.primary, backgroundColor: '#F0F9FF' },
+  mapToggleBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  formInput: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: COLORS.text, minHeight: 46, textAlignVertical: 'top' },
+  formInputSingle: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: COLORS.text, height: 46 },
+  modalActionRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, paddingTop: 10 },
+  modalBtnCancel: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  modalBtnCancelText: { fontSize: 15, fontWeight: '700', color: COLORS.textSec },
+  modalBtnSubmit: { flex: 2, flexDirection: 'row', paddingVertical: 14, borderRadius: 12, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  modalBtnSubmitText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+
+  // Cancel Booking
+  btnCancelBooking: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    gap: 8,
+    marginTop: 10,
+  },
+  btnCancelDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    opacity: 0.7,
+  },
+  btnCancelText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.red,
+  },
+  cancelWarningCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  cancelWarningTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#991B1B',
+    marginBottom: 4,
+  },
+  cancelWarningDesc: {
+    fontSize: 12,
+    color: '#7F1D1D',
+    lineHeight: 18,
+  },
+  cancelReasonLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 10,
+  },
+  cancelReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    marginBottom: 8,
+    gap: 10,
+  },
+  cancelReasonRowSelected: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+  },
+  cancelReasonText: {
+    fontSize: 14,
+    color: COLORS.textSec,
+    fontWeight: '500',
+  },
+  cancelReasonTextSelected: {
+    color: '#991B1B',
+    fontWeight: '700',
+  },
+  cancelCustomInput: {
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.text,
+    minHeight: 60,
+    textAlignVertical: 'top',
+    backgroundColor: '#FAFAFA',
+  },
+  modalBtnDanger: {
+    flex: 2,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  modalBtnDangerText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#fff',
+  },
 });
 
 export default BookingDetailScreen;

@@ -5,7 +5,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/payment_service_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:123456789}
+    password: ${DB_PASSWORD:Hung23072004}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -98,9 +98,7 @@ app:
       payment-requested: ${KAFKA_TOPIC_PAYMENT_REQUESTED:booking.payment.requested}
       payment-completed: ${KAFKA_TOPIC_PAYMENT_COMPLETED:payment.completed}
       payment-failed: ${KAFKA_TOPIC_PAYMENT_FAILED:payment.failed}
-      payment-authorized: ${KAFKA_TOPIC_PAYMENT_AUTHORIZED:payment.authorized}
       booking-cancell-request: ${KAFKA_TOPIC_BOOKING_CANCELL_REQUEST:booking.cancell.request}
-      booking-approved: ${KAFKA_TOPIC_BOOKING_APPROVED:booking.approved}
       booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}
       booking-rejected: ${KAFKA_TOPIC_BOOKING_REJECTED:booking.rejected}
       refund-completed: ${KAFKA_TOPIC_REFUND_COMPLETED:refund.completed}

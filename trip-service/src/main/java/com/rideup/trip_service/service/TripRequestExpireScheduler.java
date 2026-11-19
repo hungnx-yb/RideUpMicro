@@ -1,5 +1,6 @@
 package com.rideup.trip_service.service;
 
+import com.rideup.trip_service.dto.event.InvitationRejectedEvent;
 import com.rideup.trip_service.dto.event.TripRequestCancelEvent;
 import com.rideup.trip_service.entity.TripRequest;
 import com.rideup.trip_service.entity.TripRequestInvitation;
@@ -32,8 +33,8 @@ public class TripRequestExpireScheduler {
     com.rideup.trip_service.repository.TripRequestInvitationRepository invitationRepository;
     MarketplaceEventProducer marketplaceEventProducer;
 
-    @Scheduled(cron = "0 */5 * * * *") // Run every 5 minutes
-    @SchedulerLock(name = "TripRequestExpireScheduler_expireRequests", lockAtLeastFor = "2m", lockAtMostFor = "4m")
+    @Scheduled(cron = "0 * * * * *") // Run every minute
+    @SchedulerLock(name = "TripRequestExpireScheduler_expireRequests", lockAtLeastFor = "15s", lockAtMostFor = "50s")
     @Transactional
     public void expireOldTripRequests() {
         log.info("Cronjob: Sweeping for expired trip requests...");
@@ -52,7 +53,17 @@ public class TripRequestExpireScheduler {
             expiredRequests.forEach(req -> {
                 req.setStatus(TripRequestStatus.EXPIRED);
                 List<TripRequestInvitation> pendingInvitations = invitationRepository.findByTripRequestIdAndStatus(req.getId(), InvitationStatus.PENDING);
-                pendingInvitations.forEach(inv -> inv.setStatus(InvitationStatus.EXPIRED));
+                pendingInvitations.forEach(inv -> {
+                    inv.setStatus(InvitationStatus.REJECTED);
+                    inv.setRespondedAt(now);
+                    marketplaceEventProducer.publishInvitationRejectedEvent(
+                            InvitationRejectedEvent.builder()
+                                    .invitationId(inv.getId())
+                                    .tripRequestId(req.getId())
+                                    .driverId(inv.getDriverId())
+                                    .passengerId(req.getPassengerId())
+                                    .build());
+                });
                 invitationRepository.saveAll(pendingInvitations);
                 
                 marketplaceEventProducer.publishTripRequestExpiredEvent(

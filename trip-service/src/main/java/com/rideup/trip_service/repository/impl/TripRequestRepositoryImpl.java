@@ -32,15 +32,21 @@ public class TripRequestRepositoryImpl implements TripRequestRepositoryCustom {
             FROM TripRequest t
             WHERE t.status = :status
             AND t.expiresAt > :now
-            AND t.startProvinceId = :startProvinceId
-            AND t.endProvinceId = :endProvinceId
         """);
 
         Map<String, Object> params = new HashMap<>();
         params.put("status", TripRequestStatus.OPEN);
         params.put("now", LocalDateTime.now());
-        params.put("startProvinceId", filter.getStartProvinceId());
-        params.put("endProvinceId", filter.getEndProvinceId());
+
+        if (filter.getStartProvinceId() != null && !filter.getStartProvinceId().isBlank()) {
+            baseQuery.append(" AND t.startProvinceId = :startProvinceId ");
+            params.put("startProvinceId", filter.getStartProvinceId());
+        }
+
+        if (filter.getEndProvinceId() != null && !filter.getEndProvinceId().isBlank()) {
+            baseQuery.append(" AND t.endProvinceId = :endProvinceId ");
+            params.put("endProvinceId", filter.getEndProvinceId());
+        }
 
         if (filter.getStartWardId() != null && !filter.getStartWardId().isBlank()) {
             baseQuery.append(" AND t.startWardId = :startWardId ");

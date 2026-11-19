@@ -5,6 +5,7 @@ import com.rideup.trip_service.dto.response.ApiResponse;
 import com.rideup.trip_service.dto.response.PageResponse;
 import com.rideup.trip_service.dto.response.SeatResponse;
 import com.rideup.trip_service.dto.response.TripResponse;
+import com.rideup.trip_service.dto.response.TripPaymentOptionsResponse;
 import com.rideup.trip_service.service.TripService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -71,6 +72,14 @@ public class TripController {
                 .build();
     }
 
+    @GetMapping("/{id}/payment-options")
+    public ApiResponse<TripPaymentOptionsResponse> getPaymentOptions(@PathVariable String id) {
+        return ApiResponse.<TripPaymentOptionsResponse>builder()
+                .result(tripService.getPaymentOptions(id))
+                .message("Trip payment options retrieved successfully")
+                .build();
+    }
+
 
     @GetMapping()
     public ApiResponse<List<TripResponse>> getAllTrips(@RequestParam(required = false) String startProvinceId,
@@ -90,11 +99,16 @@ public class TripController {
 
 
     @GetMapping("/driver")
-    public ApiResponse<List<TripResponse>> searchAllDriveTrip(@ModelAttribute SearchTripDriveRequest request){
+    public ApiResponse<List<TripResponse>> searchAllDriveTrip(
+            @ModelAttribute SearchTripDriveRequest request,
+            @org.springframework.data.web.PageableDefault(page = 0, size = 10) Pageable pageable) {
+        if (request.getPageable() == null) {
+            request.setPageable(pageable);
+        }
         Page<TripResponse> tripResponses = tripService.searchDriveTrip(request);
-       return ApiResponse.<List<TripResponse>>builder()
-               .count(tripResponses.getTotalElements())
-               .result(tripResponses.getContent())
-               .build();
+        return ApiResponse.<List<TripResponse>>builder()
+                .count(tripResponses.getTotalElements())
+                .result(tripResponses.getContent())
+                .build();
     }
 }

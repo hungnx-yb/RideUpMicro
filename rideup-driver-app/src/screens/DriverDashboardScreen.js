@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView,
-  TouchableOpacity, ActivityIndicator, RefreshControl, Dimensions, Image, Modal, Alert
+  TouchableOpacity, ActivityIndicator, RefreshControl, Dimensions, Image, Modal, Alert, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { apiService } from '../services/apiService';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { chatSocket } from '../services/chatSocket';
@@ -19,8 +20,79 @@ const COLORS = {
 };
 
 const formatMoney = (val) => {
-  if (!val) return '0 đ';
+  if (!val && val !== 0) return '0 đ';
   return Number(val).toLocaleString('vi-VN') + ' đ';
+};
+
+const getStartOfMonth = (d = new Date()) => new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+const getEndOfMonth = (d = new Date()) => new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+
+const formatYMD = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDisplayDate = (date) => {
+  if (!date) return '--';
+  const d = new Date(date);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+const formatExpireTime = (expiresAt, fallbackDepartureTime) => {
+  let target = expiresAt;
+  if (!target && fallbackDepartureTime) {
+    const dep = new Date(fallbackDepartureTime);
+    if (!isNaN(dep.getTime())) {
+      target = new Date(dep.getTime() - 60 * 60 * 1000);
+    }
+  }
+  if (!target) return 'Chờ xác nhận';
+  const d = new Date(target);
+  if (isNaN(d.getTime())) return 'Chờ xác nhận';
+
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const timeStr = `${hours}:${minutes}`;
+
+  const now = new Date();
+  const isSameDay =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear();
+
+  if (isSameDay) {
+    return `Tự hủy lúc ${timeStr} (1h trước giờ chạy)`;
+  }
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `Tự hủy lúc ${timeStr} ${day}/${month} (1h trước giờ chạy)`;
+};
+
+const calculateRevenueFromTrips = (tripsList) => {
+  let revenue = 0;
+  let completed = 0;
+  let passengers = 0;
+
+  tripsList.forEach(t => {
+    const status = (t.status || '').toUpperCase();
+    const booked = Math.max((t.seatTotal || 0) - (t.seatAvailable || 0), 0);
+
+    // Chỉ tính doanh thu, số chuyến xong và số khách đã chở cho các chuyến ĐÃ HOÀN THÀNH (COMPLETED)
+    if (status === 'COMPLETED') {
+      completed++;
+      passengers += booked;
+      revenue += (t.priceVnd || 0) * booked;
+    }
+  });
+
+  return { revenue, completed, passengers };
 };
 
 export default function DriverDashboardScreen() {
@@ -30,22 +102,59 @@ export default function DriverDashboardScreen() {
   const [stats, setStats] = useState({
     totalRevenue: 0,
     tripsCompleted: 0,
-    activeTrips: 0,
-    rating: 5.0
+    totalPassengers: 0,
+    rating: '5.0'
   });
-  const [upcomingTrip, setUpcomingTrip] = useState(null);
+  const [dateRange, setDateRange] = useState({
+    startDate: getStartOfMonth(),
+    endDate: getEndOfMonth(),
+    preset: 'THIS_MONTH' // 'THIS_MONTH' | 'TODAY' | 'LAST_7_DAYS' | 'LAST_MONTH' | 'CUSTOM'
+  });
+  const [tempDateRange, setTempDateRange] = useState({
+    startDate: getStartOfMonth(),
+    endDate: getEndOfMonth(),
+    preset: 'THIS_MONTH'
+  });
+  const [showDateFilterModal, setShowDateFilterModal] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState(null); // 'start' | 'end' | null
+  const [statsLoading, setStatsLoading] = useState(false);
+  const dateRangeRef = React.useRef(dateRange);
+  dateRangeRef.current = dateRange;
+
+  const [upcomingTrips, setUpcomingTrips] = useState([]);
+  const [dashboardTripSeats, setDashboardTripSeats] = useState({});
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [pendingPage, setPendingPage] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [driverInfo, setDriverInfo] = useState(null);
   const [driverProfile, setDriverProfile] = useState(null);
-  const [resultModal, setResultModal] = useState(null); // { type: 'success'|'reject'|'error'|'debt', bookingId }
+  const [walletDebt, setWalletDebt] = useState(0);
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [resultModal, setResultModal] = useState(null); // { type: 'success'|'reject'|'error'|'debt'|'mod_approved'|'mod_rejected', bookingId }
+  const [pendingModifications, setPendingModifications] = useState([]);
+  const [showRejectModModal, setShowRejectModModal] = useState(false);
+  const [rejectingMod, setRejectingMod] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const PENDING_PAGE_SIZE = 3;
+  const totalPendingPages = Math.ceil(pendingRequests.length / PENDING_PAGE_SIZE) || 1;
+  const currentPendingRequests = pendingRequests.slice(
+    pendingPage * PENDING_PAGE_SIZE,
+    (pendingPage + 1) * PENDING_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (pendingPage >= totalPendingPages) {
+      setPendingPage(Math.max(0, totalPendingPages - 1));
+    }
+  }, [pendingRequests.length, totalPendingPages]);
 
   useFocusEffect(
     React.useCallback(() => {
       // Mở socket ngay khi load Dashboard
       chatSocket.connect();
 
-      fetchDashboardData();
+      fetchDashboardData(false, dateRangeRef.current);
       return () => { };
     }, [])
   );
@@ -55,8 +164,12 @@ export default function DriverDashboardScreen() {
     navigation.navigate('Dashboard');
     setLoading(true);
     try {
-      if (!msg.metadata) return fetchDashboardData(true);
-      const meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+      let meta = {};
+      if (msg && msg.metadata) {
+        meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+      } else if (msg) {
+        meta = msg;
+      }
 
       if (meta.bookingId && meta.tripId) {
         // Đợi thêm 1 chút phòng hờ DB chưa commit xong
@@ -73,7 +186,7 @@ export default function DriverDashboardScreen() {
         if (bookingData) {
           const enrichedBooking = { ...bookingData, tripDetails };
           setPendingRequests(prev => {
-            if (prev.find(b => b.id === enrichedBooking.id)) return prev;
+            if (prev.some(b => String(b.id) === String(enrichedBooking.id))) return prev;
             return [enrichedBooking, ...prev];
           });
         } else {
@@ -97,8 +210,20 @@ export default function DriverDashboardScreen() {
       await notificationSocket.connect();
 
       unsubscribe = notificationSocket.subscribe((msg) => {
-        const titleLower = (msg.title || '').toLowerCase();
-        if (titleLower.includes('đặt') || titleLower.includes('booking') || titleLower.includes('khẩn')) {
+        let meta = {};
+        try {
+          meta = typeof msg?.metadata === 'string' ? JSON.parse(msg.metadata) : (msg?.metadata || {});
+        } catch (e) {}
+
+        const notiType = (meta.type || msg?.type || '').toUpperCase();
+        const titleLower = (msg?.title || '').toLowerCase();
+
+        // 1. Chỉ hiện popup "CÓ YÊU CẦU ĐẶT XE!" khi THỰC SỰ là đơn mới đang CHỜ DUYỆT (BOOKING_WAITING_APPROVAL)
+        // Tuyệt đối không hiển thị popup này khi tài xế vừa duyệt xong (BOOKING_CONFIRMED) hoặc thông báo khác
+        const isWaitingApproval = notiType === 'BOOKING_WAITING_APPROVAL' ||
+          (titleLower.includes('yêu cầu đặt xe mới') && notiType !== 'BOOKING_CONFIRMED');
+
+        if (isWaitingApproval) {
           Alert.alert(
             "🚀 CÓ YÊU CẦU ĐẶT XE!",
             "Bạn vừa nhận được một yêu cầu đặt chỗ mới từ khách hàng. Vui lòng kiểm tra ngay!",
@@ -113,9 +238,19 @@ export default function DriverDashboardScreen() {
               }
             ]
           );
+        } else if (notiType === 'BOOKING_MODIFICATION_REQUESTED' || titleLower.includes('đổi') || titleLower.includes('lộ trình') || titleLower.includes('chỉnh sửa')) {
+          Alert.alert(
+            "🔔 YÊU CẦU ĐỔI LỘ TRÌNH!",
+            "Khách hàng vừa gửi yêu cầu đổi điểm đón/trả. Vui lòng kiểm tra và phản hồi trong 15 phút.",
+            [
+              { text: "Để sau", style: "cancel" },
+              { text: "Xem ngay", onPress: () => fetchDashboardData(true) }
+            ]
+          );
         } else {
-          // Nếu thông báo khác, đợi 1 chút để đảm bảo DB đã sync xong
-          setTimeout(() => fetchDashboardData(true), 1500);
+          // Các thông báo khác (đã duyệt thành công, hủy, cập nhật chuyến xe...)
+          // Không hiện popup phiền nhiễu, chỉ âm thầm đồng bộ lại dữ liệu
+          setTimeout(() => fetchDashboardData(true), 1200);
         }
       });
     };
@@ -123,17 +258,149 @@ export default function DriverDashboardScreen() {
     return () => { if (unsubscribe) unsubscribe(); };
   }, []);
 
-  const fetchDashboardData = async (isRefresh = false) => {
+  const getRevenueTitle = () => {
+    if (dateRange.preset === 'THIS_MONTH') {
+      return `DOANH THU THÁNG ${dateRange.startDate.getMonth() + 1}/${dateRange.startDate.getFullYear()}`;
+    }
+    if (dateRange.preset === 'TODAY') {
+      return 'DOANH THU HÔM NAY';
+    }
+    if (dateRange.preset === 'LAST_7_DAYS') {
+      return 'DOANH THU 7 NGÀY GẦN NHẤT';
+    }
+    if (dateRange.preset === 'LAST_MONTH') {
+      return `DOANH THU THÁNG ${dateRange.startDate.getMonth() + 1}/${dateRange.startDate.getFullYear()}`;
+    }
+    return 'DOANH THU THEO KHOẢNG NGÀY';
+  };
+
+  const handleOpenFilterModal = () => {
+    setTempDateRange({ ...dateRange });
+    setDatePickerMode(null);
+    setShowDateFilterModal(true);
+  };
+
+  const handleSelectPreset = (presetKey) => {
+    const now = new Date();
+    let start, end;
+    if (presetKey === 'THIS_MONTH') {
+      start = getStartOfMonth(now);
+      end = getEndOfMonth(now);
+    } else if (presetKey === 'TODAY') {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (presetKey === 'LAST_7_DAYS') {
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      start = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+      start.setHours(0, 0, 0, 0);
+    } else if (presetKey === 'LAST_MONTH') {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    }
+    setTempDateRange({
+      startDate: start,
+      endDate: end,
+      preset: presetKey
+    });
+    setDatePickerMode(null);
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setDatePickerMode(null);
+    }
+    if (selectedDate) {
+      if (datePickerMode === 'start') {
+        setTempDateRange(prev => ({
+          ...prev,
+          startDate: selectedDate,
+          preset: 'CUSTOM'
+        }));
+      } else if (datePickerMode === 'end') {
+        setTempDateRange(prev => ({
+          ...prev,
+          endDate: selectedDate,
+          preset: 'CUSTOM'
+        }));
+      }
+    }
+  };
+
+  const handleResetFilter = () => {
+    handleSelectPreset('THIS_MONTH');
+  };
+
+  const handleApplyFilter = () => {
+    let finalStart = new Date(tempDateRange.startDate);
+    let finalEnd = new Date(tempDateRange.endDate);
+    if (finalStart > finalEnd) {
+      const temp = finalStart;
+      finalStart = finalEnd;
+      finalEnd = temp;
+    }
+    const newRange = {
+      startDate: finalStart,
+      endDate: finalEnd,
+      preset: tempDateRange.preset
+    };
+    setDateRange(newRange);
+    setShowDateFilterModal(false);
+    setDatePickerMode(null);
+    fetchRevenueStats(newRange.startDate, newRange.endDate);
+  };
+
+  const fetchRevenueStats = async (start, end) => {
+    setStatsLoading(true);
+    try {
+      const sDateStr = formatYMD(start);
+      const eDateStr = formatYMD(end);
+      const [statsRes, repRes] = await Promise.all([
+        apiService.getDriverTrips({ startDate: sDateStr, endDate: eDateStr, size: 500, page: 0 }).catch(() => null),
+        apiService.getDriverReputation().catch(() => null)
+      ]);
+      const rawStatsTrips = statsRes?.data?.result;
+      const statsTrips = Array.isArray(rawStatsTrips) ? rawStatsTrips : (rawStatsTrips?.content || []);
+      const { revenue, completed, passengers } = calculateRevenueFromTrips(statsTrips);
+      const driverRating = repRes?.data?.result?.driverRating || driverProfile?.rating || 5.0;
+
+      setStats(prev => ({
+        ...prev,
+        totalRevenue: revenue,
+        tripsCompleted: completed,
+        totalPassengers: passengers,
+        rating: Number(driverRating).toFixed(1)
+      }));
+    } catch (err) {
+      console.warn("Failed to fetch revenue stats:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const fetchDashboardData = async (isRefresh = false, targetDateRange = dateRangeRef.current) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      // 1. Gọi song song thông tin người dùng, hồ sơ sinh trắc học và danh sách chuyến đi
-      const [userRes, driverRes, res] = await Promise.all([
+      const sDateStr = formatYMD(targetDateRange.startDate);
+      const eDateStr = formatYMD(targetDateRange.endDate);
+
+      // 1. Gọi song song thông tin người dùng, hồ sơ sinh trắc học, chuyến đi, dữ liệu tài chính và thống kê khoảng ngày
+      const [userRes, driverRes, res, walletRes, stripeRes, statsRes, repRes] = await Promise.all([
         apiService.getMyUserInfo().catch(() => null),
         apiService.getMyDriverProfile().catch(() => null),
         apiService.getDriverTrips({ size: 100, page: 0 }).catch(() => null),
+        apiService.getMyWallet().catch(() => null),
+        apiService.getStripeAccountStatus().catch(() => null),
+        apiService.getDriverTrips({ startDate: sDateStr, endDate: eDateStr, size: 500, page: 0 }).catch(() => null),
+        apiService.getDriverReputation().catch(() => null)
       ]);
+      if (walletRes?.data?.result !== undefined) {
+        setWalletDebt(Number(walletRes.data.result) || 0);
+      }
+      if (stripeRes?.data?.result) {
+        setStripeStatus(stripeRes.data.result);
+      }
       if (userRes?.data?.result) {
         setDriverInfo(userRes.data.result);
       }
@@ -152,62 +419,102 @@ export default function DriverDashboardScreen() {
         return;
       }
 
-      const rawTrips = res?.data?.result;
-      const trips = Array.isArray(rawTrips) ? rawTrips : (rawTrips?.content || []);
-
-      let revenue = 0;
-      let completed = 0;
-      let active = 0;
-      let nextTrip = null;
-
-      const now = new Date();
-
-      trips.forEach(t => {
-        const status = (t.status || '').toUpperCase();
-
-        // Tính doanh thu dựa trên số ghế đã được đặt
-        if (status === 'COMPLETED' || status === 'STARTED' || status === 'FULL') {
-          const booked = Math.max((t.seatTotal || 0) - (t.seatAvailable || 0), 0);
-          revenue += (t.priceVnd || 0) * booked;
-        }
-
-        if (status === 'COMPLETED') completed++;
-        if (status === 'OPEN' || status === 'STARTED' || status === 'FULL') active++;
-
-        // Tìm chuyến đi sắp tới gần nhất
-        const tripDate = new Date(t.departureTime);
-        if (tripDate > now && (status === 'OPEN' || status === 'FULL')) {
-          if (!nextTrip || tripDate < new Date(nextTrip.departureTime)) {
-            nextTrip = t;
-          }
-        }
-      });
+      // Xử lý thống kê khoảng ngày
+      const rawStatsTrips = statsRes?.data?.result;
+      const statsTrips = Array.isArray(rawStatsTrips) ? rawStatsTrips : (rawStatsTrips?.content || []);
+      const { revenue, completed, passengers } = calculateRevenueFromTrips(statsTrips);
+      const driverRating = repRes?.data?.result?.driverRating || driverRes?.data?.result?.rating || 5.0;
 
       setStats({
         totalRevenue: revenue,
         tripsCompleted: completed,
-        activeTrips: active,
-        rating: 4.9 // Dummy rating
+        totalPassengers: passengers,
+        rating: Number(driverRating).toFixed(1)
       });
-      setUpcomingTrip(nextTrip);
 
-      // 2. Gọi song song các request booking cho tất cả chuyến xe đang mở
-      const activeTripsList = trips.filter(t => t.status === 'OPEN' || t.status === 'FULL');
+      const rawTrips = res?.data?.result;
+      const trips = Array.isArray(rawTrips) ? rawTrips : (rawTrips?.content || []);
+
+      // De-duplicate trips list to avoid duplicate keys and duplicate queries
+      const uniqueTrips = [];
+      const seenTripIds = new Set();
+      for (const t of trips) {
+        if (t && t.id && !seenTripIds.has(String(t.id))) {
+          seenTripIds.add(String(t.id));
+          uniqueTrips.push(t);
+        }
+      }
+
+      const now = new Date();
+      // Lấy tối đa 3 chuyến đi sắp tới gần nhất (sắp xếp tăng dần theo giờ khởi hành)
+      const validUpcomingTrips = uniqueTrips
+        .filter(t => {
+          const status = (t.status || '').toUpperCase();
+          const tripDate = new Date(t.departureTime);
+          return tripDate > now && (status === 'OPEN' || status === 'FULL' || status === 'STARTED');
+        })
+        .sort((a, b) => new Date(a.departureTime) - new Date(b.departureTime))
+        .slice(0, 3);
+
+      setUpcomingTrips(validUpcomingTrips);
+
+      // 2. Gọi song song các request booking và modification cho tất cả chuyến xe đang mở
+      const activeTripsList = uniqueTrips.filter(t => t.status === 'OPEN' || t.status === 'FULL');
       if (activeTripsList.length > 0) {
-        const bookingResponses = await Promise.all(
-          activeTripsList.map(trip =>
-            apiService.getBookingsByTripId(trip.id)
-              .then(bookingRes => {
-                const bookings = bookingRes?.data?.result || [];
-                const waiting = bookings.filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
-                return waiting.map(b => ({ ...b, tripDetails: trip }));
-              })
-              .catch(() => [])
+        const tripBookedSeatsMap = {};
+        const [bookingResponses, modResponses] = await Promise.all([
+          Promise.all(
+            activeTripsList.map(trip =>
+              apiService.getBookingsByTripId(trip.id)
+                .then(bookingRes => {
+                  const bookings = bookingRes?.data?.result || [];
+                  const approved = bookings.filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+                  const bookedSeats = approved.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+                  tripBookedSeatsMap[trip.id] = bookedSeats;
+                  const waiting = bookings.filter(b => b.status === 'WAITING_DRIVER_APPROVAL');
+                  return waiting.map(b => ({ ...b, tripDetails: trip }));
+                })
+                .catch(() => [])
+            )
+          ),
+          Promise.all(
+            activeTripsList.map(trip =>
+              apiService.getPendingModificationsByTrip(trip.id)
+                .then(modRes => {
+                  const mods = modRes?.data?.result || [];
+                  return mods.map(m => ({ ...m, tripDetails: trip }));
+                })
+                .catch(() => [])
+            )
           )
-        );
-        setPendingRequests(bookingResponses.flat());
+        ]);
+        setDashboardTripSeats(tripBookedSeatsMap);
+
+        // De-duplicate bookings list by id
+        const uniqueBookings = [];
+        const seenBookingIds = new Set();
+        for (const b of bookingResponses.flat()) {
+          if (b && b.id && !seenBookingIds.has(String(b.id))) {
+            seenBookingIds.add(String(b.id));
+            uniqueBookings.push(b);
+          }
+        }
+        setPendingRequests(uniqueBookings);
+
+        // De-duplicate modifications list by id
+        const uniqueMods = [];
+        const seenModIds = new Set();
+        for (const m of modResponses.flat()) {
+          if (m && m.id && !seenModIds.has(String(m.id))) {
+            seenModIds.add(String(m.id));
+            uniqueMods.push(m);
+          }
+        }
+        setPendingModifications(uniqueMods);
       } else {
+        setDashboardTripSeats({});
         setPendingRequests([]);
+        setPendingModifications([]);
       }
 
     } catch (error) {
@@ -271,6 +578,51 @@ export default function DriverDashboardScreen() {
     }
   };
 
+  const handleApproveModification = async (modId) => {
+    setActionLoading(true);
+    try {
+      await apiService.approveBookingModification(modId);
+      await fetchDashboardData(true);
+      setResultModal({
+        type: 'mod_approved',
+        message: 'Đã chấp thuận đổi lộ trình. Điểm đón/trả của hành khách đã được cập nhật thành công!'
+      });
+    } catch (e) {
+      console.log('Approve Modification Error', e);
+      const errMsg = e.response?.data?.message || 'Không thể phê duyệt đổi lộ trình lúc này.';
+      setResultModal({ type: 'error', message: errMsg });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenRejectModification = (mod) => {
+    setRejectingMod(mod);
+    setRejectReason('Lệch cung đường di chuyển quá xa');
+    setShowRejectModModal(true);
+  };
+
+  const handleConfirmRejectModification = async () => {
+    if (!rejectingMod) return;
+    setActionLoading(true);
+    try {
+      await apiService.rejectBookingModification(rejectingMod.id, rejectReason || 'Không thuận đường di chuyển');
+      setShowRejectModModal(false);
+      setRejectingMod(null);
+      await fetchDashboardData(true);
+      setResultModal({
+        type: 'mod_rejected',
+        message: 'Đã từ chối yêu cầu đổi lộ trình. Khách hàng vẫn áp dụng lộ trình ban đầu.'
+      });
+    } catch (e) {
+      console.log('Reject Modification Error', e);
+      const errMsg = e.response?.data?.message || 'Không thể từ chối yêu cầu lúc này.';
+      setResultModal({ type: 'error', message: errMsg });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* HEADER TÀI XẾ (NHỎ GỌN) */}
@@ -279,47 +631,102 @@ export default function DriverDashboardScreen() {
           <Text style={styles.greetingText}>Ngày mới tốt lành,</Text>
           <Text style={styles.nameText}>{driverInfo?.fullName || 'Tài xế'}</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <TouchableOpacity style={styles.notificationBtn}>
-            <Ionicons name="notifications-outline" size={24} color={COLORS.text} />
-            <View style={styles.notificationBadge} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.avatarContainer} activeOpacity={0.8} onPress={() => navigation.navigate('Profile')}>
-            {driverInfo?.avatarUrl ? (
-              <Image source={{ uri: driverInfo.avatarUrl }} style={styles.avatar} />
-            ) : (
-              <Text style={styles.avatarLetter}>{(driverInfo?.fullName || 'T')[0].toUpperCase()}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.avatarContainer} activeOpacity={0.8} onPress={() => navigation.navigate('Profile')}>
+          {driverInfo?.avatarUrl ? (
+            <Image source={{ uri: driverInfo.avatarUrl }} style={styles.avatar} />
+          ) : (
+            <Text style={styles.avatarLetter}>{(driverInfo?.fullName || 'T')[0].toUpperCase()}</Text>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchDashboardData(true)} tintColor={COLORS.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchDashboardData(true, dateRangeRef.current)} tintColor={COLORS.primary} />}
       >
-        {/* TRẠNG THÁI HOẠT ĐỘNG */}
-        <View style={styles.statusBanner}>
-          <View style={styles.statusDotWrapper}>
-            <View style={styles.statusDot} />
-            <View style={styles.statusPulse} />
-          </View>
-          <Text style={styles.statusText}>Bạn đang trực tuyến và sẵn sàng nhận chuyến</Text>
-        </View>
+
+        {/* SMART FINANCIAL ALERT BANNERS (REQ-P3-04 & REQ-P3-06) */}
+        {stripeStatus && stripeStatus.status !== 'ACTIVE' && (
+          <TouchableOpacity
+            style={styles.smartAlertBannerWarning}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Wallet')}
+          >
+            <View style={styles.smartAlertIconCircle}>
+              <Ionicons name="card-outline" size={20} color="#6366F1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.smartAlertTitle}>Liên kết tài khoản Stripe Express</Text>
+              <Text style={styles.smartAlertDesc}>
+                Khách hàng hiện chưa thể trả thẻ trên xe của bạn. Bấm để liên kết ngay trong 1 phút!
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6366F1" />
+          </TouchableOpacity>
+        )}
+
+        {walletDebt >= 400000 && (
+          <TouchableOpacity
+            style={walletDebt >= 500000 ? styles.smartAlertBannerDanger : styles.smartAlertBannerAmber}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Wallet')}
+          >
+            <View style={[styles.smartAlertIconCircle, { backgroundColor: walletDebt >= 500000 ? '#FEE2E2' : '#FEF3C7' }]}>
+              <Ionicons
+                name={walletDebt >= 500000 ? 'lock-closed' : 'warning'}
+                size={20}
+                color={walletDebt >= 500000 ? '#EF4444' : '#F59E0B'}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.smartAlertTitle, { color: walletDebt >= 500000 ? '#B91C1C' : '#92400E' }]}>
+                {walletDebt >= 500000 ? 'Tài khoản bị tạm khóa nhận chuyến' : 'Dư nợ sắp chạm hạn mức 500k'}
+              </Text>
+              <Text style={[styles.smartAlertDesc, { color: walletDebt >= 500000 ? '#991B1B' : '#78350F' }]}>
+                Dư nợ hiện tại: {Number(walletDebt).toLocaleString('vi-VN')} đ. Bấm để thanh toán nợ ngay.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={walletDebt >= 500000 ? '#EF4444' : '#F59E0B'} />
+          </TouchableOpacity>
+        )}
 
 
 
         {/* THẺ DOANH THU & HIỆU SUẤT TỔNG HỢP */}
         <View style={styles.revenueCard}>
+          {/* Header Row: Label & Ví/Rút tiền tách biệt 2 bên, không lo tràn */}
           <View style={styles.revenueTop}>
-            <View>
-              <Text style={styles.revenueLabel}>DOANH THU HÔM NAY</Text>
-              <Text style={styles.revenueValue}>{formatMoney(stats.totalRevenue || 450000)}</Text>
-            </View>
-            <TouchableOpacity style={styles.walletBtn}>
-              <Text style={styles.walletBtnText}>Rút tiền</Text>
+            <Text style={styles.revenueLabel} numberOfLines={1}>{getRevenueTitle()}</Text>
+            <TouchableOpacity style={styles.walletBtn} onPress={() => navigation.navigate('Wallet')} activeOpacity={0.8}>
+              <Text style={styles.walletBtnText}>Ví & Rút tiền</Text>
               <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Revenue Amount */}
+          <View style={styles.revenueValueRow}>
+            <Text style={styles.revenueValue}>{formatMoney(stats.totalRevenue)}</Text>
+            {statsLoading && (
+              <ActivityIndicator size="small" color="#FFF" style={{ marginLeft: 10, alignSelf: 'center' }} />
+            )}
+          </View>
+
+          {/* Date Filter Badge Row (Nhấn vào để mở Modal lọc khoảng ngày) */}
+          <View style={styles.dateFilterRow}>
+            <TouchableOpacity
+              style={styles.dateRangeBadge}
+              onPress={handleOpenFilterModal}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={13} color="#FFF" />
+              <Text style={styles.dateRangeBadgeText}>
+                {formatDisplayDate(dateRange.startDate)} - {formatDisplayDate(dateRange.endDate)}
+              </Text>
+              <View style={styles.filterBadgePill}>
+                <Ionicons name="funnel-outline" size={11} color="#FFF" />
+                <Text style={styles.filterBadgePillText}>Lọc ngày</Text>
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -327,23 +734,23 @@ export default function DriverDashboardScreen() {
             <View style={styles.statBox}>
               <Ionicons name="car" size={18} color="#FFF" />
               <View style={styles.statInfo}>
-                <Text style={styles.statVal}>{stats.tripsCompleted || 3}</Text>
-                <Text style={styles.statDesc}>Chuyến</Text>
+                <Text style={styles.statVal}>{stats.tripsCompleted}</Text>
+                <Text style={styles.statDesc}>Chuyến xong</Text>
               </View>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
-              <Ionicons name="checkmark-done-circle" size={18} color="#FFF" />
+              <Ionicons name="people" size={18} color="#FFF" />
               <View style={styles.statInfo}>
-                <Text style={styles.statVal}>98%</Text>
-                <Text style={styles.statDesc}>Tỉ lệ nhận</Text>
+                <Text style={styles.statVal}>{stats.totalPassengers}</Text>
+                <Text style={styles.statDesc}>Khách chở</Text>
               </View>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
               <Ionicons name="star" size={18} color="#FFD700" />
               <View style={styles.statInfo}>
-                <Text style={styles.statVal}>{stats.rating}</Text>
+                <Text style={styles.statVal}>{stats.rating || '5.0'}</Text>
                 <Text style={styles.statDesc}>Đánh giá</Text>
               </View>
             </View>
@@ -352,7 +759,7 @@ export default function DriverDashboardScreen() {
 
         {/* LƯỚI TÍNH NĂNG NHANH (QUICK ACTIONS) */}
         <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.actionItem}>
+          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Wallet')}>
             <View style={[styles.actionIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
               <Ionicons name="wallet" size={24} color={COLORS.success} />
             </View>
@@ -378,57 +785,74 @@ export default function DriverDashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* CHUYẾN ĐI SẮP TỚI (DẠNG VÉ BOARDING PASS) */}
+        {/* CHUYẾN ĐI TIẾP THEO (TỐI ĐA 3 CHUYẾN) */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Chuyến đi tiếp theo</Text>
+          <Text style={styles.sectionTitle}>
+            Chuyến đi tiếp theo
+          </Text>
           <TouchableOpacity onPress={() => navigation.navigate('DriverTrips')}>
             <Text style={styles.seeAllText}>Tất cả</Text>
           </TouchableOpacity>
         </View>
 
-        {upcomingTrip ? (
-          <View style={styles.ticketCard}>
-            <View style={styles.ticketHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="time" size={16} color={COLORS.text} />
-                <Text style={styles.ticketTime}>
-                  {new Date(upcomingTrip.departureTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </View>
-              <View style={styles.ticketBadge}>
-                <Text style={styles.ticketBadgeText}>SẮP KHỞI HÀNH</Text>
-              </View>
-            </View>
+        {upcomingTrips.length > 0 ? (
+          upcomingTrips.map((trip, idx) => {
+            const tripDate = new Date(trip.departureTime);
+            const timeStr = tripDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = tripDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+            const isStarted = (trip.status || '').toUpperCase() === 'STARTED';
 
-            <View style={styles.ticketBody}>
-              <View style={styles.routeItem}>
-                <View style={[styles.routeDot, { backgroundColor: COLORS.primary }]} />
-                <Text style={styles.routeText} numberOfLines={1}>{upcomingTrip.startAddressText}</Text>
-              </View>
-              <View style={styles.routeLine} />
-              <View style={styles.routeItem}>
-                <View style={[styles.routeDot, { backgroundColor: COLORS.error }]} />
-                <Text style={styles.routeText} numberOfLines={1}>{upcomingTrip.endAddressText}</Text>
-              </View>
-            </View>
+            return (
+              <View key={`upcoming-${trip.id || idx}-${idx}`} style={styles.ticketCard}>
+                <View style={styles.ticketHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="time" size={16} color={COLORS.text} />
+                    <Text style={styles.ticketTime}>
+                      {timeStr} • {dateStr}
+                    </Text>
+                  </View>
+                  <View style={[styles.ticketBadge, isStarted && { backgroundColor: 'rgba(14,165,233,0.1)' }]}>
+                    <Text style={[styles.ticketBadgeText, isStarted && { color: COLORS.primary }]}>
+                      {isStarted ? 'ĐANG CHẠY' : 'SẮP KHỞI HÀNH'}
+                    </Text>
+                  </View>
+                </View>
 
-            <View style={styles.ticketDividerWrap}>
-              <View style={styles.ticketNotchLeft} />
-              <View style={styles.ticketDashedLine} />
-              <View style={styles.ticketNotchRight} />
-            </View>
+                <View style={styles.ticketBody}>
+                  <View style={styles.routeItem}>
+                    <View style={[styles.routeDot, { backgroundColor: COLORS.primary }]} />
+                    <Text style={styles.routeText} numberOfLines={1}>{trip.startAddressText}</Text>
+                  </View>
+                  <View style={styles.routeLine} />
+                  <View style={styles.routeItem}>
+                    <View style={[styles.routeDot, { backgroundColor: COLORS.error }]} />
+                    <Text style={styles.routeText} numberOfLines={1}>{trip.endAddressText}</Text>
+                  </View>
+                </View>
 
-            <View style={styles.ticketFooter}>
-              <View style={styles.ticketMeta}>
-                <Text style={styles.ticketMetaLabel}>TÌNH TRẠNG</Text>
-                <Text style={styles.ticketMetaValue}>{upcomingTrip.seatTotal - upcomingTrip.seatAvailable}/{upcomingTrip.seatTotal} ghế đã đặt</Text>
+                <View style={styles.ticketDividerWrap}>
+                  <View style={styles.ticketNotchLeft} />
+                  <View style={styles.ticketDashedLine} />
+                  <View style={styles.ticketNotchRight} />
+                </View>
+
+                <View style={styles.ticketFooter}>
+                  <View style={styles.ticketMeta}>
+                    <Text style={styles.ticketMetaLabel}>TÌNH TRẠNG</Text>
+                    <Text style={styles.ticketMetaValue}>
+                      {dashboardTripSeats[trip.id] !== undefined
+                        ? dashboardTripSeats[trip.id]
+                        : Math.max((trip.seatTotal || 0) - (trip.seatAvailable || 0), 0)}/{trip.seatTotal || 0} ghế đã đặt
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={styles.detailBtn} onPress={() => navigation.navigate('DriverTrips')}>
+                    <Text style={styles.detailBtnText}>{isStarted ? 'Chi tiết' : 'Bắt đầu'}</Text>
+                    <Ionicons name="arrow-forward" size={16} color={COLORS.background} />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <TouchableOpacity style={styles.detailBtn} onPress={() => navigation.navigate('DriverTrips')}>
-                <Text style={styles.detailBtnText}>Bắt đầu</Text>
-                <Ionicons name="arrow-forward" size={16} color={COLORS.background} />
-              </TouchableOpacity>
-            </View>
-          </View>
+            );
+          })
         ) : (
           <TouchableOpacity 
             style={styles.emptyTicket} 
@@ -457,14 +881,167 @@ export default function DriverDashboardScreen() {
           </TouchableOpacity>
         )}
 
+        {/* CẢNH BÁO YÊU CẦU ĐỔI LỘ TRÌNH TỪ KHÁCH HÀNG */}
+        {pendingModifications.length > 0 && (
+          <View style={[styles.pendingSection, { marginTop: 24 }]}>
+            <View style={styles.modSectionHeaderRow}>
+              <View style={styles.modSectionBadge}>
+                <Ionicons name="swap-horizontal" size={16} color="#B45309" />
+              </View>
+              <Text style={styles.pendingModTitle}>YÊU CẦU ĐỔI LỘ TRÌNH ({pendingModifications.length})</Text>
+            </View>
+
+            {pendingModifications.map((mod, idx) => {
+              const expireDate = mod.expiresAt ? new Date(mod.expiresAt) : null;
+              const expireText = expireDate ? expireDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '15 phút';
+
+              return (
+                <View key={`mod-${mod.id || idx}-${idx}`} style={styles.pendingModCard}>
+                  {/* Header */}
+                  <View style={styles.pendingModHeader}>
+                    <View style={styles.modTimerRow}>
+                      <Ionicons name="time" size={14} color="#D97706" />
+                      <Text style={styles.pendingModTimer}>Chờ duyệt (Hết hạn lúc {expireText})</Text>
+                    </View>
+                    <View style={styles.modCodeBadge}>
+                      <Text style={styles.modCodeBadgeText}>MÃ: {(mod.bookingId || '').substring(0, 8).toUpperCase()}</Text>
+                    </View>
+                  </View>
+
+                  {/* Body: Before vs After Comparison */}
+                  <View style={styles.pendingModBody}>
+                    {(mod.newPassengerName || mod.newPassengerPhone) && (
+                      <View style={styles.modPassengerInfo}>
+                        <Ionicons name="person-circle-outline" size={16} color={COLORS.primary} />
+                        <Text style={styles.modPassengerName}>{mod.newPassengerName || 'Hành khách'}</Text>
+                        {!!mod.newPassengerPhone && (
+                          <Text style={styles.modPassengerPhone}> • {mod.newPassengerPhone}</Text>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Diff: Pickup Comparison */}
+                    <View style={styles.diffBox}>
+                      <View style={styles.diffHeaderRow}>
+                        <Ionicons name="location" size={15} color={COLORS.primary} />
+                        <Text style={styles.diffSectionTitle}>ĐIỂM ĐÓN</Text>
+                      </View>
+                      <View style={styles.diffItemOld}>
+                        <Text style={styles.diffLabelOld}>Cũ:</Text>
+                        <Text style={styles.diffTextOld} numberOfLines={2}>
+                          {mod.oldPickupAddressText || 'Địa chỉ cũ'}
+                        </Text>
+                      </View>
+                      <View style={styles.diffItemNew}>
+                        <Ionicons name="arrow-forward" size={14} color={COLORS.success} style={{ marginTop: 2, marginRight: 4 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.diffLabelNew}>Mới đề xuất:</Text>
+                          <Text style={styles.diffTextNew} numberOfLines={2}>
+                            {mod.newPickupAddressText}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Diff: Dropoff Comparison */}
+                    <View style={[styles.diffBox, { marginTop: 10 }]}>
+                      <View style={styles.diffHeaderRow}>
+                        <Ionicons name="flag" size={15} color={COLORS.warning} />
+                        <Text style={[styles.diffSectionTitle, { color: COLORS.warning }]}>ĐIỂM TRẢ</Text>
+                      </View>
+                      <View style={styles.diffItemOld}>
+                        <Text style={styles.diffLabelOld}>Cũ:</Text>
+                        <Text style={styles.diffTextOld} numberOfLines={2}>
+                          {mod.oldDropoffAddressText || 'Địa chỉ cũ'}
+                        </Text>
+                      </View>
+                      <View style={styles.diffItemNew}>
+                        <Ionicons name="arrow-forward" size={14} color={COLORS.success} style={{ marginTop: 2, marginRight: 4 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.diffLabelNew}>Mới đề xuất:</Text>
+                          <Text style={styles.diffTextNew} numberOfLines={2}>
+                            {mod.newDropoffAddressText}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Customer note / reason */}
+                    {!!mod.newNote && (
+                      <View style={styles.modNoteBox}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={14} color="#64748B" />
+                        <Text style={styles.modNoteText}>Khách nhắn: "{mod.newNote}"</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Actions */}
+                  <View style={styles.pendingModActions}>
+                    <TouchableOpacity
+                      style={styles.btnModReject}
+                      onPress={() => handleOpenRejectModification(mod)}
+                      disabled={actionLoading}
+                    >
+                      <Text style={styles.btnModRejectText}>TỪ CHỐI</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.btnModApprove}
+                      onPress={() => handleApproveModification(mod.id)}
+                      disabled={actionLoading}
+                    >
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                      <Text style={styles.btnModApproveText}>ĐỒNG Ý ĐỔI</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* CẢNH BÁO YÊU CẦU CHỜ DUYỆT (DI CHUYỂN XUỐNG DƯỚI) */}
         {pendingRequests.length > 0 && (
           <View style={[styles.pendingSection, { marginTop: 24 }]}>
-            <Text style={styles.pendingTitle}>YÊU CẦU ĐẶT XE MỚI ({pendingRequests.length})</Text>
-            {pendingRequests.map(req => (
-              <View key={req.id} style={styles.pendingCard}>
+            <View style={styles.pendingHeaderRow}>
+              <Text style={styles.pendingTitle}>YÊU CẦU ĐẶT XE MỚI ({pendingRequests.length})</Text>
+              {totalPendingPages > 1 && (
+                <View style={styles.pendingPaginationWrap}>
+                  <TouchableOpacity
+                    style={[styles.pendingPageBtn, pendingPage === 0 && styles.pendingPageBtnDisabled]}
+                    onPress={() => setPendingPage(p => Math.max(0, p - 1))}
+                    disabled={pendingPage === 0}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name="chevron-back"
+                      size={16}
+                      color={pendingPage === 0 ? '#CBD5E1' : COLORS.primary}
+                    />
+                  </TouchableOpacity>
+                  <Text style={styles.pendingPageText}>
+                    {pendingPage + 1}/{totalPendingPages}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.pendingPageBtn, pendingPage >= totalPendingPages - 1 && styles.pendingPageBtnDisabled]}
+                    onPress={() => setPendingPage(p => Math.min(totalPendingPages - 1, p + 1))}
+                    disabled={pendingPage >= totalPendingPages - 1}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={pendingPage >= totalPendingPages - 1 ? '#CBD5E1' : COLORS.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            {currentPendingRequests.map((req, idx) => (
+              <View key={`pending-${req.id || idx}-${idx}`} style={styles.pendingCard}>
                 <View style={styles.pendingHeader}>
-                  <Text style={styles.pendingTimer}>⏱️ Chờ xác nhận (Hủy sau 14:59)</Text>
+                  <Text style={styles.pendingTimer}>
+                    ⏱️ {formatExpireTime(req.expiresAt, req.tripDetails?.departureTime)}
+                  </Text>
                   {/* Đã bỏ phương thức thanh toán theo yêu cầu */}
                 </View>
                 <View style={styles.pendingBody}>
@@ -528,12 +1105,12 @@ export default function DriverDashboardScreen() {
                     })()}
                   </View>
 
-                  {req.note ? (
-                    <View style={styles.noteBox}>
-                      <Ionicons name="chatbubble-ellipses-outline" size={14} color={COLORS.textMuted} />
-                      <Text style={styles.noteText} numberOfLines={2}>Ghi chú: {req.note}</Text>
-                    </View>
-                  ) : null}
+                  <View style={[styles.noteBox, !req.note && { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={14} color={req.note ? '#D97706' : COLORS.textMuted} />
+                    <Text style={[styles.noteText, !req.note && { color: COLORS.textMuted, fontStyle: 'italic' }]} numberOfLines={2}>
+                      Ghi chú: {req.note ? req.note : 'Không có ghi chú'}
+                    </Text>
+                  </View>
 
                   <View style={styles.pendingMetaBox}>
                     <View style={styles.metaItem}>
@@ -560,29 +1137,6 @@ export default function DriverDashboardScreen() {
             ))}
           </View>
         )}
-
-        {/* THÔNG TIN BỔ ÍCH / ĐIỂM NÓNG */}
-        <Text style={[styles.sectionTitle, { marginTop: 32, marginBottom: 16 }]}>Cơ hội thu nhập</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.opportunitiesScroll}>
-          <TouchableOpacity style={styles.oppCard} activeOpacity={0.9}>
-            <View style={styles.oppIconWrap}>
-              <Ionicons name="flame" size={24} color={COLORS.error} />
-            </View>
-            <View>
-              <Text style={styles.oppTitle}>Nhu cầu cao: Hà Nội</Text>
-              <Text style={styles.oppSub}>Đang có 120 khách chờ đi tỉnh</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.oppCard} activeOpacity={0.9}>
-            <View style={[styles.oppIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-              <Ionicons name="gift" size={24} color={COLORS.success} />
-            </View>
-            <View>
-              <Text style={styles.oppTitle}>Thưởng giờ vàng</Text>
-              <Text style={styles.oppSub}>Hoàn thành 3 chuyến nhận 100K</Text>
-            </View>
-          </TouchableOpacity>
-        </ScrollView>
 
       </ScrollView>
 
@@ -640,6 +1194,34 @@ export default function DriverDashboardScreen() {
                 </View>
               </>
             )}
+            {resultModal?.type === 'mod_approved' && (
+              <>
+                <View style={[styles.resultIconWrap, { backgroundColor: 'rgba(16,185,129,0.12)' }]}>
+                  <Ionicons name="checkmark-circle" size={56} color={COLORS.success} />
+                </View>
+                <Text style={styles.resultTitle}>Cập nhật lộ trình thành công!</Text>
+                <Text style={styles.resultDesc}>{resultModal?.message}</Text>
+                <View style={styles.resultActions}>
+                  <TouchableOpacity style={[styles.resultBtnPrimary, { backgroundColor: COLORS.success }]} onPress={() => setResultModal(null)}>
+                    <Text style={styles.resultBtnPrimaryText}>Đã hiểu</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+            {resultModal?.type === 'mod_rejected' && (
+              <>
+                <View style={[styles.resultIconWrap, { backgroundColor: 'rgba(100,116,139,0.12)' }]}>
+                  <Ionicons name="close-circle" size={56} color={COLORS.textMuted} />
+                </View>
+                <Text style={styles.resultTitle}>Đã từ chối đổi lộ trình</Text>
+                <Text style={styles.resultDesc}>{resultModal?.message}</Text>
+                <View style={styles.resultActions}>
+                  <TouchableOpacity style={[styles.resultBtnPrimary, { backgroundColor: COLORS.textMuted }]} onPress={() => setResultModal(null)}>
+                    <Text style={styles.resultBtnPrimaryText}>Đã hiểu</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
             {resultModal?.type === 'error' && (
               <>
                 <View style={[styles.resultIconWrap, { backgroundColor: 'rgba(239,68,68,0.12)' }]}>
@@ -658,6 +1240,241 @@ export default function DriverDashboardScreen() {
         </View>
       </Modal>
 
+      {/* MODAL TỪ CHỐI ĐỔI LỘ TRÌNH */}
+      <Modal visible={showRejectModModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.rejectModalContainer}>
+            <View style={styles.rejectModalHeader}>
+              <Text style={styles.rejectModalTitle}>Từ chối đổi lộ trình</Text>
+              <TouchableOpacity onPress={() => setShowRejectModModal(false)}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.rejectModalDesc}>
+              Vui lòng chọn lý do từ chối để thông báo tới khách hàng:
+            </Text>
+
+            {['Lệch cung đường di chuyển quá xa', 'Sắp đến giờ xe khởi hành', 'Khu vực cấm dừng đỗ / đường hẹp', 'Khác'].map((reasonOption) => (
+              <TouchableOpacity
+                key={reasonOption}
+                style={[
+                  styles.reasonChip,
+                  rejectReason === reasonOption && styles.reasonChipActive
+                ]}
+                onPress={() => setRejectReason(reasonOption)}
+              >
+                <Ionicons
+                  name={rejectReason === reasonOption ? "radio-button-on" : "radio-button-off"}
+                  size={16}
+                  color={rejectReason === reasonOption ? COLORS.primary : COLORS.textMuted}
+                />
+                <Text style={[styles.reasonChipText, rejectReason === reasonOption && styles.reasonChipTextActive]}>
+                  {reasonOption}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <View style={styles.rejectActionRow}>
+              <TouchableOpacity
+                style={styles.rejectBtnCancel}
+                onPress={() => setShowRejectModModal(false)}
+                disabled={actionLoading}
+              >
+                <Text style={styles.rejectBtnCancelText}>Quay lại</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.rejectBtnConfirm}
+                onPress={handleConfirmRejectModification}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.rejectBtnConfirmText}>Xác nhận từ chối</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL LỌC KHOẢNG NGÀY DOANH THU */}
+      <Modal
+        visible={showDateFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDateFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.filterModalCard}>
+            {/* Modal Header */}
+            <View style={styles.filterModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.filterIconCircle}>
+                  <Ionicons name="calendar" size={18} color={COLORS.primary} />
+                </View>
+                <Text style={styles.filterModalTitle}>Lọc doanh thu & thống kê</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowDateFilterModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Presets */}
+            <Text style={styles.filterSectionLabel}>Chọn nhanh khoảng thời gian</Text>
+            <View style={styles.presetRow}>
+              {[
+                { key: 'THIS_MONTH', label: 'Tháng này' },
+                { key: 'TODAY', label: 'Hôm nay' },
+                { key: 'LAST_7_DAYS', label: '7 ngày qua' },
+                { key: 'LAST_MONTH', label: 'Tháng trước' },
+              ].map(p => {
+                const isActive = tempDateRange.preset === p.key;
+                return (
+                  <TouchableOpacity
+                    key={p.key}
+                    style={[styles.presetChip, isActive && styles.presetChipActive]}
+                    onPress={() => handleSelectPreset(p.key)}
+                  >
+                    <Text style={[styles.presetChipText, isActive && styles.presetChipTextActive]}>
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Custom Date Inputs */}
+            <Text style={[styles.filterSectionLabel, { marginTop: 14 }]}>Hoặc chọn khoảng ngày tùy chỉnh</Text>
+            <View style={styles.dateInputsRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dateInputSubLabel}>Từ ngày</Text>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.webDateInputBox}>
+                    <input
+                      type="date"
+                      value={formatYMD(tempDateRange.startDate)}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const [y, m, d] = e.target.value.split('-').map(Number);
+                          setTempDateRange(prev => ({
+                            ...prev,
+                            startDate: new Date(y, m - 1, d, 0, 0, 0, 0),
+                            preset: 'CUSTOM'
+                          }));
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        outline: 'none',
+                        fontSize: 13,
+                        fontWeight: '600',
+                        color: COLORS.text,
+                        backgroundColor: 'transparent'
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.dateInputBox, datePickerMode === 'start' && styles.dateInputBoxActive]}
+                    onPress={() => setDatePickerMode(datePickerMode === 'start' ? null : 'start')}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                    <Text style={styles.dateInputText}>{formatDisplayDate(tempDateRange.startDate)}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={{ justifyContent: 'center', paddingTop: 18 }}>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.textMuted} />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dateInputSubLabel}>Đến ngày</Text>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.webDateInputBox}>
+                    <input
+                      type="date"
+                      value={formatYMD(tempDateRange.endDate)}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const [y, m, d] = e.target.value.split('-').map(Number);
+                          setTempDateRange(prev => ({
+                            ...prev,
+                            endDate: new Date(y, m - 1, d, 23, 59, 59, 999),
+                            preset: 'CUSTOM'
+                          }));
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        outline: 'none',
+                        fontSize: 13,
+                        fontWeight: '600',
+                        color: COLORS.text,
+                        backgroundColor: 'transparent'
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.dateInputBox, datePickerMode === 'end' && styles.dateInputBoxActive]}
+                    onPress={() => setDatePickerMode(datePickerMode === 'end' ? null : 'end')}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                    <Text style={styles.dateInputText}>{formatDisplayDate(tempDateRange.endDate)}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Native Date Picker display */}
+            {Platform.OS !== 'web' && (datePickerMode === 'start' || datePickerMode === 'end') && (
+              <View style={styles.pickerWrapper}>
+                <DateTimePicker
+                  value={datePickerMode === 'start' ? (tempDateRange.startDate || new Date()) : (tempDateRange.endDate || new Date())}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+                  themeVariant="light"
+                  onChange={handleDateChange}
+                />
+                {Platform.OS === 'ios' && (
+                  <TouchableOpacity
+                    style={styles.pickerConfirmBtn}
+                    onPress={() => setDatePickerMode(null)}
+                  >
+                    <Text style={styles.pickerConfirmBtnText}>Xong</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Modal Actions */}
+            <View style={styles.filterModalActions}>
+              <TouchableOpacity
+                style={styles.resetFilterBtn}
+                onPress={handleResetFilter}
+              >
+                <Ionicons name="refresh" size={15} color={COLORS.textMuted} />
+                <Text style={styles.resetFilterBtnText}>Mặc định (Tháng này)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyFilterBtn}
+                onPress={handleApplyFilter}
+              >
+                <Text style={styles.applyFilterBtnText}>Áp dụng</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -671,7 +1488,7 @@ const styles = StyleSheet.create({
   avatarContainer: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(14, 165, 233, 0.1)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 3 },
   avatar: { width: '100%', height: '100%', borderRadius: 22 },
   avatarLetter: { color: COLORS.primary, fontSize: 18, fontWeight: 'bold' },
-  
+
   notificationBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   notificationBadge: { position: 'absolute', top: 10, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.error, borderWidth: 1, borderColor: COLORS.surface },
 
@@ -686,9 +1503,15 @@ const styles = StyleSheet.create({
 
   // Revenue Card
   revenueCard: { backgroundColor: COLORS.primary, borderRadius: 24, padding: 20, shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 15, elevation: 8, marginBottom: 24 },
-  revenueTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  revenueLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 4 },
+  revenueTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  revenueLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: 'bold', letterSpacing: 0.8, flex: 1, marginRight: 8 },
+  revenueValueRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 10 },
   revenueValue: { color: '#FFF', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
+  dateFilterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  dateRangeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.18)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
+  dateRangeBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
+  filterBadgePill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, marginLeft: 4 },
+  filterBadgePillText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
   walletBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   walletBtnText: { color: COLORS.primary, fontSize: 12, fontWeight: 'bold', marginRight: 2 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 16, padding: 16 },
@@ -745,7 +1568,12 @@ const styles = StyleSheet.create({
 
   // Pending Requests
   pendingSection: { marginBottom: 24 },
-  pendingTitle: { color: COLORS.error, fontSize: 13, fontWeight: '900', marginBottom: 12, letterSpacing: 1 },
+  pendingHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  pendingTitle: { color: COLORS.error, fontSize: 13, fontWeight: '900', letterSpacing: 1 },
+  pendingPaginationWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  pendingPageBtn: { width: 26, height: 26, borderRadius: 6, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
+  pendingPageBtnDisabled: { backgroundColor: '#F1F5F9' },
+  pendingPageText: { fontSize: 12, fontWeight: 'bold', color: COLORS.text },
   pendingCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 2, borderColor: 'rgba(239,68,68,0.2)', shadowColor: COLORS.error, shadowOpacity: 0.1, shadowRadius: 15, elevation: 5, marginBottom: 16 },
   pendingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   pendingTimer: { color: COLORS.error, fontSize: 13, fontWeight: 'bold' },
@@ -780,4 +1608,84 @@ const styles = StyleSheet.create({
   resultBtnSecondaryText: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
   resultBtnPrimary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 14, gap: 6 },
   resultBtnPrimaryText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
+
+  // Pending Route Modifications
+  modSectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  modSectionBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
+  pendingModTitle: { color: '#B45309', fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
+  pendingModCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 2, borderColor: '#F59E0B', shadowColor: '#D97706', shadowOpacity: 0.12, shadowRadius: 15, elevation: 5, marginBottom: 16 },
+  pendingModHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modTimerRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  pendingModTimer: { color: '#B45309', fontSize: 13, fontWeight: 'bold' },
+  modCodeBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  modCodeBadgeText: { fontSize: 10, fontWeight: '800', color: '#92400E' },
+  pendingModBody: { marginBottom: 16 },
+  modPassengerInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  modPassengerName: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginLeft: 6 },
+  modPassengerPhone: { fontSize: 13, color: COLORS.textMuted },
+  diffBox: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border },
+  diffHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  diffSectionTitle: { fontSize: 11, fontWeight: '800', color: COLORS.primary, letterSpacing: 0.5 },
+  diffItemOld: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
+  diffLabelOld: { fontSize: 11, color: COLORS.textMuted, fontWeight: '700' },
+  diffTextOld: { fontSize: 12, color: COLORS.textMuted, textDecorationLine: 'line-through', flex: 1 },
+  diffItemNew: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 4, backgroundColor: '#ECFDF5', padding: 6, borderRadius: 6 },
+  diffLabelNew: { fontSize: 11, color: '#047857', fontWeight: '800' },
+  diffTextNew: { fontSize: 13, color: '#065F46', fontWeight: '700', flex: 1, lineHeight: 18, marginTop: 1 },
+  modNoteBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFBEB', padding: 10, borderRadius: 8, gap: 6, marginTop: 10, borderWidth: 1, borderColor: '#FEF3C7' },
+  modNoteText: { color: '#92400E', fontSize: 12, flex: 1, fontStyle: 'italic' },
+  pendingModActions: { flexDirection: 'row', gap: 12 },
+  btnModReject: { flex: 1, backgroundColor: '#F1F5F9', paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  btnModRejectText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '800' },
+  btnModApprove: { flex: 1.5, flexDirection: 'row', backgroundColor: COLORS.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  btnModApproveText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+
+  // Reject Modification Modal
+  rejectModalContainer: { backgroundColor: COLORS.surface, borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 16 },
+  rejectModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  rejectModalTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  rejectModalDesc: { fontSize: 13, color: COLORS.textMuted, marginBottom: 16, lineHeight: 18 },
+  reasonChip: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, marginBottom: 10, backgroundColor: '#F8FAFC' },
+  reasonChipActive: { borderColor: COLORS.primary, backgroundColor: 'rgba(14,165,233,0.06)' },
+  reasonChipText: { fontSize: 14, color: COLORS.textSec, fontWeight: '500' },
+  reasonChipTextActive: { color: COLORS.primary, fontWeight: '700' },
+  rejectActionRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  rejectBtnCancel: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' },
+  rejectBtnCancelText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '700' },
+  rejectBtnConfirm: { flex: 1.5, paddingVertical: 14, borderRadius: 12, backgroundColor: COLORS.error, alignItems: 'center' },
+  rejectBtnConfirmText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+
+  // Smart Alert Banners
+  smartAlertBannerWarning: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE', borderRadius: 16, padding: 14, marginBottom: 16, gap: 12 },
+  smartAlertBannerAmber: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 16, padding: 14, marginBottom: 16, gap: 12 },
+  smartAlertBannerDanger: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', borderRadius: 16, padding: 14, marginBottom: 16, gap: 12 },
+  smartAlertIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E0E7FF', alignItems: 'center', justifyContent: 'center' },
+  smartAlertTitle: { fontSize: 14, fontWeight: '800', color: '#4338CA', marginBottom: 2 },
+  smartAlertDesc: { fontSize: 12, color: '#4B5563', lineHeight: 16 },
+
+  // Date Filter Modal
+  filterModalCard: { backgroundColor: COLORS.surface, borderRadius: 24, padding: 22, width: '100%', maxWidth: 460, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.25, shadowRadius: 24, elevation: 16 },
+  filterModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  filterIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(14,165,233,0.1)', justifyContent: 'center', alignItems: 'center' },
+  filterModalTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+  filterSectionLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  presetChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: COLORS.border },
+  presetChipActive: { backgroundColor: 'rgba(14,165,233,0.12)', borderColor: COLORS.primary },
+  presetChipText: { fontSize: 12, fontWeight: '600', color: COLORS.textMuted },
+  presetChipTextActive: { color: COLORS.primary, fontWeight: '800' },
+  dateInputsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  dateInputSubLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textMuted, marginBottom: 4 },
+  dateInputBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  dateInputBoxActive: { borderColor: COLORS.primary, backgroundColor: '#F0F9FF' },
+  dateInputText: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  webDateInputBox: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  pickerWrapper: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 10, borderWidth: 1, borderColor: COLORS.border, marginBottom: 14 },
+  pickerConfirmBtn: { backgroundColor: COLORS.primary, paddingVertical: 10, borderRadius: 10, alignItems: 'center', marginTop: 8 },
+  pickerConfirmBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
+  filterModalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  resetFilterBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F1F5F9' },
+  resetFilterBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.textMuted },
+  applyFilterBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.primary },
+  applyFilterBtnText: { fontSize: 14, fontWeight: '800', color: '#FFF' },
 });

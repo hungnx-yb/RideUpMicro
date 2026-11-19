@@ -95,3 +95,13 @@ export async function rejectVehicleApi(vehicleId, reason) {
   });
   return unwrapApiResponse(response);
 }
+
+export async function getCommissionConfigApi() {
+  const response = await axiosClient.get("/admin/commission-config");
+  return unwrapApiResponse(response);
+}
+
+export async function updateCommissionConfigApi(payload) {
+  const response = await axiosClient.put("/admin/commission-config", payload);
+  return unwrapApiResponse(response);
+}

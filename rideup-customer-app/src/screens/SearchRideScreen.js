@@ -18,7 +18,8 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useStripe } from '@stripe/stripe-react-native';
-import MapView, { Marker } from 'react-native-maps';
+import DateTimePicker from '@react-native-community/datetimepicker';
+// [MAP_DISABLED] import MapView, { Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/apiService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -301,6 +302,9 @@ export default function SearchRideScreen({ navigation, route }) {
   const [bookingNote, setBookingNote] = useState('');
   const [bookingIdempotencyKey, setBookingIdempotencyKey] = useState('');
   const [acceptedInvitationId, setAcceptedInvitationId] = useState(null);
+  const [isStripeAllowed, setIsStripeAllowed] = useState(true);
+  const [stripeDisabledReason, setStripeDisabledReason] = useState('');
+  const [checkingPaymentOptions, setCheckingPaymentOptions] = useState(false);
 
   // Success Modal State
   const [successBooking, setSuccessBooking] = useState(null);
@@ -318,16 +322,17 @@ export default function SearchRideScreen({ navigation, route }) {
   const [requestDepartureDate, setRequestDepartureDate] = useState(new Date());
   const [requestNote, setRequestNote] = useState('');
   const [showRequestDatePicker, setShowRequestDatePicker] = useState(false);
+  const [showRequestTimePicker, setShowRequestTimePicker] = useState(false);
 
   // Mở modal phát tín hiệu: Tự động lấy toàn bộ dữ liệu từ bộ lọc tìm kiếm
   const handleOpenRequestModal = () => {
-    if (!startProvinceId || !endProvinceId) {
+    if (!startProvinceId || !endProvinceId || !startWardId || !endWardId) {
       Alert.alert(
-        'Chưa chọn tuyến đường',
-        'Vui lòng chọn Tỉnh/Thành đi và Tỉnh/Thành đến trong phần tìm kiếm trước khi phát tín hiệu tìm xe.',
+        'Chưa đủ thông tin tuyến đường',
+        'Vui lòng chọn đầy đủ Tỉnh/Thành và Phường/Xã cho cả điểm đi và điểm đến trong bộ lọc tìm kiếm trước khi phát tín hiệu tìm xe.',
         [
           { 
-            text: 'Mở bộ lọc', 
+            text: 'Mở bộ lọc chọn tuyến', 
             onPress: () => setIsFilterExpanded(true) 
           }
         ]
@@ -335,16 +340,9 @@ export default function SearchRideScreen({ navigation, route }) {
       return;
     }
 
-    const startProv = provinces.find(p => p.id === startProvinceId)?.name || '';
-    const startW = startWards.find(w => w.id === startWardId)?.name || '';
-    const endProv = provinces.find(p => p.id === endProvinceId)?.name || '';
-    const endW = endWards.find(w => w.id === endWardId)?.name || '';
-
-    const defaultStart = startW ? `${startW}, ${startProv}` : startProv;
-    const defaultEnd = endW ? `${endW}, ${endProv}` : endProv;
-
-    setRequestStartAddress(defaultStart);
-    setRequestEndAddress(defaultEnd);
+    // Địa chỉ chi tiết để trống để người dùng nhập số nhà / tên đường, không điền tên tỉnh xã vào đây
+    setRequestStartAddress('');
+    setRequestEndAddress('');
 
     // Xử lý thời gian khởi hành hợp lệ (> now + 30 phút theo yêu cầu backend)
     const now = new Date();
@@ -367,16 +365,28 @@ export default function SearchRideScreen({ navigation, route }) {
   };
 
   const handleCreateTripRequest = async () => {
-    if (!startProvinceId || !endProvinceId) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Tỉnh/Thành đi và Tỉnh/Thành đến.');
+    if (!startProvinceId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Tỉnh/Thành điểm đón.');
+      return;
+    }
+    if (!startWardId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Phường/Xã điểm đón.');
       return;
     }
     if (!requestStartAddress || !requestStartAddress.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ điểm đón cụ thể.');
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ chi tiết điểm đón (số nhà, ngõ/đường).');
+      return;
+    }
+    if (!endProvinceId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Tỉnh/Thành điểm đến.');
+      return;
+    }
+    if (!endWardId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Phường/Xã điểm đến.');
       return;
     }
     if (!requestEndAddress || !requestEndAddress.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ điểm đến cụ thể.');
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập địa chỉ chi tiết điểm đến (số nhà, ngõ/đường).');
       return;
     }
 
@@ -396,9 +406,9 @@ export default function SearchRideScreen({ navigation, route }) {
 
       const payload = {
         startProvinceId,
-        startWardId: startWardId || undefined,
+        startWardId,
         endProvinceId,
-        endWardId: endWardId || undefined,
+        endWardId,
         startAddressText: requestStartAddress.trim(),
         endAddressText: requestEndAddress.trim(),
         departureTime: localISOTime,
@@ -438,24 +448,120 @@ export default function SearchRideScreen({ navigation, route }) {
   useEffect(() => {
     if (route?.params?.prefillInvitation && route?.params?.tripRequest) {
       const { prefillInvitation, tripRequest } = route.params;
-      const fakeTrip = {
-        id: prefillInvitation.tripId,
-        driverName: prefillInvitation.driverName,
-        stops: [], // Không có sẵn stops từ lời mời, map picker sẽ cho chọn toàn phường
-        seatAvailable: tripRequest.seatTotal,
-        priceVnd: prefillInvitation.price || 0,
-        startAddressText: tripRequest.startProvinceName,
-        endAddressText: tripRequest.endProvinceName,
+
+      const loadInvitationTrip = async () => {
+        try {
+          const res = await apiService.getTripDetail(prefillInvitation.tripId);
+          const trip = res?.data?.result || res?.data;
+          if (trip && trip.id) {
+            setSelectedTrip(trip);
+
+            // Tìm điểm đón và điểm trả từ stops của chuyến xe khớp với wardId của yêu cầu
+            const pickups = trip.stops?.filter(s => s.stopType === 'PICKUP') || [];
+            const dropoffs = trip.stops?.filter(s => s.stopType === 'DROPOFF') || [];
+
+            const matchedPickup = pickups.find(s => String(s.wardId) === String(tripRequest.startWardId));
+            const matchedDropoff = dropoffs.find(s => String(s.wardId) === String(tripRequest.endWardId));
+
+            setPickupWardId(matchedPickup ? String(matchedPickup.wardId) : (pickups[0]?.wardId ? String(pickups[0].wardId) : String(tripRequest.startWardId || '')));
+            setDropoffWardId(matchedDropoff ? String(matchedDropoff.wardId) : (dropoffs[0]?.wardId ? String(dropoffs[0].wardId) : String(tripRequest.endWardId || '')));
+
+            setPickupLocation({
+              lat: NaN,
+              lng: NaN,
+              addressText: tripRequest.startAddressText || '',
+            });
+            setDropoffLocation({
+              lat: NaN,
+              lng: NaN,
+              addressText: tripRequest.endAddressText || '',
+            });
+
+            setSeatCount(tripRequest.seatTotal || 1);
+            setPaymentMethod('CASH');
+            setBookingNote(tripRequest.note || '');
+            setBookingIdempotencyKey(generateUuid());
+            setAcceptedInvitationId(prefillInvitation.id);
+
+            // Kiểm tra phương thức thanh toán Stripe của tài xế
+            setIsStripeAllowed(true);
+            setStripeDisabledReason('');
+            setCheckingPaymentOptions(true);
+            try {
+              const payRes = await apiService.getTripPaymentOptions(trip.id);
+              if (payRes && payRes.data && payRes.data.result) {
+                const { stripeEnabled, message } = payRes.data.result;
+                setIsStripeAllowed(stripeEnabled);
+                if (!stripeEnabled) {
+                  setStripeDisabledReason(message || 'Tài xế chưa kích hoạt thanh toán thẻ Stripe');
+                  setPaymentMethod('CASH');
+                }
+              }
+            } catch (err) {
+              console.warn('Lỗi kiểm tra phương thức thanh toán trip:', err);
+            } finally {
+              setCheckingPaymentOptions(false);
+            }
+            return;
+          }
+        } catch (e) {
+          console.warn('Không tải được chi tiết chuyến xe từ lời mời:', e);
+        }
+
+        // Fallback an toàn nếu API getTripDetail bị lỗi
+        const unitPrice = tripRequest.seatTotal && prefillInvitation.price
+          ? Math.round(Number(prefillInvitation.price) / Number(tripRequest.seatTotal))
+          : (Number(prefillInvitation.price) || 0);
+
+        const fallbackTrip = {
+          id: prefillInvitation.tripId,
+          driverName: prefillInvitation.driverName || 'Tài xế',
+          stops: [
+            ...(tripRequest.startWardId ? [{ stopType: 'PICKUP', wardId: tripRequest.startWardId, addressText: tripRequest.startAddressText || 'Điểm đón' }] : []),
+            ...(tripRequest.endWardId ? [{ stopType: 'DROPOFF', wardId: tripRequest.endWardId, addressText: tripRequest.endAddressText || 'Điểm trả' }] : []),
+          ],
+          seatAvailable: tripRequest.seatTotal || 4,
+          priceVnd: unitPrice,
+          startAddressText: tripRequest.startAddressText || 'Điểm đi',
+          endAddressText: tripRequest.endAddressText || 'Điểm đến',
+        };
+
+        setSelectedTrip(fallbackTrip);
+        setPickupWardId(tripRequest.startWardId || '');
+        setDropoffWardId(tripRequest.endWardId || '');
+        setPickupLocation({ lat: NaN, lng: NaN, addressText: tripRequest.startAddressText || '' });
+        setDropoffLocation({ lat: NaN, lng: NaN, addressText: tripRequest.endAddressText || '' });
+        setSeatCount(tripRequest.seatTotal || 1);
+        setPaymentMethod('CASH');
+        setBookingNote(tripRequest.note || '');
+        setBookingIdempotencyKey(generateUuid());
+        setAcceptedInvitationId(prefillInvitation.id);
       };
-      
-      setSelectedTrip(fakeTrip);
-      setPickupWardId(tripRequest.startWardId || '');
-      setDropoffWardId(tripRequest.endWardId || '');
-      setSeatCount(tripRequest.seatTotal || 1);
-      setPaymentMethod('STRIPE'); // Ưu tiên thanh toán online cho Marketplace
+
+      loadInvitationTrip();
+      navigation.setParams({ prefillInvitation: undefined, tripRequest: undefined });
+    }
+    if (route?.params?.directTrip) {
+      const targetTrip = route.params.directTrip;
+      setSelectedTrip(targetTrip);
+      setPickupWardId(targetTrip.stops?.find(s => s.stopType === 'PICKUP')?.wardId || '');
+      setDropoffWardId(targetTrip.stops?.find(s => s.stopType === 'DROPOFF')?.wardId || '');
+      setSeatCount(1);
       setBookingNote('');
       setBookingIdempotencyKey(generateUuid());
-      setAcceptedInvitationId(prefillInvitation.id);
+      navigation.setParams({ directTrip: undefined });
+    }
+    if (route?.params?.startProvinceId) {
+      setStartProvinceId(route.params.startProvinceId);
+    }
+    if (route?.params?.endProvinceId) {
+      setEndProvinceId(route.params.endProvinceId);
+    }
+    if (route?.params?.openPostRequest) {
+      navigation.setParams({ openPostRequest: undefined });
+      setTimeout(() => {
+        setIsRequestModalVisible(true);
+      }, 400);
     }
   }, [route?.params]);
 
@@ -554,7 +660,7 @@ export default function SearchRideScreen({ navigation, route }) {
     });
   };
 
-  const handleOpenBooking = (trip) => {
+  const handleOpenBooking = async (trip) => {
     setSelectedTrip(trip);
     const pickups = trip.stops?.filter(s => s.stopType === 'PICKUP') || [];
     const dropoffs = trip.stops?.filter(s => s.stopType === 'DROPOFF') || [];
@@ -567,10 +673,34 @@ export default function SearchRideScreen({ navigation, route }) {
     setBookingNote('');
     setBookingIdempotencyKey(generateUuid());
     setAcceptedInvitationId(null); // Reset when manually booking
+
+    // Check Stripe Connect eligibility of driver
+    setIsStripeAllowed(true);
+    setStripeDisabledReason('');
+    setCheckingPaymentOptions(true);
+    try {
+      const res = await apiService.getTripPaymentOptions(trip.id);
+      if (res && res.data && res.data.result) {
+        const { stripeEnabled, message } = res.data.result;
+        setIsStripeAllowed(stripeEnabled);
+        if (!stripeEnabled) {
+          setStripeDisabledReason(message || 'Tài xế chưa kích hoạt thanh toán thẻ Stripe');
+          setPaymentMethod('CASH');
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi kiểm tra phương thức thanh toán trip:', err);
+    } finally {
+      setCheckingPaymentOptions(false);
+    }
   };
 
   const confirmBooking = async () => {
     if (!selectedTrip) return;
+    if (paymentMethod === 'STRIPE' && !isStripeAllowed) {
+      Alert.alert('Phương thức không khả dụng', 'Tài xế chuyến này chưa kích hoạt nhận thanh toán thẻ Stripe. Vui lòng chọn Tiền mặt.');
+      return;
+    }
     const pickupAddr = pickupLocation.addressText?.trim();
     const dropoffAddr = dropoffLocation.addressText?.trim();
     if (!pickupWardId || !pickupAddr || !pickupAddr.length) {
@@ -651,6 +781,13 @@ export default function SearchRideScreen({ navigation, route }) {
       const response = await apiService.createBooking(payload, bookingIdempotencyKey);
       if (response.data.code === 1000) {
         const result = response.data.result;
+        if (acceptedInvitationId) {
+          try {
+            await apiService.acceptTripRequestInvitation(acceptedInvitationId);
+          } catch (e) {
+            console.warn('Accept invitation error:', e);
+          }
+        }
         setSelectedTrip(null);
         setBookingIdempotencyKey('');
         setAcceptedInvitationId(null);
@@ -692,6 +829,7 @@ export default function SearchRideScreen({ navigation, route }) {
       const { error: initError } = await initPaymentSheet({
         merchantDisplayName: 'RideUp',
         paymentIntentClientSecret: intentData.clientSecret,
+        returnURL: 'rideup://stripe-redirect',
       });
 
       if (initError) {
@@ -722,9 +860,17 @@ export default function SearchRideScreen({ navigation, route }) {
 
       if (createRes.data.code === 1000) {
         const result = createRes.data.result;
+        if (acceptedInvitationId) {
+          try {
+            await apiService.acceptTripRequestInvitation(acceptedInvitationId);
+          } catch (e) {
+            console.warn('Accept invitation error:', e);
+          }
+        }
         setStripeCheckoutData(null);
         setSelectedTrip(null);
         setBookingIdempotencyKey('');
+        setAcceptedInvitationId(null);
         setStripeSuccessBooking({
           id: result.id,
           bookingCode: result.bookingCode || '',
@@ -734,6 +880,7 @@ export default function SearchRideScreen({ navigation, route }) {
       }
     } catch (error) {
       console.error('Stripe direct pay error:', error);
+      console.error('Stripe error response data:', JSON.stringify(error?.response?.data));
       const errData = error?.response?.data;
       const errMsg = errData?.message || error?.message || 'Không thể hoàn tất thanh toán. Vui lòng thử lại.';
       Alert.alert('Lỗi thanh toán', errMsg);
@@ -748,73 +895,7 @@ export default function SearchRideScreen({ navigation, route }) {
     setPaymentMethod('CASH');
   };
 
-  // Retry lấy link tối đa 6 lần
-  const getUrlWithRetry = async (bookingId) => {
-    const maxAttempts = 600; // Tăng lên 60 giây để debug backend thoải mái
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const res = await apiService.getPaymentUrl(bookingId);
-        const result = res?.data?.result;
-        if (result?.paymentUrl) return result;
-      } catch (err) {
-        if (attempt === maxAttempts) throw err;
-      }
-      await new Promise(r => setTimeout(r, 1000));
-    }
-    return null;
-  };
-
   const [stripeSuccessBooking, setStripeSuccessBooking] = useState(null);
-
-  const handlePayNow = async () => {
-    if (!successBooking?.id || isRedirectingPayment) return;
-    setIsRedirectingPayment(true);
-    try {
-      const paymentData = await getUrlWithRetry(successBooking.id);
-      if (!paymentData || !paymentData.paymentUrl) {
-        Alert.alert('Chưa sẵn sàng', 'Chưa lấy được thông tin thanh toán. Vui lòng thử lại.');
-        setIsRedirectingPayment(false);
-        return;
-      }
-
-      if (successBooking.paymentMethod === 'STRIPE') {
-        const { error: initError } = await initPaymentSheet({
-          merchantDisplayName: 'RideUp',
-          paymentIntentClientSecret: paymentData.paymentUrl,
-        });
-        if (initError) {
-          Alert.alert('Lỗi khởi tạo', initError.message);
-          setIsRedirectingPayment(false);
-          return;
-        }
-
-        // Đợi 1 chút trước khi hiển thị Stripe để UI ổn định (nhưng KHÔNG ĐÓNG modal cũ, tránh xung đột View gốc của HĐH)
-        const currentBooking = successBooking;
-
-        const { error: presentError } = await presentPaymentSheet();
-        
-        if (presentError) {
-          Alert.alert('Thanh toán thất bại', presentError.message);
-        } else {
-          // Báo cho backend biết đã thanh toán thành công
-          try {
-            await apiService.markPaymentPaid(paymentData.id, paymentData.transactionId);
-          } catch (e) {
-            console.warn('Lỗi cập nhật backend:', e);
-          }
-          // Chuyển đổi mượt mà từ Modal thông báo sang Modal Thành công xịn xò
-          setSuccessBooking(null);
-          setTimeout(() => {
-            setStripeSuccessBooking(currentBooking);
-          }, 300);
-        }
-      }
-    } catch (error) {
-      Alert.alert('Lỗi thanh toán', 'Không thể khởi tạo thanh toán. Vui lòng thử lại.');
-    } finally {
-      setIsRedirectingPayment(false);
-    }
-  };
 
   const formatTime = (isoString) => {
     if (!isoString) return '--:--';
@@ -944,7 +1025,7 @@ export default function SearchRideScreen({ navigation, route }) {
 
       {/* Search Filter Card */}
       <View style={styles.filterCard}>
-        <TouchableOpacity style={styles.cardHeader} onPress={() => setIsFilterExpanded(!isFilterExpanded)} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.filterCardHeader} onPress={() => setIsFilterExpanded(!isFilterExpanded)} activeOpacity={0.8}>
           <View>
             <Text style={styles.brandText}>RIDEUP NOW</Text>
             <Text style={styles.cardTitle}>Bạn muốn đi đâu hôm nay?</Text>
@@ -1127,19 +1208,107 @@ export default function SearchRideScreen({ navigation, route }) {
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
             <SafeAreaView style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Xác nhận đặt chỗ</Text>
-              <TouchableOpacity onPress={() => setSelectedTrip(null)} style={styles.modalCloseIcon}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalSub}>Bạn đang đặt chỗ trên chuyến xe của {selectedTrip?.driverName}.</Text>
-
-            <ScrollView contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.modalRoute}>
-                <Text style={{ color: COLORS.textMuted }}>Từ: <Text style={{ color: COLORS.text }}>{selectedTrip?.startAddressText}</Text></Text>
-                <Text style={{ color: COLORS.textMuted, marginTop: 8 }}>Đến: <Text style={{ color: COLORS.text }}>{selectedTrip?.endAddressText}</Text></Text>
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Xác nhận đặt chỗ</Text>
+                  {selectedTrip?.id && (
+                    <View style={styles.modalTripCodeBadge}>
+                      <Ionicons name="barcode-outline" size={13} color={COLORS.primary} />
+                      <Text style={styles.modalTripCodeText}>
+                        Mã chuyến: #{selectedTrip.id.length > 12 ? selectedTrip.id.slice(0, 8).toUpperCase() : selectedTrip.id}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity onPress={() => setSelectedTrip(null)} style={styles.modalCloseIcon}>
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
               </View>
+
+              <ScrollView contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
+                {/* 1. KHỞI HÀNH NỔI BẬT */}
+                <View style={styles.modalTimeHeroCard}>
+                  <View style={styles.modalTimeIconWrap}>
+                    <Ionicons name="time" size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.modalTimeHeroSub}>THỜI GIAN KHỞI HÀNH</Text>
+                    <Text style={styles.modalTimeHeroMain}>
+                      {formatTime(selectedTrip?.departureTime)} • {formatDate(selectedTrip?.departureTime) || 'Trong ngày'}
+                    </Text>
+                    {selectedTrip?.estimatedArrivalTime && (
+                      <Text style={styles.modalTimeHeroEta}>
+                        ↳ Dự kiến đến: {formatTime(selectedTrip?.estimatedArrivalTime)} ({formatDate(selectedTrip?.estimatedArrivalTime)})
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.modalSeatBadge}>
+                    <Ionicons name="people" size={12} color={COLORS.green} />
+                    <Text style={styles.modalSeatBadgeText}>
+                      Còn {selectedTrip?.seatAvailable ?? selectedTrip?.seatTotal ?? 0} chỗ
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 2. TÀI XẾ & PHƯƠNG TIỆN */}
+                <View style={styles.modalDriverCard}>
+                  <View style={styles.modalDriverAvatar}>
+                    <Text style={styles.modalDriverAvatarText}>
+                      {(selectedTrip?.driverName || 'D').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={styles.modalDriverName} numberOfLines={1}>
+                        {selectedTrip?.driverName || 'Tài xế RideUp'}
+                      </Text>
+                      {selectedTrip?.driverPhone && (
+                        <View style={styles.modalPhoneBadge}>
+                          <Ionicons name="call" size={11} color="#0284c7" />
+                          <Text style={styles.modalPhoneText}>{selectedTrip.driverPhone}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <Text style={styles.modalDriverRating}>⭐ {formatRating(selectedTrip?.driverRating)}</Text>
+                      {(selectedTrip?.vehicleBrand || selectedTrip?.vehicleModel) && (
+                        <Text style={styles.modalVehicleText} numberOfLines={1}>
+                          🚗 {selectedTrip.vehicleBrand} {selectedTrip.vehicleModel}
+                        </Text>
+                      )}
+                      {selectedTrip?.plateNumber && (
+                        <View style={styles.modalPlateBadge}>
+                          <Text style={styles.modalPlateText}>{selectedTrip.plateNumber}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
+                {/* 3. LỘ TRÌNH TỔNG THỂ */}
+                <View style={styles.modalRouteCard}>
+                  <View style={styles.modalRoutePoint}>
+                    <View style={[styles.modalRouteDot, { backgroundColor: COLORS.primary }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.modalRouteLabel}>Tuyến đi từ</Text>
+                      <Text style={styles.modalRouteAddress}>{selectedTrip?.startAddressText || 'Điểm xuất phát'}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.modalRouteLine} />
+                  <View style={styles.modalRoutePoint}>
+                    <View style={[styles.modalRouteDot, { backgroundColor: COLORS.error }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.modalRouteLabel}>Đến</Text>
+                      <Text style={styles.modalRouteAddress}>{selectedTrip?.endAddressText || 'Điểm kết thúc'}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.modalPricePerSeatRow}>
+                    <Text style={styles.modalPricePerSeatLabel}>Giá cước chuyến</Text>
+                    <Text style={styles.modalPricePerSeatVal}>
+                      {formatMoney(selectedTrip?.priceVnd)} <Text style={{ fontSize: 11, fontWeight: 'normal', color: COLORS.textMuted }}>/ ghế</Text>
+                    </Text>
+                  </View>
+                </View>
 
               <LocationMapPicker
                 title="Điểm Đón"
@@ -1180,16 +1349,90 @@ export default function SearchRideScreen({ navigation, route }) {
                 </View>
               </View>
 
-              <View style={styles.selectionRow}>
-                <Text style={styles.selectionLabel}>Thanh toán:</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity style={[styles.payBtn, paymentMethod === 'CASH' && styles.payBtnActive]} onPress={() => setPaymentMethod('CASH')}>
-                    <Text style={[styles.payBtnText, paymentMethod === 'CASH' && { color: COLORS.background }]}>Tiền mặt</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.payBtn, paymentMethod === 'STRIPE' && styles.payBtnActive]} onPress={() => setPaymentMethod('STRIPE')}>
-                    <Text style={[styles.payBtnText, paymentMethod === 'STRIPE' && { color: COLORS.background }]}>Stripe (Thẻ)</Text>
-                  </TouchableOpacity>
+              {/* PHƯƠNG THỨC THANH TOÁN (Clean Radio Cards) */}
+              <View style={{ marginTop: 6, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={styles.selectionLabel}>Phương thức thanh toán:</Text>
+                  {checkingPaymentOptions && (
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                  )}
                 </View>
+
+                {/* Card 1: Tiền mặt */}
+                <TouchableOpacity
+                  style={[
+                    styles.paymentRadioCard,
+                    paymentMethod === 'CASH' && styles.paymentRadioCardActive,
+                  ]}
+                  onPress={() => setPaymentMethod('CASH')}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.paymentRadioIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                    <Ionicons name="cash-outline" size={22} color="#10B981" />
+                  </View>
+                  <View style={styles.paymentRadioContent}>
+                    <Text style={styles.paymentRadioTitle}>Tiền mặt trực tiếp</Text>
+                    <Text style={styles.paymentRadioSub}>Thanh toán cho tài xế sau khi chuyến đi hoàn tất</Text>
+                  </View>
+                  <View style={[styles.paymentRadioCircle, paymentMethod === 'CASH' && styles.paymentRadioCircleActive]}>
+                    {paymentMethod === 'CASH' && <View style={styles.paymentRadioDot} />}
+                  </View>
+                </TouchableOpacity>
+
+                {/* Card 2: Stripe Connect Thẻ */}
+                <TouchableOpacity
+                  style={[
+                    styles.paymentRadioCard,
+                    paymentMethod === 'STRIPE' && styles.paymentRadioCardActive,
+                    !isStripeAllowed && styles.paymentRadioCardDisabled,
+                  ]}
+                  onPress={() => {
+                    if (isStripeAllowed) {
+                      setPaymentMethod('STRIPE');
+                    } else {
+                      Alert.alert(
+                        'Cổng thẻ tạm khoá',
+                        stripeDisabledReason || 'Tài xế chuyến xe này chưa liên kết tài khoản Stripe Connect để nhận tiền tự động. Vui lòng chọn Tiền mặt.'
+                      );
+                    }
+                  }}
+                  activeOpacity={isStripeAllowed ? 0.8 : 1}
+                >
+                  <View style={[styles.paymentRadioIconCircle, { backgroundColor: isStripeAllowed ? '#E0F2FE' : '#F1F5F9' }]}>
+                    <Ionicons 
+                      name={isStripeAllowed ? "card-outline" : "lock-closed-outline"} 
+                      size={22} 
+                      color={isStripeAllowed ? COLORS.primary : COLORS.textMuted} 
+                    />
+                  </View>
+                  <View style={styles.paymentRadioContent}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <Text style={[styles.paymentRadioTitle, !isStripeAllowed && { color: COLORS.textMuted }]}>
+                        Thẻ ATM / Visa / Mastercard
+                      </Text>
+                      <View style={styles.escrowBadge}>
+                        <Text style={styles.escrowBadgeText}>🛡️ Stripe Escrow</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.paymentRadioSub}>
+                      {isStripeAllowed 
+                        ? 'Hệ thống giữ tiền an toàn, hoàn tiền 100% nếu tài xế hủy'
+                        : (stripeDisabledReason || 'Tài xế chưa kích hoạt Stripe. Vui lòng thanh toán tiền mặt.')}
+                    </Text>
+                    <View style={styles.paymentBadgesRow}>
+                      <View style={styles.cardBrandBadge}><Text style={styles.cardBrandText}>VISA</Text></View>
+                      <View style={styles.cardBrandBadge}><Text style={styles.cardBrandText}>MC</Text></View>
+                      <View style={styles.cardBrandBadge}><Text style={styles.cardBrandText}>NAPAS</Text></View>
+                    </View>
+                  </View>
+                  <View style={[
+                    styles.paymentRadioCircle, 
+                    paymentMethod === 'STRIPE' && styles.paymentRadioCircleActive,
+                    !isStripeAllowed && { borderColor: '#CBD5E1' }
+                  ]}>
+                    {paymentMethod === 'STRIPE' && <View style={styles.paymentRadioDot} />}
+                  </View>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.modalPriceBox}>
@@ -1330,50 +1573,24 @@ export default function SearchRideScreen({ navigation, route }) {
               <Text style={{ fontSize: 13, color: '#475569', fontWeight: 'bold' }}>Mã: {successBooking?.bookingCode || successBooking?.id}</Text>
             </View>
 
-            {successBooking?.paymentMethod === 'STRIPE' ? (
-              <View style={{ width: '100%', alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
-                  Vui lòng thanh toán bảo đảm bằng thẻ tín dụng qua cổng Stripe để hoàn tất yêu cầu đặt xe.
-                </Text>
-                <TouchableOpacity 
-                  style={{ backgroundColor: '#0F172A', width: '100%', paddingVertical: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }} 
-                  onPress={handlePayNow} 
-                  disabled={isRedirectingPayment}
-                >
-                  {isRedirectingPayment ? <ActivityIndicator color="#fff" /> : (
-                    <>
-                      <Ionicons name="card" size={20} color="#fff" style={{ marginRight: 8 }} />
-                      <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>THANH TOÁN BẰNG THẺ</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ width: '100%', marginTop: 12, paddingVertical: 12, alignItems: 'center' }}
-                  onPress={() => setSuccessBooking(null)}
-                >
-                  <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>Đóng</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ width: '100%', alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
-                  Yêu cầu đặt chỗ của bạn đã được gửi. Bạn sẽ thanh toán bằng tiền mặt trực tiếp cho tài xế.
-                </Text>
-                <TouchableOpacity
-                  style={{ backgroundColor: '#10b981', width: '100%', paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }}
-                  onPress={() => {
-                    setSuccessBooking(null);
-                    try {
-                      navigation.navigate('Main', { screen: 'MyTrips' });
-                    } catch (_) {
-                      navigation.navigate('MyTrips');
-                    }
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>XONG</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            <View style={{ width: '100%', alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+                Yêu cầu đặt chỗ của bạn đã được gửi. Bạn sẽ thanh toán bằng tiền mặt trực tiếp cho tài xế.
+              </Text>
+              <TouchableOpacity
+                style={{ backgroundColor: '#10b981', width: '100%', paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 8 }}
+                onPress={() => {
+                  setSuccessBooking(null);
+                  try {
+                    navigation.navigate('Main', { screen: 'MyTrips' });
+                  } catch (_) {
+                    navigation.navigate('MyTrips');
+                  }
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>XONG</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1452,22 +1669,20 @@ export default function SearchRideScreen({ navigation, route }) {
                       <Text style={styles.reqBadgeLabel}>Điểm đón:</Text>
                       <View style={styles.reqPill}>
                         <Text style={styles.reqPillText} numberOfLines={1}>
-                          {provinces.find(p => p.id === startProvinceId)?.name || 'Chưa chọn'}
+                          {provinces.find(p => p.id === startProvinceId)?.name || 'Chưa chọn tỉnh'}
                         </Text>
                       </View>
-                      {startWardId ? (
-                        <View style={[styles.reqPill, { backgroundColor: '#F1F5F9' }]}>
-                          <Text style={[styles.reqPillText, { color: COLORS.text }]} numberOfLines={1}>
-                            {startWards.find(w => w.id === startWardId)?.name}
-                          </Text>
-                        </View>
-                      ) : null}
+                      <View style={[styles.reqPill, { backgroundColor: '#F1F5F9' }]}>
+                        <Text style={[styles.reqPillText, { color: COLORS.text }]} numberOfLines={1}>
+                          {startWards.find(w => w.id === startWardId)?.name || 'Chưa chọn xã'}
+                        </Text>
+                      </View>
                     </View>
                     <TextInput
                       style={styles.reqTextInput}
                       value={requestStartAddress}
                       onChangeText={setRequestStartAddress}
-                      placeholder="Nhập địa chỉ đón chi tiết (thôn, số nhà, đường...)"
+                      placeholder="Số nhà, tên ngõ/đường đón (bắt buộc)..."
                       placeholderTextColor={COLORS.textMuted}
                     />
                   </View>
@@ -1479,77 +1694,106 @@ export default function SearchRideScreen({ navigation, route }) {
                       <Text style={styles.reqBadgeLabel}>Điểm đến:</Text>
                       <View style={styles.reqPill}>
                         <Text style={styles.reqPillText} numberOfLines={1}>
-                          {provinces.find(p => p.id === endProvinceId)?.name || 'Chưa chọn'}
+                          {provinces.find(p => p.id === endProvinceId)?.name || 'Chưa chọn tỉnh'}
                         </Text>
                       </View>
-                      {endWardId ? (
-                        <View style={[styles.reqPill, { backgroundColor: '#F1F5F9' }]}>
-                          <Text style={[styles.reqPillText, { color: COLORS.text }]} numberOfLines={1}>
-                            {endWards.find(w => w.id === endWardId)?.name}
-                          </Text>
-                        </View>
-                      ) : null}
+                      <View style={[styles.reqPill, { backgroundColor: '#F1F5F9' }]}>
+                        <Text style={[styles.reqPillText, { color: COLORS.text }]} numberOfLines={1}>
+                          {endWards.find(w => w.id === endWardId)?.name || 'Chưa chọn xã'}
+                        </Text>
+                      </View>
                     </View>
                     <TextInput
                       style={styles.reqTextInput}
                       value={requestEndAddress}
                       onChangeText={setRequestEndAddress}
-                      placeholder="Nhập địa chỉ trả chi tiết (thôn, số nhà, đường...)"
+                      placeholder="Số nhà, tên ngõ/đường đến (bắt buộc)..."
                       placeholderTextColor={COLORS.textMuted}
                     />
                   </View>
                 </View>
 
-                {/* Thời gian khởi hành */}
+                {/* Thời gian khởi hành (Chọn riêng cả Ngày và Giờ) */}
                 <View style={styles.reqSectionBox}>
-                  <Text style={styles.reqSectionTitle}>THỜI GIAN KHỞI HÀNH</Text>
-                  <TouchableOpacity 
-                    style={styles.reqTimeDisplayBtn}
-                    onPress={() => setShowRequestDatePicker(true)}
-                  >
-                    <Ionicons name="calendar-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
-                    <Text style={styles.reqTimeDisplayText}>
-                      {requestDepartureDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {requestDepartureDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={styles.reqSectionTitle}>THỜI GIAN KHỞI HÀNH</Text>
+                    <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '700' }}>
+                      {requestDepartureDate.toLocaleDateString('vi-VN')} • {requestDepartureDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                     </Text>
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-                  </TouchableOpacity>
+                  </View>
 
-                  {/* Quick time chips */}
-                  <View style={styles.reqChipRow}>
+                  <View style={styles.reqDateTimeRow}>
+                    {/* Nút Chọn Ngày */}
                     <TouchableOpacity 
-                      style={styles.reqChip} 
-                      onPress={() => setRequestDepartureDate(new Date(Date.now() + 60 * 60 * 1000))}
-                    >
-                      <Text style={styles.reqChipText}>+1 giờ</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.reqChip} 
-                      onPress={() => setRequestDepartureDate(new Date(Date.now() + 120 * 60 * 1000))}
-                    >
-                      <Text style={styles.reqChipText}>+2 giờ</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.reqChip} 
+                      style={styles.reqDateTimeCard}
                       onPress={() => {
-                        const t = new Date();
-                        t.setDate(t.getDate() + 1);
-                        t.setHours(8, 0, 0, 0);
-                        setRequestDepartureDate(t);
+                        setShowRequestDatePicker(true);
+                        setShowRequestTimePicker(false);
                       }}
+                      activeOpacity={0.8}
                     >
-                      <Text style={styles.reqChipText}>Sáng mai (08h)</Text>
+                      <View style={styles.reqDateTimeIconCircle}>
+                        <Ionicons name="calendar" size={18} color={COLORS.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.reqDateTimeLabel}>NGÀY ĐI</Text>
+                        <Text style={styles.reqDateTimeValue}>
+                          {requestDepartureDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-down" size={14} color={COLORS.textMuted} />
                     </TouchableOpacity>
+
+                    {/* Nút Chọn Giờ */}
                     <TouchableOpacity 
-                      style={styles.reqChip} 
+                      style={styles.reqDateTimeCard}
                       onPress={() => {
-                        const t = new Date();
-                        t.setDate(t.getDate() + 1);
-                        t.setHours(14, 0, 0, 0);
-                        setRequestDepartureDate(t);
+                        setShowRequestTimePicker(true);
+                        setShowRequestDatePicker(false);
                       }}
+                      activeOpacity={0.8}
                     >
-                      <Text style={styles.reqChipText}>Chiều mai (14h)</Text>
+                      <View style={[styles.reqDateTimeIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                        <Ionicons name="time" size={18} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.reqDateTimeLabel}>GIỜ XUẤT PHÁT</Text>
+                        <Text style={styles.reqDateTimeValue}>
+                          {requestDepartureDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-down" size={14} color={COLORS.textMuted} />
                     </TouchableOpacity>
+                  </View>
+
+                  {/* Các mốc giờ gợi ý nhanh */}
+                  <View style={styles.reqTimePresetsRow}>
+                    <Text style={styles.reqPresetLabel}>Giờ phổ biến:</Text>
+                    {[
+                      { label: '07:00', h: 7, m: 0 },
+                      { label: '09:00', h: 9, m: 0 },
+                      { label: '11:30', h: 11, m: 30 },
+                      { label: '14:00', h: 14, m: 0 },
+                      { label: '17:30', h: 17, m: 30 },
+                      { label: '20:00', h: 20, m: 0 },
+                    ].map((slot, idx) => {
+                      const isMatch = requestDepartureDate.getHours() === slot.h && requestDepartureDate.getMinutes() === slot.m;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={[styles.reqPresetChip, isMatch && styles.reqPresetChipActive]}
+                          onPress={() => {
+                            const d = new Date(requestDepartureDate);
+                            d.setHours(slot.h, slot.m, 0, 0);
+                            setRequestDepartureDate(d);
+                          }}
+                        >
+                          <Text style={[styles.reqPresetChipText, isMatch && styles.reqPresetChipTextActive]}>
+                            {slot.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </View>
 
@@ -1616,6 +1860,83 @@ export default function SearchRideScreen({ navigation, route }) {
                 }}
                 onClose={() => setShowRequestDatePicker(false)}
               />
+
+              {/* Android TimePicker */}
+              {showRequestTimePicker && Platform.OS === 'android' && (
+                <DateTimePicker
+                  value={requestDepartureDate}
+                  mode="time"
+                  is24Hour={true}
+                  display="clock"
+                  onChange={(event, selectedTime) => {
+                    setShowRequestTimePicker(false);
+                    if (event.type === 'dismissed' || !selectedTime) return;
+                    const d = new Date(requestDepartureDate);
+                    d.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+                    setRequestDepartureDate(d);
+                  }}
+                />
+              )}
+
+              {/* iOS TimePicker Modal */}
+              {Platform.OS === 'ios' && (
+                <Modal
+                  visible={showRequestTimePicker}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setShowRequestTimePicker(false)}
+                >
+                  <TouchableOpacity 
+                    style={styles.calOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setShowRequestTimePicker(false)} 
+                  />
+                  <View style={styles.timeSheet}>
+                    <View style={styles.timeSheetHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="time" size={20} color={COLORS.primary} />
+                        <Text style={styles.timeSheetTitle}>Chọn giờ xuất phát</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setShowRequestTimePicker(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.timeSheetSub}>
+                      Đang chọn:{' '}
+                      <Text style={{ fontWeight: 'bold', color: COLORS.primary, fontSize: 16 }}>
+                        {requestDepartureDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                      {' • '}
+                      {requestDepartureDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                    </Text>
+                    <View style={{ alignItems: 'center', marginVertical: 8 }}>
+                      <DateTimePicker
+                        value={requestDepartureDate}
+                        mode="time"
+                        is24Hour={true}
+                        display="spinner"
+                        themeVariant="light"
+                        textColor="#0F172A"
+                        locale="vi-VN"
+                        style={{ width: '100%', height: 160 }}
+                        onChange={(event, selectedTime) => {
+                          if (selectedTime) {
+                            const d = new Date(requestDepartureDate);
+                            d.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+                            setRequestDepartureDate(d);
+                          }
+                        }}
+                      />
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.timeSheetDoneBtn}
+                      onPress={() => setShowRequestTimePicker(false)}
+                    >
+                      <Text style={styles.timeSheetDoneText}>Xác nhận giờ này</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Modal>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -1642,7 +1963,7 @@ const styles = StyleSheet.create({
 
   // Filter Card
   filterCard: { backgroundColor: COLORS.surface, marginHorizontal: 16, marginBottom: 12, borderRadius: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6, borderWidth: 1, borderColor: COLORS.border },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 10 },
+  filterCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 10 },
   brandText: { color: COLORS.green, fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 4 },
   cardTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
   toggleBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(14, 165, 233, 0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, gap: 4 },
@@ -1744,10 +2065,202 @@ const styles = StyleSheet.create({
   // Booking Modal
   modalOverlay: { flex: 1, backgroundColor: COLORS.background },
   modalContent: { flex: 1, backgroundColor: COLORS.surface, padding: 20 },
-  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  modalTitle: { fontSize: 24, fontWeight: '900', color: COLORS.text },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: COLORS.text },
   modalCloseIcon: { padding: 4 },
   modalSub: { color: COLORS.textMuted, fontSize: SIZES.font, marginBottom: 20 },
+  modalTripCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginTop: 3,
+    gap: 4,
+  },
+  modalTripCodeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+    letterSpacing: 0.5,
+  },
+  modalTimeHeroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modalTimeIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTimeHeroSub: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  modalTimeHeroMain: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  modalTimeHeroEta: {
+    fontSize: 11,
+    color: '#38BDF8',
+    marginTop: 2,
+  },
+  modalSeatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  modalSeatBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.green,
+  },
+  modalDriverCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  modalDriverAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(14, 165, 233, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalDriverAvatarText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  modalDriverName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+    flex: 1,
+  },
+  modalPhoneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
+  },
+  modalPhoneText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284c7',
+  },
+  modalDriverRating: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  modalVehicleText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  modalPlateBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  modalPlateText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  modalRouteCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+  },
+  modalRoutePoint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  modalRouteDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
+  },
+  modalRouteLine: {
+    width: 2,
+    height: 14,
+    backgroundColor: '#CBD5E1',
+    marginLeft: 4,
+    marginVertical: 2,
+  },
+  modalRouteLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+  },
+  modalRouteAddress: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 1,
+  },
+  modalPricePerSeatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  modalPricePerSeatLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  modalPricePerSeatVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
   modalRoute: { backgroundColor: COLORS.background, padding: 16, borderRadius: 12, marginBottom: 20 },
   addressSection: { marginBottom: 16, backgroundColor: COLORS.background, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border },
   addressSectionTitle: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' },
@@ -1759,6 +2272,99 @@ const styles = StyleSheet.create({
   counterBtn: { paddingHorizontal: 16, paddingVertical: 8 },
   counterText: { color: COLORS.primary, fontSize: SIZES.large, fontWeight: 'bold' },
   counterValue: { color: COLORS.text, fontSize: SIZES.medium, fontWeight: 'bold', marginHorizontal: 8 },
+  // Payment Radio Cards
+  paymentRadioCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  paymentRadioCardActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: '#F0F9FF',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  paymentRadioCardDisabled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.65,
+  },
+  paymentRadioIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  paymentRadioContent: {
+    flex: 1,
+  },
+  paymentRadioTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  paymentRadioSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 15,
+  },
+  escrowBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  escrowBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  paymentBadgesRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 4,
+  },
+  cardBrandBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  cardBrandText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  paymentRadioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  paymentRadioCircleActive: {
+    borderColor: COLORS.primary,
+  },
+  paymentRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+  },
   payBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: COLORS.primary, backgroundColor: COLORS.surface },
   payBtnActive: { backgroundColor: COLORS.primary },
   payBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 13 },
@@ -1880,6 +2486,60 @@ const styles = StyleSheet.create({
   
   reqSectionBox: { backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 },
   reqSectionTitle: { fontSize: 11, fontWeight: 'bold', color: COLORS.textMuted, letterSpacing: 0.5, marginBottom: 8 },
+  reqSectionSub: { fontSize: 12, color: COLORS.textMuted, marginBottom: 8 },
+  reqDateTimeRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  reqDateTimeCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  reqDateTimeIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  reqDateTimeLabel: { fontSize: 10, fontWeight: '800', color: COLORS.textMuted, letterSpacing: 0.5, marginBottom: 2 },
+  reqDateTimeValue: { fontSize: 13, fontWeight: '800', color: COLORS.text },
+  reqTimePresetsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  reqPresetLabel: { fontSize: 11, color: COLORS.textMuted, fontWeight: '600', marginRight: 2 },
+  reqPresetChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1' },
+  reqPresetChipActive: { backgroundColor: 'rgba(14, 165, 233, 0.1)', borderColor: COLORS.primary },
+  reqPresetChipText: { fontSize: 11, color: COLORS.textMuted, fontWeight: '600' },
+  reqPresetChipTextActive: { color: COLORS.primary, fontWeight: '800' },
+
+  timeSheet: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
+  },
+  timeSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  timeSheetTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text },
+  timeSheetSub: { fontSize: 13, color: COLORS.textMuted, textAlign: 'center', marginBottom: 4 },
+  timeSheetDoneBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  timeSheetDoneText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
+
   reqTimeDisplayBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'space-between' },
   reqTimeDisplayText: { flex: 1, fontSize: 13, fontWeight: 'bold', color: COLORS.text },
   reqChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },

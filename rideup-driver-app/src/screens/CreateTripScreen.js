@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput,
@@ -17,6 +17,7 @@ const COLORS = {
 
 const SEAT_OPTIONS = ['1', '2', '3', '4', '7'];
 const PRICE_OPTIONS = ['100000', '150000', '200000', '250000', '300000'];
+const DURATION_PRESETS = ['1.5', '2', '2.5', '3', '3.5', '4', '5', '6'];
 
 const formatMoney = (val) => {
   if (!val) return '0 đ';
@@ -24,7 +25,18 @@ const formatMoney = (val) => {
 };
 
 // ---- Dropdown Component ----
-const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled, loading = false, onRetry }) => {
+const DropdownSelect = ({
+  label,
+  placeholder,
+  value,
+  options,
+  onSelect,
+  disabled,
+  disabledIds = [],
+  disabledLabel = 'Đã chọn',
+  loading = false,
+  onRetry
+}) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -170,6 +182,7 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
                 )}
                 renderItem={({ item }) => {
                   const isSelected = String(item?.id) === String(value);
+                  const isDisabledItem = Array.isArray(disabledIds) && disabledIds.some(id => String(id) === String(item?.id));
                   return (
                     <TouchableOpacity
                       style={[
@@ -181,30 +194,56 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
                           borderRadius: 12,
                           paddingHorizontal: 16,
                           borderBottomWidth: 1
+                        },
+                        isDisabledItem && {
+                          opacity: 0.45,
+                          backgroundColor: '#F8FAFC'
                         }
                       ]}
                       onPress={() => {
+                        if (isDisabledItem) return;
                         onSelect(item.id);
                         handleClose();
                       }}
-                      activeOpacity={0.7}
+                      disabled={isDisabledItem}
+                      activeOpacity={isDisabledItem ? 1 : 0.7}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-                        <View style={[styles.modalItemIconWrap, isSelected && { backgroundColor: `${COLORS.primary}20` }]}>
+                        <View style={[
+                          styles.modalItemIconWrap,
+                          isSelected && { backgroundColor: `${COLORS.primary}20` },
+                          isDisabledItem && { backgroundColor: '#E2E8F0' }
+                        ]}>
                           <Ionicons
-                            name={isSelected ? "location" : "location-outline"}
+                            name={isDisabledItem ? "ban-outline" : (isSelected ? "location" : "location-outline")}
                             size={18}
-                            color={isSelected ? COLORS.primary : COLORS.textMuted}
+                            color={isDisabledItem ? COLORS.textMuted : (isSelected ? COLORS.primary : COLORS.textMuted)}
                           />
                         </View>
-                        <Text
-                          style={[styles.modalItemText, isSelected && { color: COLORS.primary, fontWeight: '700' }]}
-                          numberOfLines={2}
-                        >
-                          {item?.name || '---'}
-                        </Text>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.modalItemText,
+                              isSelected && { color: COLORS.primary, fontWeight: '700' },
+                              isDisabledItem && { color: COLORS.textMuted, fontStyle: 'italic' }
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {item?.name || '---'}
+                          </Text>
+                          {isDisabledItem && (
+                            <Text style={{ fontSize: 11, color: COLORS.error, marginTop: 2, fontWeight: '600' }}>
+                              {disabledLabel}
+                            </Text>
+                          )}
+                        </View>
                       </View>
                       {isSelected && <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />}
+                      {isDisabledItem && (
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: '#FEE2E2' }}>
+                          <Text style={{ fontSize: 10, color: COLORS.error, fontWeight: '700' }}>ĐÃ CHỌN</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   );
                 }}
@@ -231,6 +270,7 @@ export default function CreateTripScreen({ navigation }) {
     pickups: [{ id: 'p1', wardId: '' }],
     dropoffs: [{ id: 'd1', wardId: '' }],
     departureTime: new Date(Date.now() + 86400000),
+    estimatedDurationHours: '3',
     seatTotal: '4', priceVnd: '150000'
   });
 
@@ -242,6 +282,19 @@ export default function CreateTripScreen({ navigation }) {
   const [vehicle, setVehicle] = useState(null);
   const [checkingVehicle, setCheckingVehicle] = useState(true);
 
+  // Tính thời gian đến dự kiến dựa trên giờ xuất phát + số giờ chạy
+  const estimatedArrivalTime = useMemo(() => {
+    const hours = parseFloat(form.estimatedDurationHours) || 0;
+    if (hours <= 0 || !form.departureTime) return null;
+    return new Date(form.departureTime.getTime() + hours * 3600 * 1000);
+  }, [form.departureTime, form.estimatedDurationHours]);
+
+  const adjustDuration = (delta) => {
+    const current = parseFloat(form.estimatedDurationHours) || 3;
+    const next = Math.max(0.5, Math.min(24, Math.round((current + delta) * 10) / 10));
+    updateForm('estimatedDurationHours', String(next));
+  };
+
   const resetForm = () => {
     const defaultSeat = vehicle?.seatCapacity ? String(Math.min(4, Number(vehicle.seatCapacity))) : '4';
     setForm({
@@ -249,6 +302,7 @@ export default function CreateTripScreen({ navigation }) {
       pickups: [{ id: Date.now().toString(), wardId: '' }],
       dropoffs: [{ id: (Date.now() + 1).toString(), wardId: '' }],
       departureTime: new Date(Date.now() + 86400000),
+      estimatedDurationHours: '3',
       seatTotal: defaultSeat, priceVnd: '150000'
     });
     setStartWards([]);
@@ -394,6 +448,23 @@ export default function CreateTripScreen({ navigation }) {
     if (!form.startProvinceId || !form.endProvinceId || validPickups.length === 0 || validDropoffs.length === 0) {
       Alert.alert('Chưa đầy đủ', 'Vui lòng chọn ít nhất 1 điểm đón và 1 điểm trả.'); return;
     }
+    const pickupWardIds = validPickups.map(p => String(p.wardId));
+    if (new Set(pickupWardIds).size !== pickupWardIds.length) {
+      Alert.alert('Lộ trình không hợp lệ', 'Không được chọn các điểm đón trùng phường/xã trong cùng một tỉnh.');
+      return;
+    }
+    const dropoffWardIds = validDropoffs.map(d => String(d.wardId));
+    if (new Set(dropoffWardIds).size !== dropoffWardIds.length) {
+      Alert.alert('Lộ trình không hợp lệ', 'Không được chọn các điểm trả trùng phường/xã trong cùng một tỉnh.');
+      return;
+    }
+    if (String(form.startProvinceId) === String(form.endProvinceId)) {
+      const hasDuplicate = pickupWardIds.some(wId => dropoffWardIds.includes(wId));
+      if (hasDuplicate) {
+        Alert.alert('Lộ trình không hợp lệ', 'Trong cùng 1 tỉnh, điểm đón và điểm trả không được trùng phường/xã.');
+        return;
+      }
+    }
     if (!form.seatTotal || isNaN(form.seatTotal) || Number(form.seatTotal) < 1) {
       Alert.alert('Lỗi', 'Số ghế không hợp lệ.'); return;
     }
@@ -428,12 +499,18 @@ export default function CreateTripScreen({ navigation }) {
       const tzOffset = new Date().getTimezoneOffset() * 60000;
       const localISOTime = new Date(form.departureTime.getTime() - tzOffset).toISOString().slice(0, -1);
 
+      let localEstimatedArrivalTime = null;
+      if (estimatedArrivalTime) {
+        localEstimatedArrivalTime = new Date(estimatedArrivalTime.getTime() - tzOffset).toISOString().slice(0, -1);
+      }
+
       await apiService.createTrip({
         startProvinceId: form.startProvinceId,
         endProvinceId: form.endProvinceId,
         startAddressText: startProvName,
         endAddressText: endProvName,
         departureTime: localISOTime,
+        estimatedArrivalTime: localEstimatedArrivalTime,
         seatTotal: Number(form.seatTotal), priceVnd: Number(form.priceVnd),
         stops
       });
@@ -540,27 +617,47 @@ export default function CreateTripScreen({ navigation }) {
             <View style={{ marginBottom: 16 }}>
               <DropdownSelect
                 label="Tỉnh đi" placeholder="Chọn tỉnh xuất phát"
-                value={form.startProvinceId} options={provinces} onSelect={(val) => updateForm('startProvinceId', val)}
+                value={form.startProvinceId}
+                options={provinces}
+                onSelect={(val) => updateForm('startProvinceId', val)}
                 loading={loadingProvinces}
                 onRetry={fetchProvinces}
               />
               <View style={{ marginTop: 10 }}>
-                {form.pickups.map((p, index) => (
-                  <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <DropdownSelect
-                      label={`Điểm đón ${index + 1}`} placeholder="Chọn phường/xã"
-                      value={p.wardId} options={startWards} onSelect={(val) => updateStop('pickups', index, val)}
-                      disabled={!form.startProvinceId}
-                      loading={loadingStartWards}
-                      onRetry={() => fetchWards(form.startProvinceId, true)}
-                    />
-                    {index > 0 && (
-                      <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('pickups', index)}>
-                        <Ionicons name="trash-outline" size={20} color={COLORS.error} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                {form.pickups.map((p, index) => {
+                  const otherPickupWardIds = form.pickups
+                    .filter((_, idx) => idx !== index)
+                    .map(item => item.wardId)
+                    .filter(Boolean);
+                  const disabledWardIds = [...otherPickupWardIds];
+                  if (form.startProvinceId && form.endProvinceId && String(form.startProvinceId) === String(form.endProvinceId)) {
+                    form.dropoffs.forEach(d => {
+                      if (d.wardId && !disabledWardIds.includes(d.wardId)) {
+                        disabledWardIds.push(d.wardId);
+                      }
+                    });
+                  }
+                  return (
+                    <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <DropdownSelect
+                        label={`Điểm đón ${index + 1}`} placeholder="Chọn phường/xã"
+                        value={p.wardId}
+                        options={startWards}
+                        disabledIds={disabledWardIds}
+                        disabledLabel="Phường/xã đã được chọn"
+                        onSelect={(val) => updateStop('pickups', index, val)}
+                        disabled={!form.startProvinceId}
+                        loading={loadingStartWards}
+                        onRetry={() => fetchWards(form.startProvinceId, true)}
+                      />
+                      {index > 0 && (
+                        <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('pickups', index)}>
+                          <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
                 <TouchableOpacity style={styles.addStopBtn} onPress={() => addStop('pickups')}>
                   <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
                   <Text style={styles.addStopText}>Thêm điểm đón</Text>
@@ -574,27 +671,47 @@ export default function CreateTripScreen({ navigation }) {
             <View style={{ marginTop: 16 }}>
               <DropdownSelect
                 label="Tỉnh đến" placeholder="Chọn tỉnh kết thúc"
-                value={form.endProvinceId} options={provinces} onSelect={(val) => updateForm('endProvinceId', val)}
+                value={form.endProvinceId}
+                options={provinces}
+                onSelect={(val) => updateForm('endProvinceId', val)}
                 loading={loadingProvinces}
                 onRetry={fetchProvinces}
               />
               <View style={{ marginTop: 10 }}>
-                {form.dropoffs.map((d, index) => (
-                  <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                    <DropdownSelect
-                      label={`Điểm trả ${index + 1}`} placeholder="Chọn phường/xã"
-                      value={d.wardId} options={endWards} onSelect={(val) => updateStop('dropoffs', index, val)}
-                      disabled={!form.endProvinceId}
-                      loading={loadingEndWards}
-                      onRetry={() => fetchWards(form.endProvinceId, false)}
-                    />
-                    {index > 0 && (
-                      <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('dropoffs', index)}>
-                        <Ionicons name="trash-outline" size={20} color={COLORS.error} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                {form.dropoffs.map((d, index) => {
+                  const otherDropoffWardIds = form.dropoffs
+                    .filter((_, idx) => idx !== index)
+                    .map(item => item.wardId)
+                    .filter(Boolean);
+                  const disabledWardIds = [...otherDropoffWardIds];
+                  if (form.startProvinceId && form.endProvinceId && String(form.startProvinceId) === String(form.endProvinceId)) {
+                    form.pickups.forEach(p => {
+                      if (p.wardId && !disabledWardIds.includes(p.wardId)) {
+                        disabledWardIds.push(p.wardId);
+                      }
+                    });
+                  }
+                  return (
+                    <View key={d.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <DropdownSelect
+                        label={`Điểm trả ${index + 1}`} placeholder="Chọn phường/xã"
+                        value={d.wardId}
+                        options={endWards}
+                        disabledIds={disabledWardIds}
+                        disabledLabel="Phường/xã đã được chọn"
+                        onSelect={(val) => updateStop('dropoffs', index, val)}
+                        disabled={!form.endProvinceId}
+                        loading={loadingEndWards}
+                        onRetry={() => fetchWards(form.endProvinceId, false)}
+                      />
+                      {index > 0 && (
+                        <TouchableOpacity style={styles.deleteStopBtn} onPress={() => removeStop('dropoffs', index)}>
+                          <Ionicons name="trash-outline" size={20} color={COLORS.error} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
                 <TouchableOpacity style={[styles.addStopBtn, { borderColor: `${COLORS.error}44` }]} onPress={() => addStop('dropoffs')}>
                   <Ionicons name="add-circle-outline" size={16} color={COLORS.error} />
                   <Text style={[styles.addStopText, { color: COLORS.error }]}>Thêm điểm trả</Text>
@@ -603,13 +720,13 @@ export default function CreateTripScreen({ navigation }) {
             </View>
           </View>
 
-          {/* === THỜI GIAN KHỞI HÀNH === */}
+          {/* === THỜI GIAN KHỞI HÀNH & ĐẾN === */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardIconWrap}>
                 <Ionicons name="time" size={18} color={COLORS.primary} />
               </View>
-              <Text style={styles.cardTitle}>THỜI GIAN KHỞI HÀNH</Text>
+              <Text style={styles.cardTitle}>THỜI GIAN LỘ TRÌNH</Text>
             </View>
 
             {/* Date/Time pickers */}
@@ -664,6 +781,70 @@ export default function CreateTripScreen({ navigation }) {
                 <TouchableOpacity style={styles.pickerDoneBtn} onPress={() => setShowTimePicker(false)}>
                   <Text style={styles.pickerDoneText}>Xong</Text>
                 </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={styles.divider} />
+
+            {/* Thời gian di chuyển ước tính */}
+            <View style={{ marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>Thời gian di chuyển ước tính</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.primary }}>
+                  {form.estimatedDurationHours || '0'} giờ
+                </Text>
+              </View>
+
+              {/* Stepper + Input */}
+              <View style={styles.stepperRow}>
+                <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustDuration(-0.5)} activeOpacity={0.7}>
+                  <Ionicons name="remove" size={18} color={COLORS.primary} />
+                </TouchableOpacity>
+                <View style={styles.seatValueBox}>
+                  <TextInput
+                    style={styles.seatInput}
+                    keyboardType="numeric"
+                    value={form.estimatedDurationHours}
+                    onChangeText={(t) => updateForm('estimatedDurationHours', t.replace(/[^0-9.]/g, ''))}
+                  />
+                  <Text style={styles.seatUnit}>giờ</Text>
+                </View>
+                <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustDuration(0.5)} activeOpacity={0.7}>
+                  <Ionicons name="add" size={18} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Chips gợi ý nhanh */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4 }}>
+                {DURATION_PRESETS.map((dur) => (
+                  <TouchableOpacity
+                    key={dur}
+                    style={[styles.chip, form.estimatedDurationHours === dur && styles.chipActive]}
+                    onPress={() => updateForm('estimatedDurationHours', dur)}
+                  >
+                    <Text style={[styles.chipText, form.estimatedDurationHours === dur && styles.chipTextActive]}>
+                      {dur}h
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Hộp xem trước thời gian đến dự kiến */}
+            {estimatedArrivalTime && (
+              <View style={styles.arrivalPreviewBox}>
+                <View style={styles.arrivalIconWrap}>
+                  <Ionicons name="flag" size={16} color={COLORS.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.arrivalPreviewLabel}>DỰ KIẾN ĐẾN NƠI</Text>
+                  <Text style={styles.arrivalPreviewTime}>
+                    {estimatedArrivalTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {estimatedArrivalTime.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </Text>
+                  <Text style={styles.arrivalPreviewNote}>
+                    ⏱ Chuyến sẽ tự động hoàn thành sau 30 phút kể từ giờ đến nếu bạn chưa kết thúc.
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -916,5 +1097,44 @@ const styles = StyleSheet.create({
   blockedTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, textAlign: 'center', marginBottom: 12 },
   blockedDesc: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24, paddingHorizontal: 8 },
   blockedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, height: 48, borderRadius: 14, paddingHorizontal: 20, width: '100%', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
-  blockedBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' }
+  blockedBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+
+  arrivalPreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
+    gap: 10,
+  },
+  arrivalIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#DCFCE7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  arrivalPreviewLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.success,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  arrivalPreviewTime: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  arrivalPreviewNote: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 15,
+  }
 });

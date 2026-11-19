@@ -11,8 +11,15 @@ const apiClient = axios.create({
 // 2. Tự động đính kèm Token vào Header trước khi gửi API
 apiClient.interceptors.request.use(
   async (config) => {
-    // Không đính kèm token nếu đang gọi API đăng nhập hoặc đăng ký
-    if (config.url && (config.url.includes('/auth/authentication') || config.url.includes('/auth/register'))) {
+    // Không đính kèm token nếu đang gọi API đăng nhập, đăng ký hoặc dữ liệu địa lý công khai
+    if (
+      config.url &&
+      (config.url.includes('/auth/authentication') ||
+        config.url.includes('/auth/register') ||
+        config.url.includes('/api/location/province') ||
+        config.url.includes('/api/location/ward') ||
+        config.url.includes('/config/max-distance'))
+    ) {
       return config;
     }
 
@@ -66,7 +73,22 @@ export const apiService = {
     return await apiClient.get('/api/booking/bookings/my-bookings');
   },
   rateTrip: async (bookingId, payload) => {
-    return await apiClient.post(`/api/booking/bookings/${bookingId}/rate`, payload);
+    return await apiClient.post('/api/review/reviews', { ...payload, bookingId });
+  },
+  createReview: async (payload) => {
+    return await apiClient.post('/api/review/reviews', payload);
+  },
+  getReviewByBookingId: async (bookingId) => {
+    return await apiClient.get(`/api/review/reviews/booking/${bookingId}`);
+  },
+  getDriverReviews: async (driverId) => {
+    return await apiClient.get(`/api/review/reviews/driver/${driverId}`);
+  },
+  requestBookingModification: async (bookingId, payload) => {
+    return await apiClient.post(`/api/booking/bookings/${bookingId}/modify`, payload);
+  },
+  getBookingModifications: async (bookingId) => {
+    return await apiClient.get(`/api/booking/bookings/${bookingId}/modifications`);
   },
 
   // Payment Service
@@ -76,9 +98,6 @@ export const apiService = {
   getPaymentUrl: async (bookingId) => {
     return await apiClient.get(`/api/payment/payments/booking/${bookingId}`);
   },
-  markPaymentPaid: async (paymentId, transactionId) => {
-    return await apiClient.post(`/api/payment/payments/${paymentId}/authorize`, { transactionId });
-  },
 
   // Trip Service
   getAllTrips: async (params) => {
@@ -87,8 +106,14 @@ export const apiService = {
   getTripDetail: async (tripId) => {
     return await apiClient.get(`/api/trip/trip/${tripId}`);
   },
+  getTripPaymentOptions: async (tripId) => {
+    return await apiClient.get(`/api/trip/trip/${tripId}/payment-options`);
+  },
   getBookingDetail: async (bookingId) => {
     return await apiClient.get(`/api/booking/bookings/${bookingId}`);
+  },
+  cancelBooking: async (bookingId, reason) => {
+    return await apiClient.post(`/api/booking/bookings/${bookingId}/cancel`, { reason });
   },
 
   // --- MARKETPLACE (CHỢ NHU CẦU) ---
@@ -100,6 +125,9 @@ export const apiService = {
   },
   rejectTripRequestInvitation: async (invitationId) => {
     return await apiClient.post(`/api/trip/trip-requests/invitations/${invitationId}/reject`);
+  },
+  acceptTripRequestInvitation: async (invitationId) => {
+    return await apiClient.post(`/api/trip/trip-requests/invitations/${invitationId}/accept`);
   },
   cancelTripRequest: async (requestId) => {
     return await apiClient.delete(`/api/trip/trip-requests/${requestId}`);
@@ -114,6 +142,9 @@ export const apiService = {
   },
   getWardById: async (wardId) => {
     return await apiClient.get(`/api/location/ward/${wardId}`);
+  },
+  getMaxDistanceConfig: async (provinceId) => {
+    return await apiClient.get('/api/location/config/max-distance', { params: provinceId ? { provinceId } : undefined });
   },
 
   // Notification Service

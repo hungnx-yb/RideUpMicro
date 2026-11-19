@@ -70,16 +70,22 @@ public class BookingServiceConsumer {
 
     @RetryableTopic(exclude = {JsonProcessingException.class})
     @KafkaListener(
-            topics = "${app.kafka.topics.payment-authorized}",
+            topics = "${app.kafka.topics.refund-completed:refund.completed}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void onPaymentAuthorized(String payload, Acknowledgment ack) throws Exception {
-        com.rideUp.booking_service.dto.event.PaymentAuthorizedEvent event = objectMapper.readValue(payload, com.rideUp.booking_service.dto.event.PaymentAuthorizedEvent.class);
-        log.info("[PaymentAuthorizedEvent] eventId={}, bookingId={}, paymentId={}, correlationId={}",
-                event.getEventId(), event.getBookingId(), event.getPaymentId(), event.getCorrelationId());
-        
-        bookingService.markBookingWaitingApproval(event.getBookingId());
-        
+    public void onRefundCompleted(String payload, Acknowledgment ack) throws Exception {
+        RefundCompletedEvent event = objectMapper.readValue(payload, RefundCompletedEvent.class);
+        log.info("[RefundCompletedEvent] eventId={}, bookingId={}, refundId={}, correlationId={}",
+                event.getEventId(), event.getBookingId(), event.getRefundId(), event.getCorrelationId());
+
+        bookingService.handleRefundCompleted(
+                RefundCompletedRequest.builder()
+                        .bookingId(event.getBookingId())
+                        .refundId(event.getRefundId())
+                        .correlationId(event.getCorrelationId())
+                        .build()
+        );
+
         ack.acknowledge();
     }
 
@@ -94,6 +100,21 @@ public class BookingServiceConsumer {
                 event.getEventId(), event.getTripId(), event.getDriverId(), event.getCancelReason());
 
         bookingService.handleTripCancelled(event.getTripId(), event.getCancelReason());
+
+        ack.acknowledge();
+    }
+
+    @RetryableTopic(exclude = {JsonProcessingException.class})
+    @KafkaListener(
+            topics = "${app.kafka.topics.trip-completed:trip.completed}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void onTripCompleted(String payload, Acknowledgment ack) throws Exception {
+        com.rideUp.booking_service.dto.event.TripCompletedEvent event = objectMapper.readValue(payload, com.rideUp.booking_service.dto.event.TripCompletedEvent.class);
+        log.info("[TripCompletedEvent] eventId={}, tripId={}, driverId={}",
+                event.getEventId(), event.getTripId(), event.getDriverId());
+
+        bookingService.handleTripCompleted(event.getTripId());
 
         ack.acknowledge();
     }

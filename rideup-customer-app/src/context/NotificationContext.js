@@ -53,6 +53,13 @@ export const NotificationProvider = ({ children }) => {
         // Cập nhật số đỏ ngay lập tức
         incrementUnreadCount();
         
+        // Bỏ qua popup Alert đối với thông báo hủy yêu cầu tìm xe để tránh làm gián đoạn trải nghiệm người dùng
+        const title = newNoti?.title || '';
+        const msg = newNoti?.message || newNoti?.content || '';
+        if (title.toLowerCase().includes('hủy yêu cầu') || msg.toLowerCase().includes('hủy yêu cầu')) {
+          return;
+        }
+
         if (newNoti?.title && newNoti?.message) {
            Alert.alert(`🔔 ${newNoti.title}`, newNoti.message);
         } else if (newNoti?.content) {

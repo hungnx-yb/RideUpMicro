@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ReviewResponse {
     private String id;
+    private String bookingId;
     private String tripId;
     private String driverId;
     private String customerId;

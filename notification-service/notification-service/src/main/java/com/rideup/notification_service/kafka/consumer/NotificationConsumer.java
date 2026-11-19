@@ -17,6 +17,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import com.rideup.notification_service.dto.event.BookingModificationRequestedEvent;
+import com.rideup.notification_service.dto.event.BookingModificationResolvedEvent;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -58,27 +60,27 @@ public class NotificationConsumer {
 		TripResponse trip = tripId == null ? null : resolveTrip(tripId);
 
 		String title = "Đặt chỗ thành công";
-		String message = String.format("Dat cho %s da duoc xac nhan.",
+		String message = String.format("Đặt chỗ %s của bạn đã được xác nhận.",
 				booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode());
 		notificationService.createNotification(
 				booking.getCustomerId(),
 				title,
 				message,
 				NotificationType.BOOKING_CONFIRMED,
-				buildMetadata("bookingId", event.getBookingId(), "tripId", tripId)
+				buildMetadata("bookingId", event.getBookingId(), "tripId", tripId, "type", "BOOKING_CONFIRMED")
 		);
 
 		String driverId = trip == null ? null : trip.getDriverId();
 		if (driverId != null && !driverId.equals(booking.getCustomerId())) {
-			String driverTitle = "Co dat cho moi";
-			String driverMessage = String.format("Dat cho %s vua duoc xac nhan.",
+			String driverTitle = "Có đặt chỗ mới";
+			String driverMessage = String.format("Đặt chỗ %s vừa được xác nhận cho chuyến đi của bạn.",
 					booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode());
 			notificationService.createNotification(
 					driverId,
 					driverTitle,
 					driverMessage,
 					NotificationType.BOOKING_CONFIRMED,
-					buildMetadata("bookingId", event.getBookingId(), "tripId", tripId)
+					buildMetadata("bookingId", event.getBookingId(), "tripId", tripId, "type", "BOOKING_CONFIRMED")
 			);
 		}
 		ack.acknowledge();
@@ -95,9 +97,9 @@ public class NotificationConsumer {
 			return;
 		}
 
-		String title = "Dat cho bi huy";
-		String reason = event.getReason() == null ? "" : (" Ly do: " + event.getReason());
-		String message = String.format("Dat cho %s da bi huy.%s",
+		String title = "Đặt chỗ đã bị hủy";
+		String reason = event.getReason() == null || event.getReason().isBlank() ? "" : (" Lý do: " + event.getReason());
+		String message = String.format("Đặt chỗ %s đã bị hủy.%s",
 				booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode(),
 				reason);
 		notificationService.createNotification(
@@ -105,8 +107,26 @@ public class NotificationConsumer {
 				title,
 				message,
 				NotificationType.BOOKING_CANCELLED,
-				buildMetadata("bookingId", event.getBookingId(), "tripId", booking.getTripId())
+				buildMetadata("bookingId", event.getBookingId(), "tripId", booking.getTripId(), "type", "BOOKING_CANCELLED")
 		);
+
+		// Thông báo cho tài xế khi hành khách hủy đặt chỗ / chuyến
+		String tripId = booking.getTripId() == null ? event.getTripId() : booking.getTripId();
+		TripResponse trip = tripId == null ? null : resolveTrip(tripId);
+		String driverId = trip == null ? null : trip.getDriverId();
+		if (driverId != null && !driverId.equals(booking.getCustomerId())) {
+			String driverTitle = "Hành khách đã hủy chuyến";
+			String driverMessage = String.format("Hành khách vừa hủy đặt chỗ %s trên chuyến đi của bạn.%s",
+					booking.getBookingCode() == null ? event.getBookingId() : booking.getBookingCode(),
+					reason);
+			notificationService.createNotification(
+					driverId,
+					driverTitle,
+					driverMessage,
+					NotificationType.BOOKING_CANCELLED,
+					buildMetadata("bookingId", event.getBookingId(), "tripId", tripId, "type", "BOOKING_CANCELLED")
+			);
+		}
 		ack.acknowledge();
 	}
 
@@ -122,7 +142,7 @@ public class NotificationConsumer {
 				title,
 				message,
 				NotificationType.BOOKING_COMPLETED,
-				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId())
+				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId(), "type", "BOOKING_COMPLETED")
 		);
 		ack.acknowledge();
 	}
@@ -139,7 +159,7 @@ public class NotificationConsumer {
 		}
 
 		String driverId = trip.getDriverId();
-		String title = "CÓ YÊU CẦU ĐẶT XE MỚI";
+		String title = "Có yêu cầu đặt xe mới";
 		String message = String.format("Bạn có một yêu cầu đặt xe mới (%s ghế, %s đ). Hệ thống sẽ tự động hủy sau 15 phút nếu bạn không nhận chuyến.",
 				event.getSeatCount(), event.getTotalAmount());
 				
@@ -148,7 +168,7 @@ public class NotificationConsumer {
 				title,
 				message,
 				NotificationType.SYSTEM,
-				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId())
+				buildMetadata("bookingId", event.getBookingId(), "tripId", event.getTripId(), "type", "BOOKING_WAITING_APPROVAL")
 		);
 		ack.acknowledge();
 	}
@@ -174,7 +194,7 @@ public class NotificationConsumer {
                 String departureStr = event.getDepartureTime() != null
                         ? event.getDepartureTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM"))
                         : "";
-                String message = String.format("Có khách đang tìm xe %s chỗ lúc %s. Vào Marketplace gửi lời mời ngay!",
+                String message = String.format("Có khách đang tìm xe %s chỗ lúc %s. Vào Chợ Khách gửi lời mời ngay!",
                         event.getSeatTotal() != null ? event.getSeatTotal() : 1, departureStr);
 
                 for (DriverResponse driver : matchingDrivers) {
@@ -221,7 +241,11 @@ public class NotificationConsumer {
                 title,
                 message,
                 NotificationType.SYSTEM,
-                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+                buildMetadata(
+                        "tripRequestId", event.get("tripRequestId"),
+                        "invitationId", event.get("invitationId"),
+                        "type", "TRIP_REQUEST_INVITED"
+                )
         );
         ack.acknowledge();
     }
@@ -241,7 +265,11 @@ public class NotificationConsumer {
                 title,
                 message,
                 NotificationType.SYSTEM,
-                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+                buildMetadata(
+                        "tripRequestId", event.get("tripRequestId"),
+                        "invitationId", event.get("invitationId"),
+                        "type", "TRIP_REQUEST_INVITATION_REJECTED"
+                )
         );
         ack.acknowledge();
     }
@@ -261,10 +289,148 @@ public class NotificationConsumer {
                 title,
                 message,
                 NotificationType.SYSTEM,
-                buildMetadata("tripRequestId", event.get("tripRequestId"), "invitationId", event.get("invitationId"))
+                buildMetadata(
+                        "tripRequestId", event.get("tripRequestId"),
+                        "invitationId", event.get("invitationId"),
+                        "type", "MARKETPLACE_INVITATION_ACCEPTED"
+                )
         );
         ack.acknowledge();
     }
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(topics = "${app.kafka.topics.booking-modification-requested:booking.modification.requested}", groupId = "${spring.kafka.consumer.group-id}")
+	public void onBookingModificationRequested(String payload, Acknowledgment ack) throws Exception {
+		BookingModificationRequestedEvent event = objectMapper.readValue(payload, BookingModificationRequestedEvent.class);
+		String driverId = event.getDriverId();
+		if (driverId == null && event.getTripId() != null) {
+			TripResponse trip = resolveTrip(event.getTripId());
+			driverId = trip != null ? trip.getDriverId() : null;
+		}
+
+		if (driverId != null) {
+			String title = "Yêu cầu đổi điểm đón/trả";
+			String message = "Khách hàng gửi yêu cầu thay đổi lộ trình chuyến đi. Vui lòng xem và phản hồi trong 15 phút.";
+			notificationService.createNotification(
+					driverId,
+					title,
+					message,
+					NotificationType.BOOKING_MODIFICATION_REQUESTED,
+					buildMetadata(
+							"modificationId", event.getModificationId(),
+							"bookingId", event.getBookingId(),
+							"tripId", event.getTripId(),
+							"type", "BOOKING_MODIFICATION_REQUESTED"
+					)
+			);
+		}
+		ack.acknowledge();
+	}
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(topics = "${app.kafka.topics.booking-modification-resolved:booking.modification.resolved}", groupId = "${spring.kafka.consumer.group-id}")
+	public void onBookingModificationResolved(String payload, Acknowledgment ack) throws Exception {
+		BookingModificationResolvedEvent event = objectMapper.readValue(payload, BookingModificationResolvedEvent.class);
+		String customerId = event.getCustomerId();
+		if (customerId == null && event.getBookingId() != null) {
+			BookingResponse booking = resolveBooking(event.getBookingId());
+			customerId = booking != null ? booking.getCustomerId() : null;
+		}
+
+		if (customerId != null) {
+			String title;
+			String message;
+			if ("APPROVED".equalsIgnoreCase(event.getStatus())) {
+				title = "Yêu cầu thay đổi được chấp thuận";
+				message = "Tài xế đã đồng ý cập nhật thông tin chuyến đi của bạn.";
+			} else if ("REJECTED".equalsIgnoreCase(event.getStatus())) {
+				title = "Yêu cầu thay đổi bị từ chối";
+				message = "Tài xế từ chối thay đổi" + (event.getReason() != null ? ": " + event.getReason() : ". Thông tin vé cũ được giữ nguyên.");
+			} else {
+				title = "Yêu cầu thay đổi hết hạn";
+				message = "Yêu cầu chỉnh sửa của bạn đã hết hạn do tài xế chưa kịp phản hồi. Lộ trình cũ được giữ nguyên an toàn.";
+			}
+
+			notificationService.createNotification(
+					customerId,
+					title,
+					message,
+					NotificationType.BOOKING_MODIFICATION_RESOLVED,
+					buildMetadata(
+							"modificationId", event.getModificationId(),
+							"bookingId", event.getBookingId(),
+							"tripId", event.getTripId(),
+							"status", event.getStatus(),
+							"type", "BOOKING_MODIFICATION_RESOLVED"
+					)
+			);
+		}
+		ack.acknowledge();
+	}
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(
+			topics = "${app.kafka.topics.refund-completed:refund.completed}",
+			groupId = "${spring.kafka.consumer.group-id}"
+	)
+	public void onRefundCompleted(String payload, Acknowledgment ack) throws Exception {
+		Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+		String bookingId = event.get("bookingId");
+		if (bookingId != null) {
+			BookingResponse booking = resolveBooking(bookingId);
+			if (booking != null && booking.getCustomerId() != null) {
+				notificationService.createNotification(
+						booking.getCustomerId(),
+						"Hoàn tiền thành công",
+						String.format("Yêu cầu hoàn tiền cho mã đặt chỗ %s đã được xử lý thành công.",
+								booking.getBookingCode() != null ? booking.getBookingCode() : bookingId),
+						NotificationType.SYSTEM,
+						buildMetadata("bookingId", bookingId, "type", "REFUND_COMPLETED")
+				);
+			}
+		}
+		ack.acknowledge();
+	}
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(
+			topics = "${app.kafka.topics.trip-request-expired:trip-request-expired}",
+			groupId = "${spring.kafka.consumer.group-id}"
+	)
+	public void onTripRequestExpired(String payload, Acknowledgment ack) throws Exception {
+		Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+		String passengerId = event.get("passengerId");
+		if (passengerId != null) {
+			notificationService.createNotification(
+					passengerId,
+					"Yêu cầu tìm xe đã hết hạn",
+					"Yêu cầu tìm xe của bạn đã hết hạn do chưa có chuyến đi phù hợp. Bạn có thể tạo yêu cầu mới bất cứ lúc nào.",
+					NotificationType.SYSTEM,
+					buildMetadata("tripRequestId", event.get("tripRequestId"), "type", "TRIP_REQUEST_EXPIRED")
+			);
+		}
+		ack.acknowledge();
+	}
+
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(
+			topics = "${app.kafka.topics.trip-request-cancelled:trip-request-cancelled}",
+			groupId = "${spring.kafka.consumer.group-id}"
+	)
+	public void onTripRequestCancelled(String payload, Acknowledgment ack) throws Exception {
+		Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+		String passengerId = event.get("passengerId");
+		if (passengerId != null) {
+			notificationService.createNotification(
+					passengerId,
+					"Hủy yêu cầu tìm xe",
+					"Bạn đã hủy yêu cầu tìm xe thành công.",
+					NotificationType.SYSTEM,
+					buildMetadata("tripRequestId", event.get("tripRequestId"), "type", "TRIP_REQUEST_CANCELLED")
+			);
+		}
+		ack.acknowledge();
+	}
 
 	private String buildMetadata(String... keyValues) {
 		try {

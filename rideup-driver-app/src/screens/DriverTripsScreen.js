@@ -198,6 +198,7 @@ export default function DriverTripsScreen({ navigation }) {
   // Booking Modal state
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [tripBookingStats, setTripBookingStats] = useState({});
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [actionLoading, setActionLoading] = useState(null); // track which action is loading
   const [bookingFilterTab, setBookingFilterTab] = useState('ACTIVE'); // 'ACTIVE' or 'CANCELLED'
@@ -239,7 +240,7 @@ export default function DriverTripsScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchTrips(0);
+      fetchTrips(0, activeTab);
     }, [filters])
   );
 
@@ -252,10 +253,22 @@ export default function DriverTripsScreen({ navigation }) {
     }
   };
 
-  const fetchTrips = async (targetPage = 0) => {
+  const handleTabChange = (newTab) => {
+    if (newTab === activeTab) return;
+    setActiveTab(newTab);
+    setPage(0);
+    setTrips([]);
+    fetchTrips(0, newTab);
+  };
+
+  const fetchTrips = async (targetPage = 0, targetStatus) => {
     try {
       setLoading(true);
+      const currentStatus = targetStatus !== undefined ? targetStatus : activeTab;
       const params = { size: 10, page: targetPage };
+      if (currentStatus && currentStatus !== 'ALL') {
+        params.status = currentStatus;
+      }
       if (filters.startProvinceId) params.startProvinceId = filters.startProvinceId;
       if (filters.endProvinceId) params.endProvinceId = filters.endProvinceId;
       if (filters.startDate) params.startDate = filters.startDate.toISOString().split('T')[0];
@@ -299,6 +312,30 @@ export default function DriverTripsScreen({ navigation }) {
       }
 
       setTrips(list);
+
+      // Đồng bộ số ghế đã đặt thực tế từ booking-service cho toàn bộ danh sách chuyến xe
+      if (list.length > 0) {
+        try {
+          const statsMap = {};
+          await Promise.all(
+            list.map(async (t) => {
+              try {
+                const bRes = await apiService.getBookingsByTripId(t.id);
+                const bList = bRes?.data?.result || [];
+                const approved = bList.filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+                const bookedSeats = approved.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+                statsMap[t.id] = {
+                  seatsBooked: bookedSeats,
+                  approvedCount: approved.length,
+                };
+              } catch (_) {}
+            })
+          );
+          setTripBookingStats(prev => ({ ...prev, ...statsMap }));
+        } catch (syncErr) {
+          console.log('Error syncing trip booking stats:', syncErr);
+        }
+      }
     } catch (e) {
       console.log(e);
       setTrips([]);
@@ -312,7 +349,7 @@ export default function DriverTripsScreen({ navigation }) {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchTrips(0);
+    fetchTrips(0, activeTab);
   };
 
   const handleTripPress = async (trip) => {
@@ -327,10 +364,21 @@ export default function DriverTripsScreen({ navigation }) {
         apiService.getBookingsByTripId(trip.id),
         apiService.getTripDetail(trip.id).catch(() => null)
       ]);
-      setBookings(res?.data?.result || []);
+      const currentBookings = res?.data?.result || [];
+      setBookings(currentBookings);
       if (tRes?.data?.result) {
         setSelectedTrip(tRes.data.result);
       }
+      // Đồng bộ ngay thống kê ghế cho thẻ chuyến xe bên ngoài
+      const approved = currentBookings.filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+      const bookedSeats = approved.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+      setTripBookingStats(prev => ({
+        ...prev,
+        [trip.id]: {
+          seatsBooked: bookedSeats,
+          approvedCount: approved.length,
+        }
+      }));
     } catch (e) {
       console.log(e);
     } finally {
@@ -346,10 +394,20 @@ export default function DriverTripsScreen({ navigation }) {
         apiService.getBookingsByTripId(selectedTrip.id),
         apiService.getTripDetail(selectedTrip.id).catch(() => null)
       ]);
-      setBookings(res?.data?.result || []);
+      const currentBookings = res?.data?.result || [];
+      setBookings(currentBookings);
       if (tRes?.data?.result) {
         setSelectedTrip(tRes.data.result);
       }
+      const approved = currentBookings.filter(b => ['CONFIRMED', 'COMPLETED'].includes(b.status));
+      const bookedSeats = approved.reduce((sum, b) => sum + (b.seatCount || 1), 0);
+      setTripBookingStats(prev => ({
+        ...prev,
+        [selectedTrip.id]: {
+          seatsBooked: bookedSeats,
+          approvedCount: approved.length,
+        }
+      }));
       fetchTrips();
     } catch (e) {
       console.log(e);
@@ -622,25 +680,14 @@ export default function DriverTripsScreen({ navigation }) {
     return count;
   }, [filters]);
 
-  // Lọc chuyến theo tab trạng thái
-  const displayTrips = useMemo(() => {
-    return trips.filter(t => {
-      const s = (t.status || '').toUpperCase();
-      if (activeTab === 'OPEN') {
-        return ['OPEN', 'FULL'].includes(s);
-      } else if (activeTab === 'STARTED') {
-        return s === 'STARTED';
-      } else if (activeTab === 'COMPLETED') {
-        return s === 'COMPLETED';
-      } else if (activeTab === 'CANCELLED') {
-        return ['CANCELLED', 'CANCELED'].includes(s);
-      }
-      return true; // Tab ALL hiển thị tất cả
-    }).sort((a, b) => new Date(b.departureTime) - new Date(a.departureTime));
-  }, [trips, activeTab]);
+  // Danh sách chuyến xe đã được phân trang và lọc trạng thái chính xác từ Backend
+  const displayTrips = trips;
 
   const renderTripItem = ({ item }) => {
-    const seatsBooked = Math.max((item.seatTotal || 0) - (item.seatAvailable || 0), 0);
+    const stats = tripBookingStats[item.id];
+    const seatsBooked = stats?.seatsBooked !== undefined
+      ? stats.seatsBooked
+      : Math.max((item.seatTotal || 0) - (item.seatAvailable || 0), 0);
     const revenue = (item.priceVnd || 0) * seatsBooked;
     const sColor = getStatusColor(item.status);
     const { time, date } = formatDate(item.departureTime);
@@ -798,12 +845,30 @@ export default function DriverTripsScreen({ navigation }) {
             </View>
           </View>
 
-          {!!item.note && (
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' }}>
-              <Ionicons name="chatbox-ellipses-outline" size={14} color={COLORS.warning} style={{ marginTop: 2, marginRight: 6 }} />
-              <Text style={{ flex: 1, fontSize: 12, color: COLORS.textMuted, fontStyle: 'italic' }}>{item.note}</Text>
+          {/* Ghi chú của khách (Luôn hiển thị) */}
+          <View style={{
+            backgroundColor: item.note ? '#FFFBEB' : '#F8FAFC',
+            borderRadius: 8,
+            padding: 8,
+            borderWidth: 1,
+            borderColor: item.note ? '#FDE68A' : '#E2E8F0',
+            marginTop: 4,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+              <Ionicons name="chatbox-ellipses" size={13} color={item.note ? '#D97706' : COLORS.textMuted} style={{ marginRight: 4 }} />
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: item.note ? '#B45309' : COLORS.textMuted }}>
+                GHI CHÚ CỦA KHÁCH:
+              </Text>
             </View>
-          )}
+            <Text style={{
+              fontSize: 12,
+              color: item.note ? '#78350F' : COLORS.textMuted,
+              lineHeight: 17,
+              fontStyle: item.note ? 'normal' : 'italic',
+            }}>
+              {item.note ? item.note : 'Khách không để lại ghi chú'}
+            </Text>
+          </View>
           {!!item.cancelReason && (
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' }}>
               <Ionicons name="alert-circle-outline" size={14} color={COLORS.error} style={{ marginTop: 2, marginRight: 6 }} />
@@ -817,7 +882,7 @@ export default function DriverTripsScreen({ navigation }) {
           const isStripe = item.paymentMethod === 'STRIPE' || (item.paymentMethod !== 'CASH' && (item.paymentStatus === 'HOLDING' || item.paymentId?.startsWith('pi_')));
           if (isStripe) {
             const isPaid = item.paymentStatus === 'PAID';
-            const isHolding = item.paymentStatus === 'HOLDING';
+            const isHolding = item.paymentStatus === 'HOLDING' || (item.paymentMethod === 'STRIPE' && item.paymentId?.startsWith('pi_'));
             const isRefunded = item.paymentStatus === 'REFUNDED' || item.paymentStatus === 'VOIDED';
             let label, subLabel, bg, borderCol, textCol, icon;
             if (isPaid) {
@@ -1003,7 +1068,7 @@ export default function DriverTripsScreen({ navigation }) {
               <TouchableOpacity
                 key={tab.key}
                 style={[styles.statusTabBtn, isActive && styles.statusTabBtnActive]}
-                onPress={() => setActiveTab(tab.key)}
+                onPress={() => handleTabChange(tab.key)}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.statusTabText, isActive && styles.statusTabTextActive]}>
@@ -1077,7 +1142,7 @@ export default function DriverTripsScreen({ navigation }) {
                 <TouchableOpacity
                   style={[styles.pageBtn, page === 0 && styles.pageBtnDisabled]}
                   disabled={page === 0 || loading}
-                  onPress={() => fetchTrips(page - 1)}
+                  onPress={() => fetchTrips(page - 1, activeTab)}
                 >
                   <Ionicons name="chevron-back" size={16} color={page === 0 ? COLORS.textMuted : COLORS.primary} />
                   <Text style={[styles.pageBtnText, page === 0 && styles.pageBtnTextDisabled]}>Trước</Text>
@@ -1090,7 +1155,7 @@ export default function DriverTripsScreen({ navigation }) {
                 <TouchableOpacity
                   style={[styles.pageBtn, page >= Math.ceil(totalTripsCount / 10) - 1 && styles.pageBtnDisabled]}
                   disabled={page >= Math.ceil(totalTripsCount / 10) - 1 || loading}
-                  onPress={() => fetchTrips(page + 1)}
+                  onPress={() => fetchTrips(page + 1, activeTab)}
                 >
                   <Text style={[styles.pageBtnText, page >= Math.ceil(totalTripsCount / 10) - 1 && styles.pageBtnTextDisabled]}>Sau</Text>
                   <Ionicons name="chevron-forward" size={16} color={page >= Math.ceil(totalTripsCount / 10) - 1 ? COLORS.textMuted : COLORS.primary} />

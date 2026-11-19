@@ -16,6 +16,7 @@ import java.util.Optional;
 public interface DriverProfileRepository extends JpaRepository<DriverProfile, String> {
     Optional<DriverProfile> findByUser(User user);
     Optional<DriverProfile> findByUserId(String userId);
+    Optional<DriverProfile> findByStripeAccountId(String stripeAccountId);
     boolean existsByUser(User user);
     boolean existsByCccd(String cccd);
     boolean existsByGplx(String gplx);
