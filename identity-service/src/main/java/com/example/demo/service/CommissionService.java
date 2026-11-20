@@ -77,8 +77,9 @@ public class CommissionService {
                 CommissionConfigResponse res = cached instanceof CommissionConfigResponse r
                         ? r
                         : objectMapper.convertValue(cached, CommissionConfigResponse.class);
-                // Cache định dạng cũ (chỉ có 3 tỷ lệ) => bỏ qua, nạp lại từ DB
-                if (res.getCreditLimit() != null && res.getRatingStep() != null) {
+                // Cache định dạng cũ (thiếu tham số hoặc thiếu tên người cập nhật) => bỏ qua, nạp lại từ DB
+                boolean missingUpdaterName = res.getUpdatedBy() != null && res.getUpdatedByName() == null;
+                if (res.getCreditLimit() != null && res.getRatingStep() != null && !missingUpdaterName) {
                     return res;
                 }
             }
@@ -300,6 +301,7 @@ public class CommissionService {
                 .creditLimit(config.getCreditLimit())
                 .minAcceptScore(config.getMinAcceptScore())
                 .updatedBy(config.getUpdatedBy())
+                .updatedByName(resolveUpdaterName(config.getUpdatedBy()))
                 .updatedAt(config.getUpdatedAt() != null ? config.getUpdatedAt().toString() : null)
                 .build();
     }
@@ -310,6 +312,15 @@ public class CommissionService {
         } catch (Exception e) {
             log.warn("[CommissionService] Cannot cache commission config in Redis: {}", e.getMessage());
         }
+    }
+
+    private String resolveUpdaterName(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        return userRepository.findById(userId)
+                .map(u -> u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName().trim() : u.getEmail())
+                .orElse(null);
     }
 
     private static BigDecimal scaleRate(BigDecimal value) {
