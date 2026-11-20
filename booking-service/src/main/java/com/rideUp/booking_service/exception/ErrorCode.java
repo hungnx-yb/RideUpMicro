@@ -49,7 +49,12 @@ public enum ErrorCode {
     MODIFICATION_CUTOFF_EXCEEDED(6016, "Chỉ được phép gửi yêu cầu chỉnh sửa trước giờ khởi hành tối thiểu 2 tiếng", HttpStatus.BAD_REQUEST),
     MODIFICATION_INVALID_STATUS(6017, "Trạng thái đơn đặt xe không hợp lệ để yêu cầu chỉnh sửa (chỉ hỗ trợ vé Đã xác nhận)", HttpStatus.BAD_REQUEST),
     MODIFICATION_ALREADY_RESOLVED(6018, "Yêu cầu chỉnh sửa đã được xử lý hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
-    CANCELLATION_CUTOFF_EXCEEDED(6019, "Chỉ được phép hủy vé trước giờ khởi hành tối thiểu theo quy định (2 tiếng)", HttpStatus.BAD_REQUEST);
+    CANCELLATION_CUTOFF_EXCEEDED(6019, "Đã quá mốc thời gian cho phép tự hủy vé trước giờ khởi hành", HttpStatus.BAD_REQUEST),
+
+    // ADM-FEAT-01/03
+    DRIVER_REPUTATION_TOO_LOW(6020, "Điểm uy tín của bạn thấp hơn ngưỡng tối thiểu để nhận chuyến", HttpStatus.FORBIDDEN),
+    INVALID_TIMEOUT_CONFIG(6021, "Giá trị timeout nằm ngoài giới hạn cho phép", HttpStatus.BAD_REQUEST),
+    TIMEOUT_CONFIG_NOT_FOUND(6022, "Không tìm thấy mã cấu hình timeout", HttpStatus.NOT_FOUND);
 
     private Integer code;
     private String message;

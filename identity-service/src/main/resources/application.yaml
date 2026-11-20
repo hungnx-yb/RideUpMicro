@@ -31,6 +31,11 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       enable-auto-commit: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        max.block.ms: 3000
     listener:
       ack-mode: manual_immediate
       observation-enabled: true
@@ -128,3 +133,5 @@ app:
     topics:
       driver-rating-updated: driver-rating-updated
       booking-completed: ${KAFKA_TOPIC_BOOKING_COMPLETED:booking.completed}
+      system-config-events: system-config-events
+      admin-audit-events: admin-audit-events

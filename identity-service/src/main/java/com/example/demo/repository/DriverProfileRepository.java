@@ -53,4 +53,24 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, St
     WHERE u.id IN :driverIds
 """)
     List<DriverResponse> getDriverDetailList(@Param("driverIds") List<String> driverIds);
+
+    // ===== ADM-FEAT-02: Thống kê công nợ =====
+    @Query("SELECT COALESCE(SUM(d.systemDebt), 0) FROM DriverProfile d")
+    java.math.BigDecimal sumOutstandingDebt();
+
+    @Query("SELECT COUNT(d) FROM DriverProfile d WHERE d.systemDebt > 0")
+    long countDriversWithDebt();
+
+    @Query("SELECT COUNT(d) FROM DriverProfile d WHERE d.systemDebt >= :creditLimit")
+    long countDriversOverLimit(@Param("creditLimit") java.math.BigDecimal creditLimit);
+
+    /** Danh sách tài xế cho sổ công nợ: đã duyệt hoặc đang có nợ (fetch sẵn user & xe tránh N+1) */
+    @Query("""
+            SELECT d FROM DriverProfile d
+            LEFT JOIN FETCH d.user
+            LEFT JOIN FETCH d.vehicle
+            WHERE d.status = :status OR d.systemDebt > 0
+            ORDER BY d.systemDebt DESC
+            """)
+    List<DriverProfile> findForDebtLedger(@Param("status") DriverStatus status);
 }

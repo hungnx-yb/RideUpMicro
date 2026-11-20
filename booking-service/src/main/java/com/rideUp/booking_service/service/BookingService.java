@@ -51,14 +51,13 @@ public class BookingService {
     BookingServicePublisher bookingServicePublisher;
     ModelMapper modelMapper;
     IdentityServiceClient identityServiceClient;
+    SystemTimeoutConfigService timeoutConfigService;
 
-    @NonFinal
-    @Value("${expiryTime:3600}")
-    long expirySeconds;
-
-    @NonFinal
-    @Value("${booking.cancellation-cutoff-hours:2}")
-    int cancellationCutoffHours;
+    /** ADM-FEAT-03: Hạn thanh toán Stripe (phút) đọc động từ cấu hình SLA */
+    private LocalDateTime paymentDeadlineFrom(LocalDateTime now) {
+        return now.plusMinutes(timeoutConfigService.getMinutes(
+                com.rideUp.booking_service.enums.TimeoutConfigKey.BOOKING_PAYMENT_TIMEOUT));
+    }
 
     public void checkDuplicateBooking(String tripId) {
         String currentCustomerId = SecurityUtils.getCurrentUserId();
@@ -134,15 +133,18 @@ public class BookingService {
         booking.setReservedAt(now);
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
 
-        // Đặt TTL (thời gian hết hạn):
-        // - WAITING_DRIVER_APPROVAL: Hết hạn trước khi chuyến khởi hành 1 tiếng
-        // - PENDING_PAYMENT: Hết hạn sau thời gian timeout thanh toán (hoặc trước khởi hành 1 tiếng nếu cận giờ)
+        // Đặt TTL (thời gian hết hạn) theo cấu hình SLA động (ADM-FEAT-03):
+        // - WAITING_DRIVER_APPROVAL: sau X phút tài xế chưa duyệt, muộn nhất 1 tiếng trước giờ khởi hành
+        // - PENDING_PAYMENT: sau Y phút chưa thanh toán (hoặc trước khởi hành 1 tiếng nếu cận giờ)
         if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL) {
-            booking.setExpiresAt(trip.getDepartureTime() != null
-                    ? trip.getDepartureTime().minusHours(1)
-                    : now.plusSeconds(expirySeconds));
+            LocalDateTime approvalDeadline = now.plusMinutes(timeoutConfigService.getMinutes(
+                    com.rideUp.booking_service.enums.TimeoutConfigKey.BOOKING_DRIVER_APPROVAL_TIMEOUT));
+            if (trip.getDepartureTime() != null && trip.getDepartureTime().minusHours(1).isBefore(approvalDeadline)) {
+                approvalDeadline = trip.getDepartureTime().minusHours(1);
+            }
+            booking.setExpiresAt(approvalDeadline);
         } else if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-            LocalDateTime paymentDeadline = now.plusSeconds(expirySeconds);
+            LocalDateTime paymentDeadline = paymentDeadlineFrom(now);
             if (trip.getDepartureTime() != null && trip.getDepartureTime().minusHours(1).isBefore(paymentDeadline)) {
                 booking.setExpiresAt(trip.getDepartureTime().minusHours(1));
             } else {
@@ -221,7 +223,7 @@ public class BookingService {
             booking.setExpiresAt(null);
         } else {
             booking.setStatus(BookingStatus.PENDING_PAYMENT);
-            booking.setExpiresAt(now.plusSeconds(expirySeconds));
+            booking.setExpiresAt(paymentDeadlineFrom(now));
         }
 
         Booking saved = bookingRepository.save(booking);
@@ -312,21 +314,25 @@ public class BookingService {
             throw new AppException(ErrorCode.BOOKING_NOT_FOUND); 
         }
 
-        // REQ-P3-06: Đơn CASH chặn duyệt nếu tài xế nợ >= 500k. Đơn STRIPE vẫn cho duyệt để cấn trừ nợ.
-        if (resolvePaymentMethod(booking) == PaymentMethod.CASH) {
-            try {
-                var debtResponse = identityServiceClient.getMyWallet();
-                if (debtResponse != null && debtResponse.getResult() != null) {
-                    java.math.BigDecimal currentDebt = debtResponse.getResult();
-                    if (currentDebt.compareTo(new java.math.BigDecimal("500000")) >= 0) {
-                        throw new AppException(ErrorCode.ACCOUNT_BLOCKED_DUE_TO_DEBT);
-                    }
+        // REQ-P3-06 + ADM-FEAT-01: hạn mức nợ & ngưỡng uy tín đọc từ cấu hình động của Admin.
+        // - Uy tín < ngưỡng tối thiểu: chặn duyệt mọi đơn.
+        // - Nợ >= hạn mức: chặn đơn CASH, đơn STRIPE vẫn cho duyệt để cấn trừ nợ.
+        try {
+            var eligibilityResponse = identityServiceClient.getMyEligibility();
+            var eligibility = eligibilityResponse != null ? eligibilityResponse.getResult() : null;
+            if (eligibility != null) {
+                if (Boolean.TRUE.equals(eligibility.getReputationBlocked())) {
+                    throw new AppException(ErrorCode.DRIVER_REPUTATION_TOO_LOW);
                 }
-            } catch (AppException e) {
-                throw e;
-            } catch (Exception e) {
-                log.warn("Failed to check wallet debt during approveBooking: {}", e.getMessage());
+                if (Boolean.TRUE.equals(eligibility.getDebtBlocked())
+                        && resolvePaymentMethod(booking) == PaymentMethod.CASH) {
+                    throw new AppException(ErrorCode.ACCOUNT_BLOCKED_DUE_TO_DEBT);
+                }
             }
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Failed to check driver eligibility during approveBooking: {}", e.getMessage());
         }
 
         // Chặn duyệt nếu yêu cầu đã hết hạn
@@ -492,7 +498,8 @@ public class BookingService {
             if (tripResponse != null && tripResponse.getResult() != null) {
                 var trip = tripResponse.getResult();
                 if (trip.getDepartureTime() != null) {
-                    LocalDateTime cutoff = trip.getDepartureTime().minusHours(cancellationCutoffHours);
+                    LocalDateTime cutoff = trip.getDepartureTime().minusMinutes(timeoutConfigService.getMinutes(
+                            com.rideUp.booking_service.enums.TimeoutConfigKey.CUSTOMER_CANCEL_CUTOFF));
                     if (LocalDateTime.now().isAfter(cutoff)) {
                         throw new AppException(ErrorCode.CANCELLATION_CUTOFF_EXCEEDED);
                     }
@@ -550,6 +557,7 @@ public class BookingService {
         }
 
         booking.setStatus(BookingStatus.COMPLETED);
+        booking.setCompletedAt(LocalDateTime.now());
         if (resolvePaymentMethod(booking) == PaymentMethod.CASH) {
             booking.setPaymentStatus(PaymentStatus.PAID);
         }
@@ -604,7 +612,7 @@ public class BookingService {
                 booking.setCancelledAt(now);
                 booking.setCancelReason(oldStatus == BookingStatus.PENDING_PAYMENT 
                         ? "Payment timeout" 
-                        : "Tự động hủy: Đã tới giới hạn 1 tiếng trước khi chuyến khởi hành mà tài xế chưa duyệt");
+                        : "Tự động hủy: Quá thời hạn duyệt vé mà tài xế chưa phản hồi");
                 booking.setStatus(BookingStatus.EXPIRED);
                 booking.setExpiresAt(null);
                 

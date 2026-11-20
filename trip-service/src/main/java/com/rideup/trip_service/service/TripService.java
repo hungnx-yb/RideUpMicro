@@ -43,23 +43,38 @@ public class TripService {
     ModelMapper modelMapper;
     IdentityServiceClient  identityServiceClient;
     TripServicePublisher tripServicePublisher;
+    FareBoundaryService fareBoundaryService;
 
-    @Transactional
-    public TripResponse createTrip(CreateTripRequest request) {
-        // Kiểm tra nợ của tài xế (Khóa cứng tại Backend)
+    /**
+     * Khóa cứng tại backend: tài xế nợ >= hạn mức hoặc uy tín < ngưỡng tối thiểu không được nhận/tạo chuyến.
+     * Nếu identity-service không phản hồi thì cho qua (không chặn vận hành vì lỗi hạ tầng).
+     */
+    public void ensureDriverEligible() {
         try {
-            var debtResponse = identityServiceClient.getMyWallet();
-            if (debtResponse != null && debtResponse.getResult() != null) {
-                java.math.BigDecimal currentDebt = debtResponse.getResult();
-                if (currentDebt.compareTo(new java.math.BigDecimal("500000")) >= 0) {
+            var response = identityServiceClient.getMyEligibility();
+            var eligibility = response != null ? response.getResult() : null;
+            if (eligibility != null) {
+                if (Boolean.TRUE.equals(eligibility.getDebtBlocked())) {
                     throw new AppException(ErrorCode.ACCOUNT_BLOCKED_DUE_TO_DEBT);
+                }
+                if (Boolean.TRUE.equals(eligibility.getReputationBlocked())) {
+                    throw new AppException(ErrorCode.DRIVER_REPUTATION_TOO_LOW);
                 }
             }
         } catch (AppException e) {
             throw e;
         } catch (Exception e) {
-            log.warn("Failed to check wallet debt: {}", e.getMessage());
+            log.warn("Failed to check driver eligibility: {}", e.getMessage());
         }
+    }
+
+    @Transactional
+    public TripResponse createTrip(CreateTripRequest request) {
+        // Kiểm tra hạn mức nợ & điểm uy tín theo cấu hình động của Admin (ADM-FEAT-01)
+        ensureDriverEligible();
+
+        // ADM-FEAT-05: chặn phá giá / đội giá so với khung giá cước theo km
+        fareBoundaryService.validateTripPrice(request.getStartProvinceId(), request.getEndProvinceId(), request.getPriceVnd());
 
         UserResponse userResponse = identityServiceClient.getUserInfo().getResult();
         List<String> userIds = List.of(userResponse.getId());

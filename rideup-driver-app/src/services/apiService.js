@@ -92,6 +92,14 @@ export const apiService = {
   getMyWallet: async () => {
     return await apiClient.get('/api/identity/drivers/me/wallet');
   },
+  // ADM-FEAT-01/02: hạn mức nợ & ngưỡng uy tín do Admin cấu hình động
+  getMyEligibility: async () => {
+    return await apiClient.get('/api/identity/drivers/me/eligibility');
+  },
+  // ADM-FEAT-05: khoảng giá vé hợp lệ theo tuyến
+  estimateFare: async (startProvinceId, endProvinceId) => {
+    return await apiClient.get('/api/trip/fare-boundaries/estimate', { params: { startProvinceId, endProvinceId } });
+  },
   enrollDriverFace: async (imageBase64, cccdImageBase64 = null) => {
     return await apiClient.post('/api/identity/drivers/face/enroll', {
       imageBase64,

@@ -6,6 +6,12 @@ public class AppException extends RuntimeException{
         this.errorCode = errorCode;
     }
 
+    /** Cho phép trả về thông điệp chi tiết hơn (ví dụ: khoảng giá cước hợp lệ cụ thể) */
+    public AppException(ErrorCode errorCode, String detailMessage) {
+        super(detailMessage != null ? detailMessage : errorCode.getMessage());
+        this.errorCode = errorCode;
+    }
+
     private final ErrorCode errorCode;
 
     public ErrorCode getErrorCode() {

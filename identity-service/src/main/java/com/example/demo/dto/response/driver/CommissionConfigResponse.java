@@ -15,4 +15,13 @@ public class CommissionConfigResponse implements Serializable {
     BigDecimal baseRate;
     BigDecimal minRate;
     BigDecimal maxRate;
+    Double ratingBenchmark;
+    BigDecimal ratingStep;
+    Integer reputationBenchmark;
+    BigDecimal reputationStep;
+    BigDecimal creditLimit;
+    Integer minAcceptScore;
+    String updatedBy;
+    /** ISO-8601, lưu dạng chuỗi để cache Redis an toàn */
+    String updatedAt;
 }

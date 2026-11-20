@@ -54,6 +54,8 @@ public class DriverService {
     FileService fileService;
     AiServiceClient aiServiceClient;
     ObjectMapper objectMapper;
+    DebtLedgerService debtLedgerService;
+    AdminAuditLogService auditLogService;
 
     @Transactional
     public DriverResponse registerDriver(DriverRegisterRequest request) {
@@ -272,6 +274,9 @@ public class DriverService {
         driverProfile.setApprovedAt(LocalDateTime.now());
         driverProfile.setApprovedBy(approver.getEmail());
         driverProfile = driverProfileRepository.save(driverProfile);
+        auditLogService.record("APPROVE_DRIVER", "DRIVER_PROFILE", driverProfile.getId(),
+                "Phê duyệt hồ sơ tài xế", java.util.Map.of("status", "PENDING"),
+                java.util.Map.of("status", "APPROVED"));
         return mapToDriverResponse(driverProfile);
     }
 
@@ -288,6 +293,9 @@ public class DriverService {
         driverProfile.setApprovedBy(approver.getEmail());
 
         driverProfile = driverProfileRepository.save(driverProfile);
+        auditLogService.record("REJECT_DRIVER", "DRIVER_PROFILE", driverProfile.getId(),
+                "Từ chối hồ sơ tài xế" + (reason != null && !reason.isBlank() ? ": " + reason : ""),
+                java.util.Map.of("status", "PENDING"), java.util.Map.of("status", "REJECTED"));
         return modelMapper.map(driverProfile, DriverResponse.class);
     }
 
@@ -351,8 +359,20 @@ public class DriverService {
                 .orElseThrow(() -> new AppException(ErrorCode.DRIVER_PROFILE_NOT_FOUND));
         
         java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
-        driverProfile.setSystemDebt(currentDebt.add(amount));
+        java.math.BigDecimal newDebt = currentDebt.add(amount);
+        if (newDebt.compareTo(java.math.BigDecimal.ZERO) < 0) {
+            newDebt = java.math.BigDecimal.ZERO;
+        }
+        driverProfile.setSystemDebt(newDebt);
         driverProfileRepository.save(driverProfile);
+
+        // ADM-FEAT-02: amount âm = tài xế nộp tiền trả nợ (wallet), dương = điều chỉnh tăng nợ
+        boolean isPayment = amount.signum() < 0;
+        debtLedgerService.recordDebtChange(driverProfile,
+                isPayment ? com.example.demo.enums.DebtTransactionType.MANUAL_PAYMENT
+                          : com.example.demo.enums.DebtTransactionType.ADJUSTMENT,
+                currentDebt, newDebt,
+                isPayment ? "Tài xế nộp tiền thanh toán công nợ" : "Điều chỉnh tăng công nợ");
     }
 
     @Transactional
@@ -368,6 +388,8 @@ public class DriverService {
         }
         driverProfile.setSystemDebt(newDebt);
         driverProfileRepository.save(driverProfile);
+        debtLedgerService.recordDebtChange(driverProfile, com.example.demo.enums.DebtTransactionType.STRIPE_OFFSET,
+                currentDebt, newDebt, "Cấn trừ nợ tự động từ tiền payout Stripe");
         log.info("[DriverService] Deducted debt {} for driver {}. Old debt: {}, New debt: {}",
                 amount, driverId, currentDebt, newDebt);
     }

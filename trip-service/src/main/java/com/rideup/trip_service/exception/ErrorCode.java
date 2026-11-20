@@ -73,7 +73,12 @@ public enum ErrorCode {
     ACCOUNT_BLOCKED_DUE_TO_DEBT(6001, "Your account is temporarily blocked. Please clear your debt to continue.", HttpStatus.FORBIDDEN),
     CANNOT_CANCEL_STARTED_TRIP(5007, "Chuyến xe đã bắt đầu di chuyển, không thể huỷ chuyến.", HttpStatus.BAD_REQUEST),
     SEAT_EXCEEDS_CAPACITY(5008, "Số ghế tạo chuyến không được vượt quá số ghế đăng ký của xe", HttpStatus.BAD_REQUEST),
-    CANNOT_START_WITHOUT_PASSENGERS(5009, "Chuyến đi chưa có hành khách nào. Vui lòng duyệt ít nhất 1 khách trước khi bắt đầu chuyến.", HttpStatus.BAD_REQUEST);
+    CANNOT_START_WITHOUT_PASSENGERS(5009, "Chuyến đi chưa có hành khách nào. Vui lòng duyệt ít nhất 1 khách trước khi bắt đầu chuyến.", HttpStatus.BAD_REQUEST),
+
+    // ADM-FEAT-01 / ADM-FEAT-05
+    DRIVER_REPUTATION_TOO_LOW(6002, "Điểm uy tín của bạn thấp hơn ngưỡng tối thiểu để nhận chuyến", HttpStatus.FORBIDDEN),
+    FARE_OUT_OF_RANGE(5201, "Giá vé không nằm trong khung giá cước cho phép của tuyến", HttpStatus.BAD_REQUEST),
+    INVALID_FARE_BOUNDARY(5202, "Cấu hình khung giá không hợp lệ: 0 < giá sàn <= giá trần", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

@@ -16,6 +16,12 @@ import java.util.List;
 )
 public interface IdentityFeignClient {
 
+    /** ADM-FEAT-04: Lọc người nhận phát sóng (yêu cầu token ADMIN được Feign chuyển tiếp) */
+    @org.springframework.web.bind.annotation.PostMapping("/admin/broadcast-audience")
+    ApiResponse<com.rideup.notification_service.dto.response.BroadcastAudienceResponse> resolveAudience(
+            @org.springframework.web.bind.annotation.RequestBody com.rideup.notification_service.dto.request.BroadcastAudienceRequest request,
+            @RequestParam("includeUserIds") boolean includeUserIds);
+
     @GetMapping("/drivers/internal/by-operating-provinces")
     ApiResponse<List<DriverResponse>> getDriversByOperatingProvinces(
             @RequestParam("startProvinceId") String startProvinceId,

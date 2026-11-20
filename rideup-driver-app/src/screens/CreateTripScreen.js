@@ -409,6 +409,22 @@ export default function CreateTripScreen({ navigation }) {
     }
   }, [form.endProvinceId]);
 
+  // ADM-FEAT-05: gợi ý khoảng giá vé hợp lệ theo khung giá cước Admin cấu hình
+  const [fareRange, setFareRange] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    setFareRange(null);
+    if (form.startProvinceId && form.endProvinceId && String(form.startProvinceId) !== String(form.endProvinceId)) {
+      apiService.estimateFare(form.startProvinceId, form.endProvinceId)
+        .then((res) => { if (!cancelled) setFareRange(res?.data?.result || null); })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [form.startProvinceId, form.endProvinceId]);
+  const priceNumber = Number(form.priceVnd || 0);
+  const isPriceOutOfRange = Boolean(fareRange?.applicable && priceNumber > 0
+    && (priceNumber < Number(fareRange.minPrice) || priceNumber > Number(fareRange.maxPrice)));
+
   const addStop = (type) => updateForm(type, [...form[type], { id: Date.now().toString(), wardId: '' }]);
   const removeStop = (type, index) => { const list = [...form[type]]; list.splice(index, 1); updateForm(type, list); };
   const updateStop = (type, index, wardId) => { const list = [...form[type]]; list[index].wardId = wardId; updateForm(type, list); };
@@ -522,12 +538,16 @@ export default function CreateTripScreen({ navigation }) {
       if (errorCode === 6001 || errorCode === 8001 || errorMessage.includes('ACCOUNT_BLOCKED_DUE_TO_DEBT')) {
         Alert.alert(
           'Tạm khóa tạo chuyến',
-          'Dư nợ của bạn đã vượt mức 500.000đ. Vui lòng thanh toán hoa hồng để tiếp tục hoạt động.',
+          'Dư nợ hoa hồng của bạn đã chạm hạn mức cho phép. Vui lòng thanh toán hoa hồng để tiếp tục hoạt động.',
           [
             { text: 'Đóng', style: 'cancel' },
             { text: 'Đi tới Ví', onPress: () => navigation.navigate('Wallet') }
           ]
         );
+      } else if (errorCode === 6002) {
+        Alert.alert('Tạm khóa tạo chuyến', errorMessage || 'Điểm uy tín của bạn thấp hơn ngưỡng tối thiểu để nhận chuyến.');
+      } else if (errorCode === 5201) {
+        Alert.alert('Giá vé không hợp lệ', errorMessage);
       } else if (errorCode === 5008 || errorMessage.includes('vượt quá số ghế')) {
         Alert.alert('Không hợp lệ', errorMessage || 'Số ghế tạo chuyến không được vượt quá số ghế đăng ký của xe');
       } else {
@@ -933,6 +953,12 @@ export default function CreateTripScreen({ navigation }) {
               />
               <Text style={styles.currencyLabel}>VNĐ</Text>
             </View>
+            {fareRange?.applicable ? (
+              <Text style={{ marginTop: 8, fontSize: 12, fontWeight: '600', color: isPriceOutOfRange ? COLORS.error : COLORS.textMuted }}>
+                {isPriceOutOfRange ? 'Giá ngoài khung cho phép. ' : ''}
+                Tuyến ~{Number(fareRange.distanceKm).toLocaleString('vi-VN')} km: giá hợp lệ {formatMoney(fareRange.minPrice)} – {formatMoney(fareRange.maxPrice)}/ghế
+              </Text>
+            ) : null}
           </View>
         </ScrollView>
       )}

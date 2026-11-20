@@ -112,6 +112,23 @@
 		</dependency>
 
 		<!-- Actuator (Eureka health check) -->
+		<!-- ADM-FEAT-03: ShedLock trên Redis cho các scheduler quét hết hạn -->
+		<dependency>
+			<groupId>net.javacrumbs.shedlock</groupId>
+			<artifactId>shedlock-spring</artifactId>
+			<version>5.13.0</version>
+		</dependency>
+		<dependency>
+			<groupId>net.javacrumbs.shedlock</groupId>
+			<artifactId>shedlock-provider-redis-spring</artifactId>
+			<version>5.13.0</version>
+		</dependency>
+		<!-- ADM-FEAT-02: Xuất báo cáo Excel đối soát -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.4.0</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>

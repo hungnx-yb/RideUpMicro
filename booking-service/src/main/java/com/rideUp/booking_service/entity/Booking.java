@@ -70,6 +70,10 @@ public class Booking {
     LocalDateTime cancelledAt;
     String cancelReason;
 
+    /** ADM-FEAT-02: thời điểm hoàn thành chuyến (phục vụ thống kê doanh thu theo kỳ) */
+    @Column(name = "completed_at")
+    LocalDateTime completedAt;
+
     Integer tripVersionAtReserve;
 
     @Version

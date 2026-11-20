@@ -43,6 +43,7 @@ public class BookingModificationService {
     BookingModificationRepository bookingModificationRepository;
     TripServiceClient tripServiceClient;
     BookingServicePublisher bookingServicePublisher;
+    SystemTimeoutConfigService timeoutConfigService;
 
     /**
      * Khách hàng gửi yêu cầu chỉnh sửa lộ trình/thông tin chuyến đi
@@ -151,8 +152,9 @@ public class BookingModificationService {
             }
         }
 
-        // Quy tắc 4: Thời hạn phản hồi tối đa 15 phút (hoặc 30 phút trước giờ xuất phát)
-        LocalDateTime expiresAt = now.plusMinutes(15);
+        // Quy tắc 4: Thời hạn phản hồi theo cấu hình SLA động (mặc định 15 phút), muộn nhất 30 phút trước giờ xuất phát
+        LocalDateTime expiresAt = now.plusMinutes(timeoutConfigService.getMinutes(
+                com.rideUp.booking_service.enums.TimeoutConfigKey.BOOKING_MODIFICATION_RESPONSE_TIMEOUT));
         if (trip != null && trip.getDepartureTime() != null) {
             LocalDateTime thirtyMinsBefore = trip.getDepartureTime().minusMinutes(30);
             if (thirtyMinsBefore.isBefore(expiresAt)) {
@@ -403,6 +405,8 @@ public class BookingModificationService {
      * Scheduled Job quét định kỳ mỗi 60 giây để expire các yêu cầu quá hạn 15 phút
      */
     @Scheduled(fixedDelay = 60000)
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(name = "BookingModification_expirePending",
+            lockAtLeastFor = "15s", lockAtMostFor = "50s")
     @Transactional
     public void expirePendingModifications() {
         LocalDateTime now = LocalDateTime.now();
@@ -413,7 +417,7 @@ public class BookingModificationService {
             return;
         }
 
-        log.info("Quét timeout: tìm thấy {} yêu cầu chỉnh sửa quá hạn 15 phút", expiredList.size());
+        log.info("Quét timeout: tìm thấy {} yêu cầu chỉnh sửa quá hạn phản hồi", expiredList.size());
         for (BookingModification mod : expiredList) {
             mod.setStatus(ModificationStatus.EXPIRED);
             mod.setResolvedAt(now);

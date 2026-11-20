@@ -10,6 +10,22 @@ import DriverDashboardPage from "../pages/DriverDashboardPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import AdminDriverApprovalPage from "../pages/AdminDriverApprovalPage";
 import AdminVehicleApprovalPage from "../pages/AdminVehicleApprovalPage";
+import AdminCommissionConfigPage from "../pages/admin/AdminCommissionConfigPage";
+import AdminRevenueAnalyticsPage from "../pages/admin/AdminRevenueAnalyticsPage";
+import AdminTimeoutConfigPage from "../pages/admin/AdminTimeoutConfigPage";
+import AdminBroadcastPage from "../pages/admin/AdminBroadcastPage";
+import AdminFareBoundaryPage from "../pages/admin/AdminFareBoundaryPage";
+import AdminAuditLogsPage from "../pages/admin/AdminAuditLogsPage";
+
+// ADM-FEAT-01 → 06: các trang quản trị mở rộng
+const ADMIN_FEATURE_ROUTES = [
+  { path: "/admin/commission-config", element: <AdminCommissionConfigPage /> },
+  { path: "/admin/revenue-analytics", element: <AdminRevenueAnalyticsPage /> },
+  { path: "/admin/timeout-config", element: <AdminTimeoutConfigPage /> },
+  { path: "/admin/broadcast-push", element: <AdminBroadcastPage /> },
+  { path: "/admin/fare-boundary", element: <AdminFareBoundaryPage /> },
+  { path: "/admin/audit-logs", element: <AdminAuditLogsPage /> },
+];
 import AuthVerifyNoticePage from "../pages/AuthVerifyNoticePage";
 import AuthVerifyAccountPage from "../pages/AuthVerifyAccountPage";
 import ChangePasswordPage from "../pages/ChangePasswordPage";
@@ -196,6 +212,13 @@ function AppRouter() {
             </AdminOnlyRoute>
           )}
         />
+        {ADMIN_FEATURE_ROUTES.map((route) => (
+          <Route
+            key={route.path}
+            path={route.path}
+            element={<AdminOnlyRoute>{route.element}</AdminOnlyRoute>}
+          />
+        ))}
         <Route path="/trips/search" element={<CustomerOnlyRoute />} />
         <Route
           path="/profile"

@@ -36,6 +36,7 @@ public class VehicleService {
     UserService userService;
     ModelMapper modelMapper;
     FileService fileService;
+    AdminAuditLogService auditLogService;
 
     @Transactional
     public VehicleResponse registerVehicle(VehicleRegisterRequest request) {
@@ -144,6 +145,9 @@ public class VehicleService {
         vehicle.setRejectedBy(null);
 
         vehicle = vehicleRepository.save(vehicle);
+        auditLogService.record("APPROVE_VEHICLE", "VEHICLE", vehicle.getId(),
+                "Phê duyệt phương tiện " + vehicle.getPlateNumber(),
+                java.util.Map.of("isVerified", false), java.util.Map.of("isVerified", true, "isActive", true));
         return mapToVehicleResponse(vehicle);
     }
 
@@ -166,6 +170,10 @@ public class VehicleService {
         vehicle.setApprovedBy(null);
 
         vehicle = vehicleRepository.save(vehicle);
+        auditLogService.record("REJECT_VEHICLE", "VEHICLE", vehicle.getId(),
+                "Từ chối phương tiện " + vehicle.getPlateNumber()
+                        + (reason != null && !reason.isBlank() ? ": " + reason : ""),
+                null, java.util.Map.of("isVerified", false, "isActive", false));
         return mapToVehicleResponse(vehicle);
     }
 

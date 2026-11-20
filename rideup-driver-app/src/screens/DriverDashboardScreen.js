@@ -129,6 +129,8 @@ export default function DriverDashboardScreen() {
   const [driverInfo, setDriverInfo] = useState(null);
   const [driverProfile, setDriverProfile] = useState(null);
   const [walletDebt, setWalletDebt] = useState(0);
+  // ADM-FEAT-01: hạn mức nợ do Admin cấu hình (mặc định 500.000đ)
+  const [creditLimit, setCreditLimit] = useState(500000);
   const [stripeStatus, setStripeStatus] = useState(null);
   const [resultModal, setResultModal] = useState(null); // { type: 'success'|'reject'|'error'|'debt'|'mod_approved'|'mod_rejected', bookingId }
   const [pendingModifications, setPendingModifications] = useState([]);
@@ -386,17 +388,21 @@ export default function DriverDashboardScreen() {
       const eDateStr = formatYMD(targetDateRange.endDate);
 
       // 1. Gọi song song thông tin người dùng, hồ sơ sinh trắc học, chuyến đi, dữ liệu tài chính và thống kê khoảng ngày
-      const [userRes, driverRes, res, walletRes, stripeRes, statsRes, repRes] = await Promise.all([
+      const [userRes, driverRes, res, walletRes, stripeRes, statsRes, repRes, eligibilityRes] = await Promise.all([
         apiService.getMyUserInfo().catch(() => null),
         apiService.getMyDriverProfile().catch(() => null),
         apiService.getDriverTrips({ size: 100, page: 0 }).catch(() => null),
         apiService.getMyWallet().catch(() => null),
         apiService.getStripeAccountStatus().catch(() => null),
         apiService.getDriverTrips({ startDate: sDateStr, endDate: eDateStr, size: 500, page: 0 }).catch(() => null),
-        apiService.getDriverReputation().catch(() => null)
+        apiService.getDriverReputation().catch(() => null),
+        apiService.getMyEligibility().catch(() => null)
       ]);
       if (walletRes?.data?.result !== undefined) {
         setWalletDebt(Number(walletRes.data.result) || 0);
+      }
+      if (Number(eligibilityRes?.data?.result?.creditLimit) > 0) {
+        setCreditLimit(Number(eligibilityRes.data.result.creditLimit));
       }
       if (stripeRes?.data?.result) {
         setStripeStatus(stripeRes.data.result);
@@ -666,28 +672,28 @@ export default function DriverDashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {walletDebt >= 400000 && (
+        {walletDebt >= creditLimit * 0.8 && (
           <TouchableOpacity
-            style={walletDebt >= 500000 ? styles.smartAlertBannerDanger : styles.smartAlertBannerAmber}
+            style={walletDebt >= creditLimit ? styles.smartAlertBannerDanger : styles.smartAlertBannerAmber}
             activeOpacity={0.8}
             onPress={() => navigation.navigate('Wallet')}
           >
-            <View style={[styles.smartAlertIconCircle, { backgroundColor: walletDebt >= 500000 ? '#FEE2E2' : '#FEF3C7' }]}>
+            <View style={[styles.smartAlertIconCircle, { backgroundColor: walletDebt >= creditLimit ? '#FEE2E2' : '#FEF3C7' }]}>
               <Ionicons
-                name={walletDebt >= 500000 ? 'lock-closed' : 'warning'}
+                name={walletDebt >= creditLimit ? 'lock-closed' : 'warning'}
                 size={20}
-                color={walletDebt >= 500000 ? '#EF4444' : '#F59E0B'}
+                color={walletDebt >= creditLimit ? '#EF4444' : '#F59E0B'}
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.smartAlertTitle, { color: walletDebt >= 500000 ? '#B91C1C' : '#92400E' }]}>
-                {walletDebt >= 500000 ? 'Tài khoản bị tạm khóa nhận chuyến' : 'Dư nợ sắp chạm hạn mức 500k'}
+              <Text style={[styles.smartAlertTitle, { color: walletDebt >= creditLimit ? '#B91C1C' : '#92400E' }]}>
+                {walletDebt >= creditLimit ? 'Tài khoản bị tạm khóa nhận chuyến' : `Dư nợ sắp chạm hạn mức ${Number(creditLimit).toLocaleString('vi-VN')}đ`}
               </Text>
-              <Text style={[styles.smartAlertDesc, { color: walletDebt >= 500000 ? '#991B1B' : '#78350F' }]}>
+              <Text style={[styles.smartAlertDesc, { color: walletDebt >= creditLimit ? '#991B1B' : '#78350F' }]}>
                 Dư nợ hiện tại: {Number(walletDebt).toLocaleString('vi-VN')} đ. Bấm để thanh toán nợ ngay.
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={walletDebt >= 500000 ? '#EF4444' : '#F59E0B'} />
+            <Ionicons name="chevron-forward" size={18} color={walletDebt >= creditLimit ? '#EF4444' : '#F59E0B'} />
           </TouchableOpacity>
         )}
 
@@ -1182,7 +1188,7 @@ export default function DriverDashboardScreen() {
                   <Ionicons name="warning" size={56} color={COLORS.warning} />
                 </View>
                 <Text style={styles.resultTitle}>Tạm khóa nhận chuyến</Text>
-                <Text style={styles.resultDesc}>Dư nợ hoa hồng của bạn đã vượt mức 500.000đ. Vui lòng thanh toán để tiếp tục hoạt động.</Text>
+                <Text style={styles.resultDesc}>Dư nợ hoa hồng của bạn đã chạm hạn mức {Number(creditLimit).toLocaleString('vi-VN')}đ. Vui lòng thanh toán để tiếp tục hoạt động.</Text>
                 <View style={styles.resultActions}>
                   <TouchableOpacity style={styles.resultBtnSecondary} onPress={() => setResultModal(null)}>
                     <Text style={styles.resultBtnSecondaryText}>Đóng</Text>

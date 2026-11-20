@@ -9,5 +9,8 @@ public enum NotificationType {
     BOOKING_COMPLETED,
     BOOKING_MODIFICATION_REQUESTED,
     BOOKING_MODIFICATION_RESOLVED,
-    SYSTEM
+    SYSTEM,
+    // ADM-FEAT-04: thông báo phát sóng thủ công từ Admin
+    BROADCAST,
+    DEBT_REMINDER
 }

@@ -30,6 +30,7 @@ public class IdentityServiceConsumer {
     ObjectMapper objectMapper;
     UserRepository userRepository;
     com.example.demo.service.CommissionService commissionService;
+    com.example.demo.service.DebtLedgerService debtLedgerService;
 
     @RetryableTopic(
             exclude = {JsonProcessingException.class, IllegalArgumentException.class}
@@ -92,7 +93,10 @@ public class IdentityServiceConsumer {
                         .or(() -> driverProfileRepository.findByUserId(event.getDriverId()))
                         .orElse(null);
 
-                if (driverProfile != null) {
+                if (driverProfile != null && debtLedgerService.isCommissionRecorded(event.getBookingId())) {
+                    // Kafka retry / gửi lặp: cuốc này đã được ghi nhận hoa hồng => bỏ qua để không cộng nợ 2 lần
+                    log.warn("[Kafka] Commission for booking {} already recorded. Skipping duplicate event.", event.getBookingId());
+                } else if (driverProfile != null) {
 
                     // 1. Tính hoa hồng cá nhân hóa theo thời gian thực (12% - 25%)
                     java.math.BigDecimal dynamicRate = commissionService.calculateCommissionRate(driverProfile);
@@ -101,10 +105,14 @@ public class IdentityServiceConsumer {
 
                     // 2. Với cuốc tiền mặt (CASH), cộng công nợ hoa hồng cho tài xế. Với STRIPE, sàn đã tự trích giữ hoa hồng tại nguồn.
                     boolean isCash = event.getPaymentMethod() == null || "CASH".equalsIgnoreCase(event.getPaymentMethod());
+                    java.math.BigDecimal debtBefore = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
                     if (isCash) {
-                        java.math.BigDecimal currentDebt = driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : java.math.BigDecimal.ZERO;
-                        driverProfile.setSystemDebt(currentDebt.add(commission));
+                        driverProfile.setSystemDebt(debtBefore.add(commission));
                     }
+                    // ADM-FEAT-02: ghi sổ cái hoa hồng (phục vụ thống kê doanh thu sàn & lịch sử nợ)
+                    debtLedgerService.recordCommission(driverProfile, event.getBookingId(), event.getPaymentMethod(),
+                            event.getTotalAmount(), dynamicRate, commission,
+                            debtBefore, driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : debtBefore);
 
                     // 3. Tăng tổng số chuyến hoàn thành của tài xế
                     int currentRides = driverProfile.getTotalDriverRides() != null ? driverProfile.getTotalDriverRides() : 0;

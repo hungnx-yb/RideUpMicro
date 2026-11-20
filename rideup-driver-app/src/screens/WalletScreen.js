@@ -30,8 +30,9 @@ const COLORS = {
   cardBgLight: '#F1F5F9'
 };
 
-const DEBT_LIMIT = 500000;
-const WARNING_LIMIT = 400000;
+// Hạn mức mặc định khi chưa tải được cấu hình từ server (Admin có thể thay đổi)
+const DEFAULT_DEBT_LIMIT = 500000;
+const WARNING_RATIO = 0.8;
 
 const formatMoney = (val) => {
   if (!val && val !== 0) return '0 đ';
@@ -46,6 +47,8 @@ export default function WalletScreen({ navigation }) {
 
   // Dữ liệu tài chính
   const [debt, setDebt] = useState(0);
+  const [DEBT_LIMIT, setDebtLimit] = useState(DEFAULT_DEBT_LIMIT);
+  const WARNING_LIMIT = DEBT_LIMIT * WARNING_RATIO;
   const [reputation, setReputation] = useState(null);
   const [stripeStatus, setStripeStatus] = useState(null);
   const [payouts, setPayouts] = useState([]);
@@ -55,14 +58,17 @@ export default function WalletScreen({ navigation }) {
 
   const fetchAllData = useCallback(async () => {
     try {
-      const [walletRes, repRes, stripeRes, payoutsRes] = await Promise.all([
+      const [walletRes, repRes, stripeRes, payoutsRes, eligibilityRes] = await Promise.all([
         apiService.getMyWallet().catch(() => ({ data: { result: 0 } })),
         apiService.getDriverReputation().catch(() => null),
         apiService.getStripeAccountStatus().catch(() => null),
-        apiService.getDriverPayouts().catch(() => null)
+        apiService.getDriverPayouts().catch(() => null),
+        apiService.getMyEligibility().catch(() => null)
       ]);
 
       setDebt(walletRes?.data?.result || 0);
+      const creditLimit = Number(eligibilityRes?.data?.result?.creditLimit);
+      if (creditLimit > 0) setDebtLimit(creditLimit);
       if (repRes?.data?.result) setReputation(repRes.data.result);
       if (stripeRes?.data?.result) setStripeStatus(stripeRes.data.result);
       if (payoutsRes?.data?.result) setPayouts(payoutsRes.data.result);

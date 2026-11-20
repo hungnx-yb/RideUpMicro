@@ -57,6 +57,7 @@ public class TripRequestService {
     ModelMapper modelMapper;
     com.rideup.trip_service.repository.TripRepository tripRepository;
     TripService tripService;
+    MarketplaceTimeoutReader marketplaceTimeoutReader;
 
     @Transactional
     public TripRequestResponse createTripRequest(TripRequestCreate request) {
@@ -68,7 +69,8 @@ public class TripRequestService {
         }
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime latestPossibleExpire = request.getDepartureTime().minusMinutes(15);
-        LocalDateTime maxOpenTime = now.plusDays(1);
+        // ADM-FEAT-03: thời gian tồn tại yêu cầu trên chợ đọc động từ cấu hình SLA (mặc định 24h)
+        LocalDateTime maxOpenTime = now.plusMinutes(marketplaceTimeoutReader.getMarketplaceRequestTtlMinutes());
         if (maxOpenTime.isAfter(latestPossibleExpire)) {
             maxOpenTime = latestPossibleExpire;
         }
@@ -402,6 +404,8 @@ public class TripRequestService {
 
     @Transactional
     public TripRequestInvitationResponse sendInvitation(TripRequestInvitationCreateDTO request) {
+        // ADM-FEAT-01: tài xế bị khóa (nợ / uy tín thấp) không được mời khách từ chợ
+        tripService.ensureDriverEligible();
         UserResponse driver = identityServiceClient.getUserInfo().getResult();
         TripRequest tripRequest = tripRequestRepository.findById(request.getTripRequestId())
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_REQUEST_NOT_FOUND));

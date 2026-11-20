@@ -17,4 +17,6 @@ import lombok.experimental.FieldDefaults;
 public class ProvinceResponse {
     String id;
     String name;
+    java.math.BigDecimal lat;
+    java.math.BigDecimal lng;
 }

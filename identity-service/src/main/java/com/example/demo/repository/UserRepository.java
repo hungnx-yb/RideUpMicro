@@ -14,5 +14,11 @@ public interface UserRepository extends JpaRepository<User, String > {
     boolean existsByEmail(String email);
     List<User> findAllByIdIn(List<String> ids);
 
+    // ===== ADM-FEAT-04: Lọc người nhận thông báo phát sóng =====
+    @org.springframework.data.jpa.repository.Query("SELECT u.id FROM User u")
+    List<String> findAllIds();
+
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT u.id FROM User u JOIN u.roles r WHERE r = :role")
+    List<String> findIdsByRole(@org.springframework.data.repository.query.Param("role") com.example.demo.enums.Role role);
 
 }

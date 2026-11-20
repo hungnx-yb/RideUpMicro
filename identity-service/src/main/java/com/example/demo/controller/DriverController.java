@@ -154,6 +154,24 @@ public class DriverController {
                 .build();
     }
 
+    /**
+     * ADM-FEAT-01/02: Trạng thái đủ điều kiện nhận chuyến theo hạn mức nợ & điểm uy tín cấu hình động.
+     */
+    @GetMapping("/me/eligibility")
+    public ApiResponse<com.example.demo.dto.response.driver.DriverEligibilityResponse> getMyEligibility() {
+        return ApiResponse.<com.example.demo.dto.response.driver.DriverEligibilityResponse>builder()
+                .result(commissionService.getMyEligibility())
+                .build();
+    }
+
+    @GetMapping("/internal/{driverId}/eligibility")
+    public ApiResponse<com.example.demo.dto.response.driver.DriverEligibilityResponse> getEligibilityInternal(
+            @PathVariable String driverId) {
+        return ApiResponse.<com.example.demo.dto.response.driver.DriverEligibilityResponse>builder()
+                .result(commissionService.getDriverEligibility(driverId))
+                .build();
+    }
+
     @GetMapping("/me/wallet")
     public ApiResponse<java.math.BigDecimal> getMyWallet() {
         com.example.demo.entity.User currentUser = driverService.getMyDriverProfile().getUserId() != null ? 

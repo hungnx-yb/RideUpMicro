@@ -1,6 +1,7 @@
 package com.rideup.trip_service.feignClient;
 import com.rideup.trip_service.config.FeignClientConfig;
 import com.rideup.trip_service.dto.response.ApiResponse;
+import com.rideup.trip_service.dto.response.DriverEligibilityResponse;
 import com.rideup.trip_service.dto.response.DriverResponse;
 import com.rideup.trip_service.dto.response.UserResponse;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -24,6 +25,9 @@ public interface IdentityServiceClient {
 
     @PostMapping("/drivers/detail")
     ApiResponse<List<DriverResponse>> getDriverDetail(@RequestBody List<String> userIds);
+
+    @GetMapping("/drivers/me/eligibility")
+    ApiResponse<DriverEligibilityResponse> getMyEligibility();
 
     @GetMapping("/drivers/me/wallet")
     ApiResponse<java.math.BigDecimal> getMyWallet();

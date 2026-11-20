@@ -47,7 +47,7 @@ public enum ErrorCode {
     VEHICLE_NOT_PENDING(3008, "Vehicle is not in pending status", HttpStatus.BAD_REQUEST),
 
     // Commission Configuration
-    INVALID_COMMISSION_CONFIG(4001, "Invalid commission rate configuration. Conditions: 0 < minRate <= baseRate <= maxRate <= 1", HttpStatus.BAD_REQUEST);
+    INVALID_COMMISSION_CONFIG(4001, "Invalid commission rate configuration. Conditions: 0 < minRate <= baseRate <= maxRate <= 0.5 (50%)", HttpStatus.BAD_REQUEST);
 
     private Integer code;
     private String message;

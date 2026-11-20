@@ -25,6 +25,7 @@ import {
   FaUser,
 } from "react-icons/fa";
 import useAuth from "../hooks/useAuth";
+import { ADMIN_MENU_GROUPS } from "../components/admin/AdminLayout";
 import { useNavigate } from "react-router-dom";
 import { getApiErrorMessage } from "../services/authApi";
 import {
@@ -40,7 +41,7 @@ import {
 
 const topMenus = [
   { label: "Thống kê", icon: FaRegChartBar, active: true, path: "/admin-dashboard" },
-  { label: "Phân tích", icon: FaChartBar, active: false },
+  { label: "Phân tích", icon: FaChartBar, active: false, path: "/admin/revenue-analytics" },
   { label: "Người dùng", icon: FaUserFriends, active: false },
   { label: "Hỗ trợ", icon: FaComments, active: false },
 ];
@@ -617,6 +618,29 @@ function AdminDashboardPage() {
                 <p className="mt-1 text-2xl font-extrabold text-white">{Math.max(1, totalUsers)}</p>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* ADM-FEAT-01 → 06: lối tắt tới các chức năng quản trị mở rộng */}
+        <section className="mt-6 rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm">
+          <h2 className="text-lg font-extrabold text-slate-900">Công cụ quản trị</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {ADMIN_MENU_GROUPS.slice(1).flatMap((group) => group.items).map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700"
+                >
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-500 text-white">
+                    <Icon className="text-sm" />
+                  </span>
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
         </section>
 
