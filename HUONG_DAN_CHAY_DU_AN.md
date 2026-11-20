@@ -38,11 +38,22 @@ Tài liệu này hướng dẫn chi tiết các bước chuẩn bị môi trư�
 
 ## 🗄️ 3. Khởi tạo Cơ sở Dữ liệu (MySQL)
 
-Nạp file `sqlDump.sql` ở thư mục gốc vào MySQL:
+Nạp file `sqlDump.sql` ở thư mục gốc vào MySQL **bằng lệnh `source` và chỉ định rõ bảng mã `utf8mb4`**:
 ```powershell
-mysql -u root -p < d:\do_an\RideUpMicro\sqlDump.sql
+mysql -u root -p --default-character-set=utf8mb4 -e "source D:/do_an/RideUpMicro/sqlDump.sql"
 ```
-*(Hoặc dùng MySQL Workbench / Navicat / DBeaver mở file `sqlDump.sql` và nhấn Run/Execute).*
+
+> ⚠️ **Không dùng** `mysql -u root -p < sqlDump.sql` trong PowerShell. PowerShell tự đổi bảng mã của file khi chuyển hướng `<`, khiến toàn bộ chữ tiếng Việt có dấu bị lưu thành dấu `?` (ví dụ `Tỉnh Đồng Nai` → `T???nh ?????ng Nai`). Dữ liệu hỏng nằm ngay trong database nên web/app hiển thị sai dù code không lỗi.
+>
+> Kiểm tra sau khi nạp: `SELECT name FROM location_service_db.province LIMIT 3;` phải ra tên tỉnh có dấu đúng.
+
+*(Hoặc dùng MySQL Workbench / Navicat / DBeaver mở file `sqlDump.sql` và nhấn Run/Execute — các công cụ này đọc đúng UTF-8.)*
+
+**Mật khẩu MySQL khác máy:** file `application.yaml` của các service đang ghi sẵn mật khẩu `root` của một thành viên. Nếu máy bạn dùng mật khẩu khác, **không sửa file cấu hình** (tránh commit nhầm làm hỏng máy người khác). Thay vào đó đặt biến môi trường trước khi chạy service:
+```powershell
+$env:SPRING_DATASOURCE_PASSWORD='mat_khau_cua_ban'; mvn spring-boot:run
+```
+Với IntelliJ: **Run → Edit Configurations → Environment variables** → `SPRING_DATASOURCE_PASSWORD=mat_khau_cua_ban`.
 
 ---
 
