@@ -156,11 +156,67 @@ function AdminCommissionConfigPage() {
         <p className="mb-4 text-xs text-slate-500">Cập nhật lần cuối: {formatDateTime(savedConfig.updatedAt)}</p>
       ) : null}
 
+      {/* Hộp công thức toán học chuẩn hóa R_final */}
+      <div className="mb-6 rounded-2xl border border-orange-200/90 bg-gradient-to-br from-amber-50/80 via-orange-50/50 to-white p-5 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-orange-100 pb-3">
+          <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-orange-800">
+            <FaCalculator className="text-orange-500" /> Công thức chuẩn hóa tính hoa hồng sàn động (Dynamic Commission)
+          </span>
+          <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-bold text-orange-700">
+            ADM-FEAT-01
+          </span>
+        </div>
+
+        {/* Khung hiển thị công thức chuẩn toán học */}
+        <div className="my-4 flex flex-wrap items-center justify-center gap-2 rounded-xl bg-white/95 p-4 font-mono text-xs sm:text-sm text-slate-800 shadow-xs ring-1 ring-orange-200/60">
+          <span className="text-base font-extrabold text-orange-600 sm:text-lg">R_final</span>
+          <span className="font-bold text-slate-400">=</span>
+          <span className="font-extrabold text-slate-700">clamp</span>
+          <span className="font-bold text-slate-400">(</span>
+          <span className="rounded-md bg-slate-100 px-2 py-0.5 font-bold text-slate-800">R_base</span>
+          <span className="font-bold text-orange-500">−</span>
+          <div className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-blue-700 font-semibold">
+            <span>(Rating − Rating_base)</span>
+            <span className="font-bold">×</span>
+            <span>W_rate</span>
+          </div>
+          <span className="font-bold text-orange-500">−</span>
+          <div className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-emerald-800 font-semibold">
+            <div className="inline-flex flex-col items-center leading-tight">
+              <span className="border-b border-emerald-400 pb-0.5 text-[11px]">Uy tín − Rep_base</span>
+              <span className="pt-0.5 text-[11px]">10</span>
+            </div>
+            <span className="font-bold">×</span>
+            <span>W_rep</span>
+          </div>
+          <span className="font-bold text-slate-400">,</span>
+          <span className="rounded-md bg-sky-50 px-2 py-0.5 font-bold text-sky-700">R_min</span>
+          <span className="font-bold text-slate-400">,</span>
+          <span className="rounded-md bg-red-50 px-2 py-0.5 font-bold text-red-700">R_max</span>
+          <span className="font-bold text-slate-400">)</span>
+        </div>
+
+        <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+          <div className="flex items-center gap-2 rounded-lg bg-white/70 px-3 py-1.5">
+            <span className="h-2 w-2 rounded-full bg-slate-600" />
+            <span><strong>R_base:</strong> Hoa hồng cơ sở nền tảng</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-white/70 px-3 py-1.5">
+            <span className="h-2 w-2 rounded-full bg-blue-500" />
+            <span><strong>Đòn bẩy Rating:</strong> Chiết khấu theo số sao</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-white/70 px-3 py-1.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span><strong>Đòn bẩy Uy tín:</strong> Thưởng điểm uy tín cao</span>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
         <div className="space-y-6">
           <Card
             title="Tham số hoa hồng & đòn bẩy"
-            description="R_final = R_base − (Rating − Rate_base) × W_rate − ((Uy tín − Rep_base) / 10) × W_rep, giới hạn trong [R_min, R_max]."
+            description="Cấu hình các hệ số tỷ lệ chiết khấu, ngưỡng rating và điểm uy tín chuẩn áp dụng cho thuật toán."
             icon={FaPercentage}
           >
             <div className="grid gap-4 sm:grid-cols-3">
@@ -213,13 +269,57 @@ function AdminCommissionConfigPage() {
                 <input type="range" min={0} max={100} step={1} value={simReputation} onChange={(e) => setSimReputation(Number(e.target.value))} className="mt-2 w-full accent-orange-500" />
               </div>
 
-              <div className="rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 p-5 text-white">
-                <p className="text-xs font-bold uppercase tracking-wide text-orange-100">Hoa hồng áp dụng R_final</p>
-                <p className="mt-1 text-4xl font-extrabold">{simulation.final}%</p>
-                <p className="mt-2 text-xs text-orange-50">
-                  {form.baseRate}% − ({simulation.deltaRating}%) − ({simulation.deltaReputation}%) = {simulation.applied}%
-                  {simulation.applied !== simulation.final ? ` → giới hạn về ${simulation.final}%` : ""}
-                </p>
+              {/* Thẻ hiển thị R_final định dạng công thức đẹp */}
+              <div className="overflow-hidden rounded-2xl border border-orange-200 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-5 text-white shadow-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-orange-400">
+                    Kết quả tính R_final
+                  </span>
+                  <span className="rounded-full border border-orange-500/30 bg-orange-500/20 px-2.5 py-0.5 text-[10px] font-bold text-orange-300">
+                    {simulation.applied !== simulation.final
+                      ? simulation.final === Number(form.minRate)
+                        ? "Chạm sàn R_min"
+                        : "Chạm trần R_max"
+                      : "Trong khung chuẩn"}
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-4xl font-extrabold tracking-tight text-white">{simulation.final}%</span>
+                  {simulation.applied !== simulation.final && (
+                    <span className="text-xs text-slate-400 line-through">
+                      {simulation.applied}% (trước giới hạn)
+                    </span>
+                  )}
+                </div>
+
+                {/* Phân rã từng bước tính toán rõ ràng theo công thức */}
+                <div className="mt-3.5 space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/80 p-3 font-mono text-xs">
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="text-slate-400">R_base (cơ sở):</span>
+                    <span className="font-bold text-white">{form.baseRate}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-blue-300">
+                    <span className="text-slate-400">Δ Rating ({simRating}★ − {form.ratingBenchmark}★):</span>
+                    <span className="font-bold">
+                      {simulation.deltaRating >= 0 ? `− ${simulation.deltaRating}%` : `+ ${Math.abs(simulation.deltaRating)}%`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-emerald-300">
+                    <span className="text-slate-400">Δ Uy tín (({simReputation} − {form.reputationBenchmark})/10):</span>
+                    <span className="font-bold">
+                      {simulation.deltaReputation >= 0 ? `− ${simulation.deltaReputation}%` : `+ ${Math.abs(simulation.deltaReputation)}%`}
+                    </span>
+                  </div>
+                  <div className="border-t border-slate-800 pt-1.5 flex items-center justify-between text-orange-400 font-bold">
+                    <span>R_applied =</span>
+                    <span>{simulation.applied}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                    <span>Khung giới hạn [{form.minRate}%, {form.maxRate}%]:</span>
+                    <span className="font-bold text-white">⇒ {simulation.final}%</span>
+                  </div>
+                </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 Cuốc 300.000đ: sàn thu <strong className="text-slate-900">{formatVnd(Math.round(300000 * simulation.final / 100))}</strong>, tài xế nhận{" "}
@@ -239,7 +339,11 @@ function AdminCommissionConfigPage() {
                     <th className="pb-2">Hồ sơ</th>
                     <th className="pb-2">Rating</th>
                     <th className="pb-2">Uy tín</th>
-                    <th className="pb-2 text-right">R_final</th>
+                    <th className="pb-2 text-right">
+                      <span className="rounded bg-orange-100 px-1.5 py-0.5 font-mono text-[11px] font-bold text-orange-700">
+                        R_final
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

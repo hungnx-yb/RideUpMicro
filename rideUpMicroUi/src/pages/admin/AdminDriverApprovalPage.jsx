@@ -24,25 +24,20 @@ import {
   FaUserShield,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import useAuth from "../hooks/useAuth";
+import useAuth from "../../hooks/useAuth";
+import AdminLayout from "../../components/admin/AdminLayout";
 import {
   approveDriverApi,
   getPendingDriversApi,
   rejectDriverApi,
-} from "../services/adminApi";
-import { getApiErrorMessage } from "../services/authApi";
-import { resolveImageUrl } from "../utils/imageUrl";
-
-const topMenus = [
-  { label: "Thống kê", icon: FaRegChartBar, active: false, path: "/admin-dashboard" },
-  { label: "Phân tích", icon: FaChartBar, active: false },
-  { label: "Người dùng", icon: FaUserFriends, active: true, path: "/admin-dashboard/drivers-approval" },
-  { label: "Hỗ trợ", icon: FaComments, active: false },
-];
+} from "../../services/adminApi";
+import { getApiErrorMessage } from "../../services/authApi";
+import { resolveImageUrl } from "../../utils/imageUrl";
+import { formatDriverProfileId } from "../../utils/formatId";
 
 function AdminDriverApprovalPage() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [pendingDrivers, setPendingDrivers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState("");
@@ -52,13 +47,6 @@ function AdminDriverApprovalPage() {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [rejectingDriver, setRejectingDriver] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const menuRef = useRef(null);
-
-  const adminName = user?.fullName?.trim() || user?.email || "Quản trị viên";
-  const adminInitial = adminName.charAt(0).toUpperCase();
-
   const getDriverName = (driver) =>
     driver?.fullName || driver?.user?.fullName || driver?.email || driver?.user?.email || "Tài xế mới";
 
@@ -67,30 +55,6 @@ function AdminDriverApprovalPage() {
 
   const getDriverPhone = (driver) =>
     driver?.phoneNumber || driver?.phone || driver?.user?.phoneNumber || driver?.user?.phone || "Chưa cập nhật";
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!menuRef.current?.contains(event.target)) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true);
-      await logout();
-      navigate("/auth/login", { replace: true });
-    } finally {
-      setIsLoggingOut(false);
-      setIsMenuOpen(false);
-    }
-  };
 
   const loadDrivers = async () => {
     try {
@@ -198,128 +162,23 @@ function AdminDriverApprovalPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,_#fff7ed,_#f8fafc_45%,_#e2e8f0_100%)]">
-      <div className="pointer-events-none absolute -left-32 top-24 h-72 w-72 rounded-full bg-orange-300/20 blur-3xl" />
-      <div className="pointer-events-none absolute -right-24 top-64 h-80 w-80 rounded-full bg-amber-300/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-8 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-red-300/10 blur-3xl" />
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white">
-                <FaTaxi />
-              </span>
-              <p className="text-3xl font-extrabold tracking-tight text-slate-800">
-                Ride<span className="text-orange-500">Up</span>
-              </p>
-            </div>
-
-            <nav className="hidden items-center gap-2 xl:flex">
-              {topMenus.map((menu) => {
-                const Icon = menu.icon;
-
-                return (
-                  <button
-                    key={menu.label}
-                    type="button"
-                    onClick={() => menu.path && navigate(menu.path)}
-                    className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-base font-semibold ${
-                      menu.active
-                        ? "bg-orange-50 text-orange-600"
-                        : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    <Icon className="text-sm" />
-                    {menu.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="relative flex items-center gap-3" ref={menuRef}>
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-              className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm hover:border-orange-300"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-400 text-xl font-bold text-white">
-                {adminInitial}
-              </span>
-              <span className="hidden text-left md:block">
-                <span className="block text-xl font-bold leading-tight text-slate-800">{adminName}</span>
-                <span className="block text-sm font-semibold text-orange-500">Quản trị viên</span>
-              </span>
-              <FaChevronDown className={`ml-2 text-slate-400 transition-transform ${isMenuOpen ? "rotate-180" : ""}`} size={16} />
-            </button>
-
-            {isMenuOpen ? (
-              <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-                <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Chức năng
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    navigate("/dashboard");
-                  }}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                >
-                  <FaUser size={14} />
-                  Thông tin tài khoản
-                </button>
-                <div className="my-2 border-t border-slate-100" />
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  disabled={isLoggingOut}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-500 transition-colors hover:bg-red-50"
-                >
-                  <FaSignOutAlt size={15} />
-                  {isLoggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </header>
-
-      <main className="relative z-10 mx-auto w-full max-w-[1500px] px-4 pb-10 pt-6 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/admin-dashboard")}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300/70 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-white"
-          >
-            <FaArrowLeft /> Quay lại Dashboard
-          </button>
-        </div>
-
-        <section className="relative mt-4 overflow-hidden rounded-3xl border border-orange-200/70 bg-[linear-gradient(125deg,#f97316_0%,#fb923c_45%,#ef4444_100%)] px-6 py-7 text-white shadow-xl shadow-orange-500/25">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full border border-white/25" />
-          <div className="pointer-events-none absolute bottom-0 right-24 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
-          <div className="relative grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <h1 className="inline-flex items-center gap-3 text-3xl font-extrabold tracking-tight">
-                <FaUserShield /> Duyệt tài khoản tài xế
-              </h1>
-              <p className="mt-2 text-sm font-medium text-orange-50 sm:text-base">
-                Kiểm tra thông tin tài xế trước khi kích hoạt quyền chạy xe trong hệ thống.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 md:justify-end">
-              <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-orange-50">
-                Ưu tiên xác minh giấy tờ
-              </span>
-              <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-orange-50">
-                SLA dưới 24h
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+    <AdminLayout
+      title="Duyệt tài khoản tài xế"
+      subtitle="Kiểm tra thông tin tài xế và hồ sơ giấy tờ trước khi kích hoạt quyền chạy xe trong hệ thống"
+      icon={FaIdBadge}
+      actions={
+        <button
+          type="button"
+          onClick={loadDrivers}
+          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+        >
+          <FaClock className={isLoading ? "animate-spin text-orange-500" : "text-slate-400"} />
+          Làm mới
+        </button>
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid gap-3 sm:grid-cols-3">
           <article className="rounded-2xl border border-amber-200/80 bg-white/95 px-4 py-4 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
             <p className="inline-flex items-center gap-2 text-sm font-semibold text-amber-700">
               <FaClock /> Chờ duyệt
@@ -405,6 +264,10 @@ function AdminDriverApprovalPage() {
                     </div>
 
                     <div className="grid gap-1 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 text-sm text-slate-600 sm:grid-cols-2">
+                      <p className="inline-flex items-center gap-2" title={driver.id}>
+                        <FaIdBadge className="text-xs text-orange-500" /> Mã hồ sơ:{" "}
+                        <span className="font-mono font-semibold text-slate-800">{formatDriverProfileId(driver.id)}</span>
+                      </p>
                       <p className="inline-flex items-center gap-2">
                         <FaPhoneAlt className="text-xs text-orange-500" /> {phone}
                       </p>
@@ -481,7 +344,9 @@ function AdminDriverApprovalPage() {
 
               <div className="mt-4 rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-500 to-red-500 px-5 py-4 text-white shadow-lg shadow-orange-500/20">
                 <p className="text-xl font-extrabold">{getDriverName(selectedDriver)}</p>
-                <p className="mt-1 text-sm text-orange-50">Mã hồ sơ: {selectedDriver?.id || "-"}</p>
+                <p className="mt-1 text-sm text-orange-50" title={selectedDriver?.id}>
+                  Mã hồ sơ: <span className="font-mono font-semibold">{formatDriverProfileId(selectedDriver?.id)}</span>
+                </p>
               </div>
 
               <div className="mt-4 grid max-h-[58vh] gap-4 overflow-y-auto pr-2 md:grid-cols-2">
@@ -510,6 +375,11 @@ function AdminDriverApprovalPage() {
                 <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-500">Hồ sơ tài xế</h4>
                   <div className="mt-3 space-y-2 text-sm">
+                    <p className="flex items-center gap-2 text-slate-700" title={selectedDriver?.id}>
+                      <FaIdBadge className="text-orange-500" />
+                      Mã hồ sơ:{" "}
+                      <span className="font-mono font-semibold">{formatDriverProfileId(selectedDriver?.id)}</span>
+                    </p>
                     <p className="flex items-center gap-2 text-slate-700">
                       <FaIdBadge className="text-orange-500" />
                       CCCD: {selectedDriver?.cccd || "Chưa cập nhật"}
@@ -774,9 +644,10 @@ function AdminDriverApprovalPage() {
             </div>
           </div>
         ) : null}
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 
 export default AdminDriverApprovalPage;
+

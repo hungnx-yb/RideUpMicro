@@ -1,5 +1,5 @@
 import { createContext, useMemo, useState } from "react";
-import { loginApi, logoutApi, registerApi } from "../services/authApi";
+import { loginApi, logoutApi } from "../services/authApi";
 
 export const AuthContext = createContext(null);
 
@@ -12,18 +12,15 @@ function normalizeRoles(user) {
   return Array.isArray(user?.roles) ? user.roles : [];
 }
 
-function getDefaultRole(user, preferredRole) {
+function getDefaultRole(user) {
   const roles = normalizeRoles(user);
   if (!roles.length) {
     return null;
   }
 
-  if (preferredRole && roles.includes(preferredRole)) {
-    return preferredRole;
-  }
-
-  if (roles.includes("CUSTOMER")) {
-    return "CUSTOMER";
+  // Luôn ưu tiên ADMIN cho trang quản trị
+  if (roles.includes("ADMIN")) {
+    return "ADMIN";
   }
 
   return roles[0];
@@ -37,10 +34,9 @@ export function AuthProvider({ children }) {
     return savedUser ? JSON.parse(savedUser) : null;
   });
   const [activeRole, setActiveRole] = useState(() => {
-    const savedRole = localStorage.getItem(ACTIVE_ROLE_KEY);
     const savedUser = localStorage.getItem(AUTH_USER_KEY);
     const parsedUser = savedUser ? JSON.parse(savedUser) : null;
-    return getDefaultRole(parsedUser, savedRole);
+    return getDefaultRole(parsedUser);
   });
 
   const clearAuth = () => {
@@ -59,7 +55,7 @@ export function AuthProvider({ children }) {
     const nextToken = authResult?.token;
     const nextRefreshToken = authResult?.refreshToken;
     const nextUser = authResult?.user;
-    const nextRole = getDefaultRole(nextUser, localStorage.getItem(ACTIVE_ROLE_KEY));
+    const nextRole = getDefaultRole(nextUser);
 
     setToken(nextToken);
     setRefreshToken(nextRefreshToken);
@@ -73,39 +69,6 @@ export function AuthProvider({ children }) {
     }
 
     return authResult;
-  };
-
-  const register = async (payload) => {
-    return registerApi(payload);
-  };
-
-  const switchRole = (role) => {
-    const roles = normalizeRoles(user);
-    if (!roles.includes(role)) {
-      return;
-    }
-
-    setActiveRole(role);
-    localStorage.setItem(ACTIVE_ROLE_KEY, role);
-  };
-
-  const addRole = (role) => {
-    if (!role) {
-      return;
-    }
-
-    const currentRoles = normalizeRoles(user);
-    if (currentRoles.includes(role)) {
-      return;
-    }
-
-    const nextUser = {
-      ...(user || {}),
-      roles: [...currentRoles, role],
-    };
-
-    setUser(nextUser);
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(nextUser));
   };
 
   const logout = async () => {
@@ -129,9 +92,6 @@ export function AuthProvider({ children }) {
       activeRole,
       isAuthenticated: Boolean(token),
       login,
-      register,
-      switchRole,
-      addRole,
       logout,
     }),
     [token, refreshToken, user, activeRole]

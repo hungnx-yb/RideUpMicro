@@ -24,10 +24,11 @@ import {
   FaSignOutAlt,
   FaUser,
 } from "react-icons/fa";
-import useAuth from "../hooks/useAuth";
-import { ADMIN_MENU_GROUPS } from "../components/admin/AdminLayout";
+import useAuth from "../../hooks/useAuth";
+import AdminLayout, { ADMIN_MENU_GROUPS } from "../../components/admin/AdminLayout";
 import { useNavigate } from "react-router-dom";
-import { getApiErrorMessage } from "../services/authApi";
+import { getApiErrorMessage } from "../../services/authApi";
+import { formatDriverProfileId } from "../../utils/formatId";
 import {
   approveDriverApi,
   approveVehicleApi,
@@ -37,14 +38,8 @@ import {
   getPendingVehiclesCountApi,
   rejectDriverApi,
   rejectVehicleApi,
-} from "../services/adminApi";
+} from "../../services/adminApi";
 
-const topMenus = [
-  { label: "Thống kê", icon: FaRegChartBar, active: true, path: "/admin-dashboard" },
-  { label: "Phân tích", icon: FaChartBar, active: false, path: "/admin/revenue-analytics" },
-  { label: "Người dùng", icon: FaUserFriends, active: false },
-  { label: "Hỗ trợ", icon: FaComments, active: false },
-];
 
 function KpiCard({ icon: Icon, value, title, sub, trend, accent = "blue" }) {
   const accentClass = {
@@ -174,8 +169,9 @@ function DriverApprovalList({
                     <p className="inline-flex items-center gap-2 text-sm text-slate-500">
                       <FaEnvelope className="text-xs text-orange-500" /> {email}
                     </p>
-                    <p className="mt-1 inline-flex items-center gap-2 text-sm text-slate-500">
-                      <FaIdBadge className="text-xs text-orange-500" /> ID: {driver.id?.slice(0, 8) || "-"}
+                    <p className="mt-1 inline-flex items-center gap-2 text-sm text-slate-500" title={driver.id}>
+                      <FaIdBadge className="text-xs text-orange-500" /> Mã hồ sơ:{" "}
+                      <span className="font-mono font-semibold text-slate-700">{formatDriverProfileId(driver.id)}</span>
                     </p>
                   </div>
 
@@ -320,34 +316,6 @@ function AdminDashboardPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [processedDriverCount, setProcessedDriverCount] = useState({ approved: 0, rejected: 0 });
 
-  const adminName = user?.fullName?.trim() || user?.email || "Quản trị viên";
-  const adminInitial = adminName.charAt(0).toUpperCase();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!menuRef.current?.contains(event.target)) {
-        setIsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true);
-      await logout();
-      navigate("/", { replace: true });
-    } finally {
-      setIsLoggingOut(false);
-      setIsMenuOpen(false);
-    }
-  };
   const [activeTab, setActiveTab] = useState(null);
   const [hasLoadedDriverList, setHasLoadedDriverList] = useState(false);
   const [hasLoadedVehicleList, setHasLoadedVehicleList] = useState(false);
@@ -508,114 +476,48 @@ function AdminDashboardPage() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_#fff7ed,_#f8fafc_45%,_#e2e8f0_100%)]">
-      <div className="pointer-events-none absolute -left-24 top-20 h-72 w-72 rounded-full bg-orange-300/20 blur-3xl" />
-      <div className="pointer-events-none absolute -right-20 top-72 h-72 w-72 rounded-full bg-sky-300/20 blur-3xl" />
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white">
-                <FaTaxi />
-              </span>
-              <p className="text-3xl font-extrabold tracking-tight text-slate-800">
-                Ride<span className="text-orange-500">Up</span>
-              </p>
-            </div>
-
-            <nav className="hidden items-center gap-2 xl:flex">
-              {topMenus.map((menu) => {
-                const Icon = menu.icon;
-                return (
-                  <button
-                    key={menu.label}
-                    type="button"
-                    onClick={() => menu.path && navigate(menu.path)}
-                    className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-base font-semibold ${
-                      menu.active
-                        ? "bg-orange-50 text-orange-600"
-                        : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    <Icon className="text-sm" />
-                    {menu.label}
-                  </button>
-                );
-              })}
-            </nav>
+    <AdminLayout
+      title="Bảng điều khiển Admin"
+      subtitle="Tổng quan hoạt động và dữ liệu phê duyệt hệ thống RideUp theo thời gian thực"
+      icon={FaUserShield}
+      actions={
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700">
+            <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+            {totalPending} hồ sơ chờ duyệt
           </div>
-
-          <div className="relative flex items-center gap-3" ref={menuRef}>
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-              className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm hover:border-orange-300"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-400 text-xl font-bold text-white">
-                {adminInitial}
-              </span>
-              <span className="hidden text-left md:block">
-                <span className="block text-xl font-bold leading-tight text-slate-800">{adminName}</span>
-                <span className="block text-sm font-semibold text-orange-500">Quản trị viên</span>
-              </span>
-              <FaChevronDown className={`ml-2 text-slate-400 transition-transform ${isMenuOpen ? "rotate-180" : ""}`} size={16} />
-            </button>
-            {isMenuOpen ? (
-              <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-                <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Chức năng
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    navigate("/dashboard");
-                  }}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                >
-                  <FaUser size={14} />
-                  Thông tin tài khoản
-                </button>
-                <div className="my-2 border-t border-slate-100" />
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  disabled={isLoggingOut}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-500 transition-colors hover:bg-red-50"
-                >
-                  <FaSignOutAlt size={15} />
-                  {isLoggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <button
+            type="button"
+            onClick={loadPendingCounts}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+          >
+            <FaSyncAlt className={isLoadingCounts ? "animate-spin text-orange-500" : "text-slate-400"} />
+            Làm mới
+          </button>
         </div>
-      </header>
-
-      <main className="relative z-10 mx-auto w-full max-w-[1500px] px-4 pb-10 pt-5 sm:px-6 lg:px-8">
-        <section className="relative overflow-hidden rounded-3xl border border-orange-200 bg-[linear-gradient(125deg,#ef4444_0%,#f97316_48%,#f59e0b_100%)] px-6 py-10 text-white shadow-xl shadow-orange-500/20">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/15" />
-          <div className="pointer-events-none absolute -bottom-16 left-10 h-28 w-28 rounded-full bg-white/10" />
-          <div className="relative grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
-            <div className="flex flex-col items-start gap-2">
-              <h1 className="inline-flex items-center gap-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-                <FaUserShield className="text-2xl sm:text-3xl" /> Bảng điều khiển Admin
-              </h1>
-              <p className="text-base font-medium text-orange-50 sm:text-lg">
-                <span className="inline-flex items-center gap-2">
-                  <FaChartBar className="text-sm" /> Tổng quan hoạt động hệ thống RideUp
-                </span>
+      }
+    >
+      <div className="space-y-6">
+        {/* Banner tóm tắt nhanh */}
+        <section className="relative overflow-hidden rounded-2xl border border-orange-200/80 bg-gradient-to-r from-orange-500 via-amber-500 to-red-500 px-6 py-5 text-white shadow-lg shadow-orange-500/15">
+          <div className="relative flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-orange-100">Hệ thống điều hành RideUp</p>
+              <h2 className="mt-1 text-xl font-extrabold text-white sm:text-2xl">
+                Xin chào, {user?.fullName || "Quản trị viên"}!
+              </h2>
+              <p className="mt-0.5 text-xs text-orange-100">
+                Theo dõi tình trạng phê duyệt tài xế, phương tiện và giám sát toàn bộ hoạt động hệ thống.
               </p>
-              <p className="relative mt-1 text-sm font-semibold text-orange-100">Cập nhật dữ liệu phê duyệt theo thời gian thực</p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-2xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur">
-                <p className="text-xs font-bold uppercase tracking-wide text-orange-100">Hồ sơ đang chờ</p>
-                <p className="mt-1 text-2xl font-extrabold text-white">{totalPending}</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 backdrop-blur">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-orange-100">Hồ sơ chờ duyệt</p>
+                <p className="mt-0.5 text-xl font-extrabold text-white">{totalPending}</p>
               </div>
-              <div className="rounded-2xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur">
-                <p className="text-xs font-bold uppercase tracking-wide text-orange-100">Người dùng liên quan</p>
-                <p className="mt-1 text-2xl font-extrabold text-white">{Math.max(1, totalUsers)}</p>
+              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 backdrop-blur">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-orange-100">Người dùng liên quan</p>
+                <p className="mt-0.5 text-xl font-extrabold text-white">{Math.max(1, totalUsers)}</p>
               </div>
             </div>
           </div>
@@ -775,8 +677,8 @@ function AdminDashboardPage() {
             </ul>
           </article>
         </section>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 

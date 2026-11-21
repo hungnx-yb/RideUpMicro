@@ -3,7 +3,6 @@ import {
   FaChartLine,
   FaCoins,
   FaExchangeAlt,
-  FaFileExcel,
   FaFilter,
   FaHandHoldingUsd,
   FaMoneyBillWave,
@@ -15,7 +14,6 @@ import { Button, Card, EmptyState, KpiCard, ModalShell, StatusBadge, formatDateT
 import DateRangePicker, { resolvePresetRange } from "../../components/admin/DateRangePicker";
 import DriverDebtTable from "../../components/admin/DriverDebtTable";
 import {
-  exportRevenueExcelApi,
   getDriverDebtTransactionsApi,
   getDriverDebtsApi,
   getRevenueKpisApi,
@@ -38,33 +36,115 @@ const TX_TYPE_LABEL = {
   ADJUSTMENT: { label: "Điều chỉnh", tone: "slate" },
 };
 
+function formatYAxisLabel(val) {
+  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)} tỷ`;
+  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(val % 1_000_000 === 0 ? 0 : 1)} tr`;
+  if (val >= 1_000) return `${Math.round(val / 1_000)}k`;
+  if (val === 0) return "0đ";
+  return `${val}đ`;
+}
+
 function DailyRevenueChart({ series }) {
-  const max = Math.max(1, ...series.map((p) => Number(p.gmv || 0)));
-  if (!series.length) return <EmptyState>Chưa có dữ liệu trong kỳ.</EmptyState>;
-  const showEvery = Math.ceil(series.length / 12);
+  if (!series || !series.length) return <EmptyState>Chưa có dữ liệu trong kỳ.</EmptyState>;
+
+  const rawMax = Math.max(1, ...series.map((p) => Number(p.gmv || 0)));
+  const magnitude = Math.pow(10, Math.max(0, Math.floor(Math.log10(rawMax))));
+  const normalized = rawMax / magnitude;
+  let niceFactor = 10;
+  if (normalized <= 1.2) niceFactor = 1.2;
+  else if (normalized <= 2) niceFactor = 2;
+  else if (normalized <= 5) niceFactor = 5;
+  else niceFactor = 10;
+  const max = Math.max(10000, Math.ceil(normalized / niceFactor) * niceFactor * magnitude);
+
+  const yTicks = [max, max * 0.75, max * 0.5, max * 0.25, 0];
+  const showEvery = Math.max(1, Math.ceil(series.length / 12));
+
   return (
-    <div>
-      <div className="flex h-48 items-end gap-1 overflow-x-auto pb-1">
-        {series.map((point, index) => {
-          const cash = Number(point.cashGmv || 0);
-          const stripe = Number(point.stripeGmv || 0);
-          return (
-            <div key={point.date} className="group relative flex h-full min-w-[14px] flex-1 flex-col justify-end">
-              <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2 py-1 text-[11px] text-white group-hover:block">
-                {point.date}: {formatVnd(point.gmv)} · {point.bookings} vé
-              </div>
-              <div className="w-full rounded-t bg-sky-500" style={{ height: `${(stripe / max) * 100}%` }} />
-              <div className="w-full bg-orange-400" style={{ height: `${(cash / max) * 100}%` }} />
-              <span className={`mt-1 block text-center text-[10px] text-slate-400 ${index % showEvery === 0 ? "" : "invisible"}`}>
-                {point.date.slice(8, 10)}/{point.date.slice(5, 7)}
-              </span>
-            </div>
-          );
-        })}
+    <div className="w-full">
+      <div className="flex items-stretch gap-2.5">
+        {/* Trục tung (Y-Axis) */}
+        <div className="flex w-16 shrink-0 flex-col justify-between py-1 text-right text-[11px] font-semibold text-slate-400">
+          {yTicks.map((tick, idx) => (
+            <span key={idx} className="leading-none">
+              {formatYAxisLabel(tick)}
+            </span>
+          ))}
+        </div>
+
+        {/* Vùng vẽ biểu đồ kèm lưới ngang */}
+        <div className="relative flex-1">
+          {/* Lưới ngang (Gridlines) */}
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-between py-1">
+            {yTicks.map((_, idx) => (
+              <div key={idx} className="w-full border-b border-dashed border-slate-200" />
+            ))}
+          </div>
+
+          {/* Các cột bar */}
+          <div className="relative flex h-52 items-end gap-1.5 overflow-x-auto pb-1 pt-2">
+            {series.map((point, index) => {
+              const cash = Number(point.cashGmv || 0);
+              const stripe = Number(point.stripeGmv || 0);
+              const total = cash + stripe;
+              const heightPct = Math.min(100, Math.max(2, (total / max) * 100));
+              const stripePct = total > 0 ? (stripe / total) * 100 : 0;
+              const cashPct = total > 0 ? (cash / total) * 100 : 0;
+
+              return (
+                <div key={point.date} className="group relative flex h-full min-w-[16px] flex-1 flex-col justify-end">
+                  {/* Tooltip khi hover */}
+                  <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-900/95 p-2.5 text-xs text-white shadow-xl backdrop-blur group-hover:block">
+                    <p className="font-bold text-orange-400">{point.date}</p>
+                    <p className="mt-1 font-semibold">Tổng GMV: {formatVnd(point.gmv)}</p>
+                    <div className="mt-1 space-y-0.5 text-[11px] text-slate-300">
+                      <p className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-orange-400" />
+                        Tiền mặt: {formatVnd(cash)}
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-sky-500" />
+                        Stripe: {formatVnd(stripe)}
+                      </p>
+                      <p className="text-slate-400">{point.bookings} vé thành công</p>
+                    </div>
+                  </div>
+
+                  {/* Cột dữ liệu xếp chồng */}
+                  <div
+                    className="w-full overflow-hidden rounded-t-sm transition-all group-hover:brightness-110"
+                    style={{ height: `${heightPct}%` }}
+                  >
+                    <div className="w-full bg-sky-500" style={{ height: `${stripePct}%` }} />
+                    <div className="w-full bg-orange-400" style={{ height: `${cashPct}%` }} />
+                  </div>
+
+                  {/* Nhãn ngày tháng trục hoành */}
+                  <span
+                    className={`mt-1.5 block text-center text-[10px] font-medium text-slate-400 ${
+                      index % showEvery === 0 ? "" : "invisible"
+                    }`}
+                  >
+                    {point.date.slice(8, 10)}/{point.date.slice(5, 7)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
-      <div className="mt-3 flex gap-4 text-xs font-semibold text-slate-500">
-        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-orange-400" /> Tiền mặt</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> Stripe</span>
+
+      {/* Chú thích biểu đồ (Legend) */}
+      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
+        <div className="flex gap-4 font-semibold text-slate-600">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-orange-400" /> Tiền mặt (CASH)
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> Thanh toán Stripe
+          </span>
+        </div>
+        <p className="text-[11px] font-semibold text-slate-400">Đơn vị trục tung: VNĐ</p>
       </div>
     </div>
   );
@@ -76,7 +156,6 @@ function AdminRevenueAnalyticsPage() {
   const [appliedFilter, setAppliedFilter] = useState({ preset: "month", ...initialRange, paymentMethod: "ALL" });
   const [kpis, setKpis] = useState(null);
   const [isLoadingKpis, setIsLoadingKpis] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
 
   const [debts, setDebts] = useState([]);
   const [debtStatus, setDebtStatus] = useState("ALL");
@@ -126,26 +205,6 @@ function AdminRevenueAnalyticsPage() {
       [row.fullName, row.email, row.phoneNumber, row.plateNumber].some((v) => v && v.toLowerCase().includes(keyword)));
   }, [debts, debtKeyword]);
 
-  const handleExport = async () => {
-    try {
-      setIsExporting(true);
-      const blob = await exportRevenueExcelApi(appliedFilter);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `rideup-doanh-thu_${appliedFilter.fromDate}_${appliedFilter.toDate}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      showToast("Đã xuất file Excel đối soát");
-    } catch (error) {
-      showToast(getApiErrorMessage(error, "Xuất Excel thất bại"), "error");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const openHistory = async (row) => {
     setHistoryDriver(row);
     setHistoryRows([]);
@@ -187,11 +246,6 @@ function AdminRevenueAnalyticsPage() {
       title="Doanh thu & Công nợ"
       subtitle="Tổng quan GMV, doanh thu hoa hồng sàn, dòng tiền tiền mặt / Stripe và theo dõi công nợ hoa hồng của tài xế."
       icon={FaChartLine}
-      actions={(
-        <Button variant="secondary" onClick={handleExport} disabled={isExporting}>
-          <FaFileExcel className="text-emerald-600" /> {isExporting ? "Đang xuất..." : "Xuất Excel đối soát"}
-        </Button>
-      )}
     >
       <Card className="mb-6">
         <div className="flex flex-wrap items-end gap-3">

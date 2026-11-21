@@ -5,7 +5,6 @@ import {
   FaBroadcastTower,
   FaCar,
   FaChartLine,
-  FaChevronDown,
   FaClipboardList,
   FaClock,
   FaHome,
@@ -15,6 +14,7 @@ import {
   FaSignOutAlt,
   FaTaxi,
   FaTimes,
+  FaUserShield,
 } from "react-icons/fa";
 import useAuth from "../../hooks/useAuth";
 
@@ -43,17 +43,18 @@ export const ADMIN_MENU_GROUPS = [
     title: "Vận hành & Hỗ trợ",
     items: [
       { label: "Phát sóng thông báo", path: "/admin/broadcast-push", icon: FaBroadcastTower },
-      { label: "Nhật ký kiểm toán", path: "/admin/audit-logs", icon: FaClipboardList },
     ],
   },
 ];
 
-function SidebarContent({ onNavigate }) {
+function SidebarNavList({ onNavigate }) {
   return (
     <nav className="space-y-6">
       {ADMIN_MENU_GROUPS.map((group) => (
         <div key={group.title}>
-          <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">{group.title}</p>
+          <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+            {group.title}
+          </p>
           <div className="mt-2 space-y-1">
             {group.items.map((item) => {
               const Icon = item.icon;
@@ -64,15 +65,19 @@ function SidebarContent({ onNavigate }) {
                   end={item.end}
                   onClick={onNavigate}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                    `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
                       isActive
-                        ? "bg-orange-50 text-orange-600 shadow-sm ring-1 ring-orange-100"
+                        ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md shadow-orange-500/25"
                         : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     }`
                   }
                 >
-                  <Icon className="shrink-0 text-sm" />
-                  <span className="truncate">{item.label}</span>
+                  {({ isActive }) => (
+                    <>
+                      <Icon className={`shrink-0 text-sm ${isActive ? "text-white" : "text-slate-400 group-hover:text-slate-600"}`} />
+                      <span className="truncate">{item.label}</span>
+                    </>
+                  )}
                 </NavLink>
               );
             })}
@@ -84,132 +89,178 @@ function SidebarContent({ onNavigate }) {
 }
 
 /**
- * Khung giao diện chung cho các trang quản trị: header + sidebar điều hướng theo nhóm chức năng.
+ * Khung giao diện chuẩn mực cho toàn bộ Admin Portal:
+ * Sidebar dọc toàn phần (Full-height Sidebar) từ đầu trang đến cuối trang,
+ * KHÔNG còn thanh header bar nằm ngang gây phân mảnh giao diện.
  */
 function AdminLayout({ title, subtitle, icon: TitleIcon, actions, children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const menuRef = useRef(null);
 
   const adminName = user?.fullName?.trim() || user?.email || "Quản trị viên";
   const adminInitial = adminName.charAt(0).toUpperCase();
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!menuRef.current?.contains(event.target)) {
-        setIsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
       await logout();
-      navigate("/", { replace: true });
+      navigate("/login", { replace: true });
     } finally {
       setIsLoggingOut(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#fff7ed,_#f8fafc_45%,_#e2e8f0_100%)]">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 lg:hidden"
-              aria-label="Mở menu"
-            >
-              <FaBars />
-            </button>
-            <button type="button" onClick={() => navigate("/admin-dashboard")} className="flex items-center gap-2">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white">
-                <FaTaxi />
-              </span>
-              <span className="text-2xl font-extrabold tracking-tight text-slate-800">
-                Ride<span className="text-orange-500">Up</span>
-                <span className="ml-2 hidden rounded-lg bg-slate-100 px-2 py-0.5 align-middle text-xs font-bold text-slate-500 sm:inline">
-                  Admin
-                </span>
-              </span>
-            </button>
-          </div>
+    <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_left,_#fff7ed,_#f8fafc_45%,_#f1f5f9_100%)] text-slate-800">
+      {/* Mobile Top Bar (chỉ hiện trên màn hình nhỏ < lg) */}
+      <div className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:hidden">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-orange-500 to-red-600 text-white shadow-sm">
+            <FaTaxi className="text-sm" />
+          </span>
+          <span className="font-extrabold text-slate-900">
+            Ride<span className="text-orange-500">Up</span>
+            <span className="ml-1.5 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">
+              Admin
+            </span>
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsSidebarOpen(true)}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+          aria-label="Mở menu điều hướng"
+        >
+          <FaBars />
+        </button>
+      </div>
 
-          <div className="relative" ref={menuRef}>
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-              className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-sm hover:border-orange-300"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-400 font-bold text-white">
+      {/* Sidebar Desktop (Full height, sticky top-0) */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white/90 backdrop-blur-md lg:flex">
+        {/* Logo & Brand Header */}
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-100 px-5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-orange-500 to-red-600 text-white shadow-md shadow-orange-500/20">
+            <FaTaxi className="text-lg" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-lg font-extrabold tracking-tight text-slate-900">
+                Ride<span className="text-orange-500">Up</span>
+              </span>
+              <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-extrabold text-orange-700">
+                ADMIN
+              </span>
+            </div>
+            <p className="text-[11px] font-medium text-slate-400">Hệ thống điều hành</p>
+          </div>
+        </div>
+
+        {/* Navigation Groups */}
+        <div className="custom-scrollbar flex-1 overflow-y-auto px-3.5 py-4">
+          <SidebarNavList />
+        </div>
+
+        {/* User Card & Logout Button */}
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50/70 p-3">
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/70 bg-white p-2.5 shadow-sm">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-orange-500 to-red-500 text-xs font-bold text-white shadow-sm">
                 {adminInitial}
               </span>
-              <span className="hidden text-left md:block">
-                <span className="block max-w-[180px] truncate text-sm font-bold text-slate-800">{adminName}</span>
-                <span className="block text-xs font-semibold text-orange-500">Quản trị viên</span>
-              </span>
-              <FaChevronDown className={`text-slate-400 transition-transform ${isMenuOpen ? "rotate-180" : ""}`} size={12} />
+              <div className="min-w-0">
+                <p className="truncate text-xs font-bold text-slate-800">{adminName}</p>
+                <p className="truncate text-[10px] font-medium text-slate-400">{user?.email || "admin@rideup.vn"}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              title="Đăng xuất khỏi hệ thống"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500 active:scale-95 disabled:opacity-50"
+            >
+              <FaSignOutAlt className="text-xs" />
             </button>
-            {isMenuOpen ? (
-              <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Drawer */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" onClick={() => setIsSidebarOpen(false)} />
+          <aside className="absolute left-0 top-0 flex h-full w-72 flex-col bg-white shadow-2xl">
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-100 px-5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-orange-500 to-red-600 text-white shadow-sm">
+                  <FaTaxi className="text-sm" />
+                </span>
+                <span className="font-extrabold text-slate-900">
+                  Ride<span className="text-orange-500">Up</span> Admin
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="custom-scrollbar flex-1 overflow-y-auto px-4 py-4">
+              <SidebarNavList onNavigate={() => setIsSidebarOpen(false)} />
+            </div>
+
+            <div className="shrink-0 border-t border-slate-100 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-orange-500 to-red-500 text-xs font-bold text-white shadow-sm">
+                    {adminInitial}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-slate-800">{adminName}</p>
+                    <p className="truncate text-[10px] text-slate-400">{user?.email}</p>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-500 hover:bg-red-50"
+                  className="rounded-lg px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
                 >
-                  <FaSignOutAlt size={14} />
-                  {isLoggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+                  Đăng xuất
                 </button>
               </div>
-            ) : null}
-          </div>
-        </div>
-      </header>
-
-      <div className="flex w-full">
-        <aside className="sticky top-[65px] hidden h-[calc(100vh-65px)] w-64 shrink-0 overflow-y-auto border-r border-slate-200 bg-white/80 px-3 py-6 lg:block">
-          <SidebarContent />
-        </aside>
-
-        {isSidebarOpen ? (
-          <div className="fixed inset-0 z-40 lg:hidden">
-            <div className="absolute inset-0 bg-slate-900/40" onClick={() => setIsSidebarOpen(false)} />
-            <aside className="absolute left-0 top-0 h-full w-72 overflow-y-auto bg-white px-3 py-5 shadow-2xl">
-              <div className="mb-4 flex items-center justify-between px-3">
-                <span className="text-lg font-extrabold text-slate-800">Menu quản trị</span>
-                <button type="button" onClick={() => setIsSidebarOpen(false)} className="text-slate-500" aria-label="Đóng menu">
-                  <FaTimes />
-                </button>
-              </div>
-              <SidebarContent onNavigate={() => setIsSidebarOpen(false)} />
-            </aside>
-          </div>
-        ) : null}
-
-        <main className="min-w-0 flex-1 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="flex items-center gap-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-                {TitleIcon ? (
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 text-lg text-white shadow-md">
-                    <TitleIcon />
-                  </span>
-                ) : null}
-                {title}
-              </h1>
-              {subtitle ? <p className="mt-2 max-w-3xl text-sm text-slate-500">{subtitle}</p> : null}
             </div>
-            {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-          </div>
+          </aside>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex min-w-0 flex-1 flex-col pt-14 lg:pt-0">
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          {(title || actions) && (
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+              <div className="min-w-0">
+                {title && (
+                  <h1 className="flex items-center gap-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+                    {TitleIcon && (
+                      <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 text-lg text-white shadow-md shadow-orange-500/20">
+                        <TitleIcon />
+                      </span>
+                    )}
+                    <span>{title}</span>
+                  </h1>
+                )}
+                {subtitle && <p className="mt-1.5 max-w-3xl text-sm text-slate-500">{subtitle}</p>}
+              </div>
+              {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+            </div>
+          )}
+
           {children}
         </main>
       </div>

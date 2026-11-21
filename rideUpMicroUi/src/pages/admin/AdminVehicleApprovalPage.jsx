@@ -24,61 +24,27 @@ import {
   FaPhoneAlt,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import useAuth from "../hooks/useAuth";
+import useAuth from "../../hooks/useAuth";
+import AdminLayout from "../../components/admin/AdminLayout";
 import {
   approveVehicleApi,
   getPendingVehiclesApi,
   rejectVehicleApi,
-} from "../services/adminApi";
-import { getApiErrorMessage } from "../services/authApi";
-import { resolveImageUrl } from "../utils/imageUrl";
-
-const topMenus = [
-  { label: "Thống kê", icon: FaRegChartBar, active: false, path: "/admin-dashboard" },
-  { label: "Phân tích", icon: FaChartBar, active: false },
-  { label: "Người dùng", icon: FaUserFriends, active: true, path: "/admin-dashboard/vehicles-approval" },
-  { label: "Hỗ trợ", icon: FaComments, active: false },
-];
+} from "../../services/adminApi";
+import { getApiErrorMessage } from "../../services/authApi";
+import { resolveImageUrl } from "../../utils/imageUrl";
+import { formatVehicleId } from "../../utils/formatId";
 
 function AdminVehicleApprovalPage() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [pendingVehicles, setPendingVehicles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const menuRef = useRef(null);
 
-  const adminName = user?.fullName?.trim() || user?.email || "Quản trị viên";
-  const adminInitial = adminName.charAt(0).toUpperCase();
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!menuRef.current?.contains(event.target)) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true);
-      await logout();
-      navigate("/", { replace: true });
-    } finally {
-      setIsLoggingOut(false);
-      setIsMenuOpen(false);
-    }
-  };
 
   const loadVehicles = async () => {
     try {
@@ -167,111 +133,23 @@ function AdminVehicleApprovalPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-500 text-white">
-                <FaTaxi />
-              </span>
-              <p className="text-3xl font-extrabold tracking-tight text-slate-800">
-                Ride<span className="text-orange-500">Up</span>
-              </p>
-            </div>
-
-            <nav className="hidden items-center gap-2 xl:flex">
-              {topMenus.map((menu) => {
-                const Icon = menu.icon;
-
-                return (
-                  <button
-                    key={menu.label}
-                    type="button"
-                    onClick={() => menu.path && navigate(menu.path)}
-                    className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-base font-semibold ${
-                      menu.active
-                        ? "bg-orange-50 text-orange-600"
-                        : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    <Icon className="text-sm" />
-                    {menu.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="relative flex items-center gap-3" ref={menuRef}>
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-              className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm hover:border-orange-300"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-red-400 text-xl font-bold text-white">
-                {adminInitial}
-              </span>
-              <span className="hidden text-left md:block">
-                <span className="block text-xl font-bold leading-tight text-slate-800">{adminName}</span>
-                <span className="block text-sm font-semibold text-orange-500">Quản trị viên</span>
-              </span>
-              <FaChevronDown className={`ml-2 text-slate-400 transition-transform ${isMenuOpen ? "rotate-180" : ""}`} size={16} />
-            </button>
-
-            {isMenuOpen ? (
-              <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
-                <p className="px-3 pb-2 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Chức năng
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    navigate("/dashboard");
-                  }}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                >
-                  <FaUser size={14} />
-                  Thông tin tài khoản
-                </button>
-                <div className="my-2 border-t border-slate-100" />
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  disabled={isLoggingOut}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-500 transition-colors hover:bg-red-50"
-                >
-                  <FaSignOutAlt size={15} />
-                  {isLoggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-[1500px] px-4 pb-10 pt-6 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/admin-dashboard")}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <FaArrowLeft /> Quay lại Dashboard
-          </button>
-        </div>
-
-        <section className="mt-4 rounded-3xl border border-blue-200 bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-600 px-6 py-7 text-white shadow-lg shadow-cyan-500/20">
-          <h1 className="inline-flex items-center gap-3 text-3xl font-extrabold tracking-tight">
-            <FaCar /> Duyệt phương tiện di chuyển
-          </h1>
-          <p className="mt-2 text-sm font-medium text-cyan-50 sm:text-base">
-            Xác minh thông tin và tài liệu phương tiện trước khi kích hoạt hoạt động.
-          </p>
-        </section>
-
-        <section className="mt-5 grid gap-3 sm:grid-cols-3">
+    <AdminLayout
+      title="Duyệt phương tiện di chuyển"
+      subtitle="Xác minh thông tin cà vẹt, biển số và hình ảnh xe trước khi kích hoạt hoạt động trong hệ thống"
+      icon={FaCar}
+      actions={
+        <button
+          type="button"
+          onClick={loadVehicles}
+          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+        >
+          <FaCar className={isLoading ? "animate-spin text-orange-500" : "text-slate-400"} />
+          Làm mới
+        </button>
+      }
+    >
+      <div className="space-y-6">
+        <section className="grid gap-3 sm:grid-cols-3">
           <article className="rounded-2xl border border-blue-200 bg-white px-4 py-4 shadow-sm">
             <p className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700">
               <FaCar /> Xe chờ duyệt
@@ -374,8 +252,9 @@ function AdminVehicleApprovalPage() {
                     </div>
 
                     <div className="min-w-[200px] flex-1">
-                      <p className="inline-flex items-center gap-2 text-sm text-slate-500">
-                        <FaIdBadge className="text-xs text-sky-500" /> ID xe: {row?.id?.slice(0, 10) || "-"}
+                      <p className="inline-flex items-center gap-2 text-sm text-slate-500" title={row?.id}>
+                        <FaIdBadge className="text-xs text-sky-500" /> ID xe:{" "}
+                        <span className="font-mono font-semibold text-slate-700">{formatVehicleId(row?.id)}</span>
                       </p>
                       <p className="mt-1 inline-flex items-center gap-2 text-sm text-slate-500">
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">PENDING</span>
@@ -438,7 +317,9 @@ function AdminVehicleApprovalPage() {
 
               <div className="mt-4 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-4 text-white">
                 <p className="text-xl font-extrabold">{selectedVehicle?.plateNumber || "-"}</p>
-                <p className="mt-1 text-sm text-sky-50">Mã hồ sơ: {selectedVehicle?.id || "-"}</p>
+                <p className="mt-1 text-sm text-sky-50" title={selectedVehicle?.id}>
+                  Mã hồ sơ: <span className="font-mono font-semibold">{formatVehicleId(selectedVehicle?.id)}</span>
+                </p>
               </div>
 
               <div className="mt-4 max-h-[58vh] space-y-4 overflow-y-auto pr-2">
@@ -457,9 +338,9 @@ function AdminVehicleApprovalPage() {
                       <FaCalendarAlt className="text-sky-500" />
                       Ngày tạo: {selectedVehicle?.createdAt ? new Date(selectedVehicle.createdAt).toLocaleString("vi-VN") : "-"}
                     </p>
-                    <p className="flex items-center gap-2 text-slate-700">
+                    <p className="flex items-center gap-2 text-slate-700" title={selectedVehicle?.id}>
                       <FaIdBadge className="text-sky-500" />
-                      ID xe: {selectedVehicle?.id || "-"}
+                      ID xe: <span className="font-mono font-semibold">{formatVehicleId(selectedVehicle?.id)}</span>
                     </p>
                   </div>
                 </section>
@@ -545,9 +426,10 @@ function AdminVehicleApprovalPage() {
             </div>
           </div>
         ) : null}
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 
 export default AdminVehicleApprovalPage;
+
