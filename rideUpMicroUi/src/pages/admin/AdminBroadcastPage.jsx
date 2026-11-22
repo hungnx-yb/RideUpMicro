@@ -14,19 +14,14 @@ import { getAllProvinces } from "../../services/locationApi";
 import { getApiErrorMessage } from "../../services/authApi";
 
 const EMPTY_AUDIENCE = { targetRole: "DRIVER", provinceIds: [], minReputation: 0, maxReputation: 100 };
-const EMPTY_CONTENT = { title: "", summary: "", content: "", deepLink: "" };
-const CHANNELS = [
-  { value: "FCM", label: "FCM Push Notification (Điện thoại)", disabled: true, note: "Chưa cấu hình Firebase" },
-  { value: "IN_APP", label: "Hòm thư trong App (Inbox)" },
-  { value: "WEBSOCKET", label: "WebSocket Popup trực tiếp" },
-];
+const EMPTY_CONTENT = { title: "", content: "" };
 const STATUS_TONE = { DRAFT: "slate", SENDING: "amber", SENT: "green", FAILED: "red" };
 const ROLE_LABEL = { ALL: "Tất cả", DRIVER: "Tài xế", CUSTOMER: "Hành khách", DIRECT: "Gửi trực tiếp" };
 
 function AdminBroadcastPage() {
   const [audience, setAudience] = useState(EMPTY_AUDIENCE);
   const [content, setContent] = useState(EMPTY_CONTENT);
-  const [channels, setChannels] = useState(["IN_APP", "WEBSOCKET"]);
+  const channels = ["IN_APP"];
   const [draftId, setDraftId] = useState(null);
   const [provinces, setProvinces] = useState([]);
   const [recipientCount, setRecipientCount] = useState(null);
@@ -38,8 +33,8 @@ function AdminBroadcastPage() {
   const { showToast, toastElement } = useToast();
 
   useEffect(() => {
-    getAllProvinces().then((list) => setProvinces(list || [])).catch(() => {});
-    getBroadcastCampaignsApi().then(setCampaigns).catch(() => {});
+    getAllProvinces().then((list) => setProvinces(list || [])).catch(() => { });
+    getBroadcastCampaignsApi().then(setCampaigns).catch(() => { });
   }, []);
 
   // Bộ đếm người nhận thời gian thực (debounce 400ms)
@@ -62,25 +57,23 @@ function AdminBroadcastPage() {
   const errors = useMemo(() => {
     const result = {};
     if (!content.title.trim()) result.title = "Vui lòng nhập tiêu đề";
-    if (!content.summary.trim()) result.summary = "Vui lòng nhập tóm tắt";
-    if (content.summary.length > 200) result.summary = "Tóm tắt tối đa 200 ký tự";
-    if (!channels.length) result.channels = "Chọn ít nhất một kênh";
+    if (!content.content?.trim()) result.content = "Vui lòng nhập nội dung thông báo";
     return result;
-  }, [content, channels]);
+  }, [content]);
 
   const buildPayload = () => ({
     campaignId: draftId || undefined,
-    ...content,
+    title: content.title.trim(),
+    summary: content.title.trim().slice(0, 200), // Đáp ứng validation backend, tự động đồng bộ theo tiêu đề
+    content: content.content.trim(),
+    deepLink: "",
     ...audience,
-    channels,
+    channels: ["IN_APP"],
   });
 
-  const toggleChannel = (value) =>
-    setChannels((prev) => (prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]));
-
   const handleSaveDraft = async () => {
-    if (errors.title || errors.summary) {
-      showToast("Vui lòng nhập tiêu đề và tóm tắt trước khi lưu nháp", "error");
+    if (errors.title || errors.content) {
+      showToast("Vui lòng nhập tiêu đề và nội dung trước khi lưu nháp", "error");
       return;
     }
     try {
@@ -122,9 +115,7 @@ function AdminBroadcastPage() {
     setDraftId(campaign.id);
     setContent({
       title: campaign.title || "",
-      summary: campaign.summary || "",
-      content: campaign.content || "",
-      deepLink: campaign.deepLink || "",
+      content: campaign.content || campaign.summary || "",
     });
     setAudience({
       targetRole: ["ALL", "DRIVER", "CUSTOMER"].includes(campaign.targetRole) ? campaign.targetRole : "ALL",
@@ -132,7 +123,6 @@ function AdminBroadcastPage() {
       minReputation: campaign.minReputation ?? 0,
       maxReputation: campaign.maxReputation ?? 100,
     });
-    setChannels((campaign.channels || []).filter((c) => c !== "FCM"));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -179,36 +169,26 @@ function AdminBroadcastPage() {
           <Card title="2. Nội dung thông báo" icon={FaBroadcastTower}>
             <div className="space-y-4">
               <Field label="Tiêu đề" error={errors.title}>
-                <input value={content.title} maxLength={200} onChange={(e) => setContent((p) => ({ ...p, title: e.target.value }))} className={inputClass} placeholder="VD: Cảnh báo mưa bão tuyến Hà Nội – Lào Cai" />
+                <input
+                  value={content.title}
+                  maxLength={200}
+                  onChange={(e) => setContent((p) => ({ ...p, title: e.target.value }))}
+                  className={inputClass}
+                  placeholder="VD: Cảnh báo mưa bão tuyến Hà Nội – Lào Cai"
+                />
               </Field>
-              <Field label={`Tóm tắt hiển thị trên màn hình khóa (${content.summary.length}/200)`} error={errors.summary}>
-                <textarea rows={2} value={content.summary} maxLength={200} onChange={(e) => setContent((p) => ({ ...p, summary: e.target.value }))} className={inputClass} />
+              <Field label="Nội dung thông báo (hỗ trợ Markdown)" error={errors.content}>
+                <textarea
+                  rows={8}
+                  value={content.content}
+                  onChange={(e) => setContent((p) => ({ ...p, content: e.target.value }))}
+                  className={`${inputClass} font-mono`}
+                  placeholder={"**Lưu ý:** ...\n- Ý 1\n- Ý 2"}
+                />
               </Field>
-              <Field label="Nội dung chi tiết trong app (hỗ trợ Markdown)">
-                <textarea rows={6} value={content.content} onChange={(e) => setContent((p) => ({ ...p, content: e.target.value }))} className={`${inputClass} font-mono`} placeholder={"**Lưu ý:** ...\n- Ý 1\n- Ý 2"} />
-              </Field>
-              <Field label="Đường dẫn chuyển hướng (deep link)" hint="VD: rideup://policy/commission-2026">
-                <input value={content.deepLink} onChange={(e) => setContent((p) => ({ ...p, deepLink: e.target.value }))} className={inputClass} />
-              </Field>
-            </div>
-          </Card>
-
-          <Card title="3. Kênh phát sóng" icon={FaPaperPlane}>
-            <div className="space-y-2">
-              {CHANNELS.map((channel) => (
-                <label key={channel.value} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm ${channel.disabled ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400" : "cursor-pointer border-slate-200 text-slate-700 hover:bg-slate-50"}`}>
-                  <input
-                    type="checkbox"
-                    disabled={channel.disabled}
-                    checked={channels.includes(channel.value)}
-                    onChange={() => toggleChannel(channel.value)}
-                    className="accent-orange-500"
-                  />
-                  <span className="flex-1 font-semibold">{channel.label}</span>
-                  {channel.note ? <StatusBadge>{channel.note}</StatusBadge> : null}
-                </label>
-              ))}
-              {errors.channels ? <p className="text-xs font-semibold text-red-600">{errors.channels}</p> : null}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">Kênh nhận thông báo:</span> Mặc định gửi vào <strong className="text-orange-600">Hòm thư trong App (Inbox)</strong>, không hiện popup, không FCM.
+              </div>
             </div>
           </Card>
         </div>

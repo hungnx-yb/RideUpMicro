@@ -58,16 +58,13 @@ public class ReviewService {
     private void updateDriverRating(String driverId) {
         DriverRatingStats stats = reviewRepository.getRatingStatsByDriverId(driverId);
         long v = (stats != null) ? stats.getTotalReviews() : 0;
-        double R = (stats != null) ? stats.getAverageRating() : 5.0;
-        long W = 5;
-        double C = 5.0;
-        double bayesianAverage = ((W * C) + (R * v)) / (W + v);
-        bayesianAverage = Math.round(bayesianAverage * 10.0) / 10.0;
-        log.info("Calculated Bayesian rating for driver {}: {} (Actual Average: {}, Total Reviews: {})",
-                driverId, bayesianAverage, Math.round(R * 10.0) / 10.0, v);
+        double actualAverage = (stats != null && v > 0) ? stats.getAverageRating() : 5.0;
+        double roundedRating = Math.round(actualAverage * 10.0) / 10.0;
+        log.info("Calculated actual average rating for driver {}: {} (Total Reviews: {})",
+                driverId, roundedRating, v);
         DriverRatingUpdatedEvent event = DriverRatingUpdatedEvent.builder()
                 .driverId(driverId)
-                .averageRating(bayesianAverage)
+                .averageRating(roundedRating)
                 .build();
         reviewServicePublisher.publishDriverRatingUpdated(event);
     }

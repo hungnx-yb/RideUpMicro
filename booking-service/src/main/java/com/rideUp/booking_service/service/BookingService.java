@@ -103,6 +103,7 @@ public class BookingService {
         String correlationId = UUID.randomUUID().toString();
         Booking booking = modelMapper.map(request, Booking.class);
         booking.setBookingCode(generateBookingCode());
+        booking.setPaymentMethod(request.getPaymentMethod());
 
         boolean isStripePrePaid = request.getPaymentMethod() == PaymentMethod.STRIPE
                 && request.getPaymentIntentId() != null
@@ -216,6 +217,7 @@ public class BookingService {
         booking.setCustomerId(currentUserId);
         booking.setSeatCount(processResp.getSeatCount());
         booking.setTotalAmount(processResp.getPriceVnd().multiply(BigDecimal.valueOf(processResp.getSeatCount())));
+        booking.setPaymentMethod(request.getPaymentMethod());
         booking.setPaymentStatus(PaymentStatus.PENDING);
         booking.setReservedAt(now);
         if (request.getPaymentMethod() == PaymentMethod.CASH) {
@@ -403,6 +405,12 @@ public class BookingService {
 
 
     public PaymentMethod resolvePaymentMethod(Booking booking) {
+        if (booking == null) {
+            return PaymentMethod.CASH;
+        }
+        if (booking.getPaymentMethod() != null) {
+            return booking.getPaymentMethod();
+        }
         if (booking.getPaymentId() != null && (booking.getPaymentId().startsWith("pi_") || booking.getPaymentId().startsWith("pm_"))) {
             return PaymentMethod.STRIPE;
         }

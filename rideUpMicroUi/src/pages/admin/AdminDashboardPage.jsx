@@ -29,6 +29,7 @@ import AdminLayout, { ADMIN_MENU_GROUPS } from "../../components/admin/AdminLayo
 import { useNavigate } from "react-router-dom";
 import { getApiErrorMessage } from "../../services/authApi";
 import { formatDriverProfileId } from "../../utils/formatId";
+import { formatVnd } from "../../components/admin/AdminUi";
 import {
   approveDriverApi,
   approveVehicleApi,
@@ -36,6 +37,7 @@ import {
   getPendingDriversCountApi,
   getPendingVehiclesApi,
   getPendingVehiclesCountApi,
+  getRevenueKpisApi,
   rejectDriverApi,
   rejectVehicleApi,
 } from "../../services/adminApi";
@@ -56,7 +58,9 @@ function KpiCard({ icon: Icon, value, title, sub, trend, accent = "blue" }) {
         <span className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-md ${accentClass[accent] || accentClass.blue}`}>
           <Icon />
         </span>
-        <p className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">{trend}</p>
+        {trend ? (
+          <p className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">{trend}</p>
+        ) : null}
       </div>
       <p className="relative mt-4 text-3xl font-extrabold text-slate-900">{value}</p>
       <p className="relative mt-1 text-sm font-bold uppercase tracking-wide text-slate-500">{title}</p>
@@ -315,6 +319,7 @@ function AdminDashboardPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [processedDriverCount, setProcessedDriverCount] = useState({ approved: 0, rejected: 0 });
+  const [revenueKpis, setRevenueKpis] = useState(null);
 
   const [activeTab, setActiveTab] = useState(null);
   const [hasLoadedDriverList, setHasLoadedDriverList] = useState(false);
@@ -332,6 +337,8 @@ function AdminDashboardPage() {
 
       setPendingDriverCount(Number(driverCount || 0));
       setPendingVehicleCount(Number(vehicleCount || 0));
+
+      getRevenueKpisApi().then(setRevenueKpis).catch(() => { });
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Không tải được số lượng chờ duyệt"));
     } finally {
@@ -391,6 +398,7 @@ function AdminDashboardPage() {
 
   const handleRefreshData = async () => {
     await loadPendingCounts();
+    getRevenueKpisApi().then(setRevenueKpis).catch(() => { });
 
     if (activeTab === "drivers") {
       await loadPendingDriverList({ force: true });
@@ -549,34 +557,30 @@ function AdminDashboardPage() {
         <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             icon={FaUsers}
-            trend="↗ +15%"
             value={Math.max(1, totalUsers)}
             title="Tổng người dùng"
-            sub={`${pendingDriverCount} tài xế chờ duyệt, ${Math.max(0, totalUsers - pendingDriverCount)} hồ sơ còn lại`}
+            sub={`${pendingDriverCount} tài xế chờ duyệt, ${pendingVehicleCount} xe chờ duyệt`}
             accent="blue"
           />
           <KpiCard
             icon={FaCar}
-            trend="↗ +23%"
-            value={pendingDriverCount + pendingVehicleCount + 10}
-            title="Tổng chuyến xe"
-            sub={`${Math.max(0, pendingVehicleCount)} xe chờ duyệt`}
+            value={revenueKpis?.completedBookings ?? 0}
+            title="Vé hoàn thành"
+            sub="Số chuyến đi hoàn thành thành công"
             accent="amber"
           />
           <KpiCard
             icon={FaMapMarkedAlt}
-            trend="↗ +18%"
-            value="93.990.000 đ"
-            title="Doanh thu T3"
-            sub="Tháng 3/2026"
+            value={formatVnd(revenueKpis?.totalGmv ?? 0)}
+            title="Tổng GMV giao dịch"
+            sub="Doanh số toàn hệ thống"
             accent="emerald"
           />
           <KpiCard
             icon={FaRegChartBar}
-            trend="↗ +12%"
-            value="10.890.000 đ"
-            title="Tổng doanh thu"
-            sub="Tất cả thời gian"
+            value={formatVnd(revenueKpis?.commissionRevenue ?? 0)}
+            title="Doanh thu hoa hồng sàn"
+            sub="Doanh thu nền tảng tích lũy"
             accent="slate"
           />
         </section>
@@ -655,28 +659,6 @@ function AdminDashboardPage() {
             <p className="mt-1">{errorMessage}</p>
           </div>
         ) : null}
-
-        <section className="mt-6 grid gap-4 xl:grid-cols-2">
-          <article className="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm backdrop-blur">
-            <h3 className="inline-flex items-center gap-2 text-lg font-bold text-slate-900">
-              <FaExclamationTriangle className="text-amber-500" /> Quy tắc duyệt nhanh
-            </h3>
-            <p className="mt-2 text-sm text-slate-600">
-              Ưu tiên duyệt hồ sơ tài xế trước, sau đó mới duyệt phương tiện. Khi từ chối, nhập lý do cụ thể để tài xế sửa nhanh hơn.
-            </p>
-          </article>
-
-          <article className="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm backdrop-blur">
-            <h3 className="inline-flex items-center gap-2 text-lg font-bold text-slate-900">
-              <FaClock className="text-orange-500" /> Hoạt động gần đây
-            </h3>
-            <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              <li className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">Tự động đồng bộ số lượng hồ sơ đang chờ duyệt.</li>
-              <li className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">Phê duyệt hoặc từ chối được ghi nhận ngay trên dashboard.</li>
-              <li className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">Sử dụng Trung tâm phê duyệt để chuyển nhanh đến màn hình chi tiết.</li>
-            </ul>
-          </article>
-        </section>
       </div>
     </AdminLayout>
   );
