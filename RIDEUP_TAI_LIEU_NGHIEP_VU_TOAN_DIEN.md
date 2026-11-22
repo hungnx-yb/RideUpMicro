@@ -703,7 +703,7 @@ Dưới đây là kết quả đối chiếu và kiểm định chi tiết giữ
 
 # 9. HƯỚNG DẪN DÀNH CHO NGƯỜI MỚI (ONBOARDING GUIDE)
 
-### Bước 1: Khởi động Hệ thống Hạ tầng & Dịch vụ
+### Khởi động Hệ thống Hạ tầng & Dịch vụ
 1. Đảm bảo Docker đang chạy: MySQL (Port 3306), Redis (Port 6379), Apache Kafka (Port 9092).
 2. Khởi chạy `discovery-server` (Netflix Eureka Server tại Port 8761).
 3. Khởi chạy các service nghiệp vụ Spring Boot:
@@ -720,16 +720,3 @@ Dưới đây là kết quả đối chiếu và kiểm định chi tiết giữ
 6. Khởi chạy Web Admin `rideUpMicroUi` (`npm run dev` tại Port 5173).
 7. Khởi chạy Mobile App: Mở thư mục `rideup-customer-app` và `rideup-driver-app`, chạy `npx expo start`.
 
-### Bước 2: Kịch bản Thử nghiệm Luồng Nghiệp vụ Chuẩn (End-to-End Demo)
-1. **Đăng ký Tài xế & eKYC Sinh trắc học:** Mở Driver App $\rightarrow$ Nộp hồ sơ CCCD/GPLX, chụp ảnh selfie eKYC (AI kiểm tra Liveness Detection và so khớp FaceNet) $\rightarrow$ Mở Web Admin duyệt hồ sơ và duyệt xe.
-2. **Khai báo Tuyến & Stripe Connect:** Trên Driver App, chọn tỉnh hoạt động $\rightarrow$ Vào mục Ví liên kết tài khoản Stripe Connect Express (ở môi trường Test Mode bấm *Skip this form* để kích hoạt ngay).
-3. **Tạo Chuyến xe có Kiểm tra Khung giá:** Tài xế tạo chuyến xe liên tỉnh. Hệ thống tự động kiểm tra giá vé theo khung cước Km (`FareBoundaryService`). Nếu giá vé hợp lệ, chuyến được tạo ở trạng thái `OPEN`.
-4. **Khách Đặt vé & Duyệt 2 chiều:**
-   - Mở Customer App $\rightarrow$ Tìm kiếm chuyến xe.
-   - Chọn điểm đón/trả tinh gọn: Chọn Phường/Xã từ danh sách điểm dừng của chuyến xe và nhập địa chỉ chi tiết (số nhà, tên đường).
-   - Chọn thanh toán Thẻ Stripe $\rightarrow$ Hoàn tất giữ tiền thẻ qua Stripe PaymentSheet (tiền ở trạng thái `HOLDING`).
-   - Đơn vé chuyển sang `WAITING_DRIVER_APPROVAL`.
-   - Driver App nhận thông báo khẩn cấp kèm thông tin điểm đón chi tiết $\rightarrow$ Tài xế bấm **Duyệt (`APPROVE`)** $\rightarrow$ Ghế được trừ an toàn bằng Optimistic Locking, vé chuyển sang `CONFIRMED`.
-5. **Thử nghiệm Đề xuất Sửa vé:** Khách mở chi tiết vé bấm sửa điểm đón $\rightarrow$ Driver App nhận yêu cầu so sánh Before vs After $\rightarrow$ Tài xế bấm Duyệt $\rightarrow$ Lộ trình vé tự động cập nhật.
-6. **Thử nghiệm Sàn Chợ Nhu Cầu:** Khách tìm tuyến không có xe $\rightarrow$ Bấm "Đăng yêu cầu tìm xe" $\rightarrow$ Driver App thấy yêu cầu trên Chợ $\rightarrow$ Gửi lời mời ghép xe $\rightarrow$ Khách chấp nhận lời mời $\rightarrow$ Tự động tạo vé `CONFIRMED` và trừ ghế ngay.
-7. **Thử nghiệm Hoàn tất & Tự động Cấn trừ Nợ:** Tài xế hoàn thành cuốc xe Stripe $\rightarrow$ Tiền thẻ được capture thành `PAID` $\rightarrow$ Hệ thống tự động cấn trừ dư nợ cũ và chuyển số tiền thực nhận còn lại về tài khoản ngân hàng của tài xế qua Stripe Connect Payout.
