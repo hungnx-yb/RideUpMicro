@@ -42,7 +42,10 @@
           "enableGooglePay": false
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "reactCompiler": false
