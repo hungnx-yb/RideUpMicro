@@ -28,8 +28,12 @@ public class PaymentResponse {
     PaymentMethod method;
     PaymentStatus status;
     String transactionId;
-    String paymentUrl;
+    String clientSecret;
     String failureReason;
+
+    public String getPaymentUrl() {
+        return clientSecret;
+    }
     LocalDateTime paidAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
