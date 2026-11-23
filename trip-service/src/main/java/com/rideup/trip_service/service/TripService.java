@@ -289,9 +289,11 @@ public class TripService {
                                                   String endProvinceId,
                                                   String endWardId,
                                                   LocalDate date,
+                                                  LocalDate fromDate,
+                                                  LocalDate toDate,
                                                   Pageable pageable) {
 
-        Page<Trip> tripPage = tripRepository.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date, pageable);
+        Page<Trip> tripPage = tripRepository.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date, fromDate, toDate, pageable);
         List<Trip> trips = tripPage.getContent();
 
         List<String> ids = trips.stream()

@@ -87,9 +87,11 @@ public class TripController {
                                                        @RequestParam(required = false) String endProvinceId,
                                                        @RequestParam(required = false) String endWardId,
                                                        @RequestParam(required = false) LocalDate date,
+                                                       @RequestParam(required = false) LocalDate fromDate,
+                                                       @RequestParam(required = false) LocalDate toDate,
                                                        Pageable pageable
                                                        ){
-        PageResponse<TripResponse> pageResponse = tripService.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date, pageable);
+        PageResponse<TripResponse> pageResponse = tripService.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date, fromDate, toDate, pageable);
        return ApiResponse.<List<TripResponse>>builder()
                .result(pageResponse.getItems())
                .message("Trips retrieved successfully")

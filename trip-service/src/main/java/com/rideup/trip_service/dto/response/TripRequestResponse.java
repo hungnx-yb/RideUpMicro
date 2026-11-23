@@ -15,6 +15,8 @@ import java.util.List;
 public class TripRequestResponse {
     String id;
     String passengerId;
+    String passengerName;
+    String passengerPhone;
     UserResponse passenger; // Aggregated from identity-service via Feign
 
     String startProvinceId;

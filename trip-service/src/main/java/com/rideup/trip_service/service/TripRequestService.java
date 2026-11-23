@@ -82,6 +82,8 @@ public class TripRequestService {
         String userId = SecurityUtils.getCurrentUserId();
         TripRequest tripRequest = TripRequest.builder()
                 .passengerId(userId)
+                .passengerName(request.getPassengerName())
+                .passengerPhone(request.getPassengerPhone())
                 .startProvinceId(request.getStartProvinceId())
                 .startWardId(request.getStartWardId())
                 .endProvinceId(request.getEndProvinceId())

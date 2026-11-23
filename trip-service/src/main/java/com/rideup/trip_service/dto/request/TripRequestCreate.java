@@ -41,5 +41,8 @@ public class TripRequestCreate {
     @Min(value = 1, message = "At least 1 seat is required")
     Integer seatTotal;
 
+    String passengerName;
+    String passengerPhone;
+
     String note;
 }

@@ -25,7 +25,7 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
 
 
     @Override
-    public Page<Trip> getAllTrips(String startProvinceId, String startWardId, String endProvinceId, String endWardId, LocalDate date, Pageable pageable) {
+    public Page<Trip> getAllTrips(String startProvinceId, String startWardId, String endProvinceId, String endWardId, LocalDate date, LocalDate fromDate, LocalDate toDate, Pageable pageable) {
         StringBuilder baseQuery = new StringBuilder("""
             FROM trip t
             WHERE 1=1
@@ -72,7 +72,23 @@ public class TripRepositoryImpl implements TripRepositoryCustom {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        if (date != null) {
+        if (fromDate != null || toDate != null) {
+            LocalDate effFrom = fromDate != null ? fromDate : LocalDate.now();
+            LocalDateTime startOfRange = effFrom.isBefore(LocalDate.now())
+                    ? now
+                    : (effFrom.equals(LocalDate.now()) ? now : effFrom.atStartOfDay());
+
+            LocalDate effTo = toDate != null ? toDate : effFrom;
+            LocalDateTime endOfRange = effTo.plusDays(1).atStartOfDay();
+
+            baseQuery.append("""
+                AND t.departure_time >= :startOfRange
+                AND t.departure_time < :endOfRange
+            """);
+
+            params.put("startOfRange", startOfRange);
+            params.put("endOfRange", endOfRange);
+        } else if (date != null) {
             LocalDate queryDate = date.isBefore(LocalDate.now()) ? LocalDate.now() : date;
             LocalDateTime startOfDay = queryDate.equals(LocalDate.now()) ? now : queryDate.atStartOfDay();
             LocalDateTime endOfDay = queryDate.plusDays(1).atStartOfDay();
