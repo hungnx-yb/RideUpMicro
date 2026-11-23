@@ -51,18 +51,12 @@ public class Booking {
 
     BigDecimal totalAmount;
 
-    LocalDateTime reservedAt;
     LocalDateTime expiresAt;
 
-
     String pickupWardId;
-    Double pickupLat;
-    Double pickupLng;
     String pickupAddressText;
 
     String dropoffWardId;
-    Double dropoffLat;
-    Double dropoffLng;
     String dropoffAddressText;
 
     String passengerName;

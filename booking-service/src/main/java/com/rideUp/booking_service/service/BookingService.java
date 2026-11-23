@@ -131,7 +131,6 @@ public class BookingService {
             booking.setPaymentStatus(PaymentStatus.PENDING);
         }
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
-        booking.setReservedAt(now);
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
 
         // Đặt TTL (thời gian hết hạn) theo cấu hình SLA động (ADM-FEAT-03):
@@ -219,7 +218,6 @@ public class BookingService {
         booking.setTotalAmount(processResp.getPriceVnd().multiply(BigDecimal.valueOf(processResp.getSeatCount())));
         booking.setPaymentMethod(request.getPaymentMethod());
         booking.setPaymentStatus(PaymentStatus.PENDING);
-        booking.setReservedAt(now);
         if (request.getPaymentMethod() == PaymentMethod.CASH) {
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setExpiresAt(null);

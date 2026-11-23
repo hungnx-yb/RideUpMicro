@@ -69,13 +69,9 @@ public class BookingModificationService {
             log.info("Booking {} đang chờ tài xế duyệt -> Tự động cập nhật trực tiếp vào Booking", bookingId);
 
             booking.setPickupAddressText(request.getPickupAddressText());
-            booking.setPickupLat(request.getPickupLat());
-            booking.setPickupLng(request.getPickupLng());
             booking.setPickupWardId(request.getPickupWardId());
 
             booking.setDropoffAddressText(request.getDropoffAddressText());
-            booking.setDropoffLat(request.getDropoffLat());
-            booking.setDropoffLng(request.getDropoffLng());
             booking.setDropoffWardId(request.getDropoffWardId());
 
             if (StringUtils.hasText(request.getPassengerName())) {
@@ -96,19 +92,11 @@ public class BookingModificationService {
                     .customerId(savedBooking.getCustomerId())
                     .tripId(savedBooking.getTripId())
                     .oldPickupAddressText(booking.getPickupAddressText())
-                    .oldPickupLat(booking.getPickupLat())
-                    .oldPickupLng(booking.getPickupLng())
                     .oldDropoffAddressText(booking.getDropoffAddressText())
-                    .oldDropoffLat(booking.getDropoffLat())
-                    .oldDropoffLng(booking.getDropoffLng())
                     .oldNote(booking.getNote())
                     .newPickupAddressText(request.getPickupAddressText())
-                    .newPickupLat(request.getPickupLat())
-                    .newPickupLng(request.getPickupLng())
                     .newPickupWardId(request.getPickupWardId())
                     .newDropoffAddressText(request.getDropoffAddressText())
-                    .newDropoffLat(request.getDropoffLat())
-                    .newDropoffLng(request.getDropoffLng())
                     .newDropoffWardId(request.getDropoffWardId())
                     .newPassengerName(request.getPassengerName())
                     .newPassengerPhone(request.getPassengerPhone())
@@ -169,20 +157,12 @@ public class BookingModificationService {
                 .tripId(booking.getTripId())
                 // Snapshot cũ
                 .oldPickupAddressText(booking.getPickupAddressText())
-                .oldPickupLat(booking.getPickupLat())
-                .oldPickupLng(booking.getPickupLng())
                 .oldDropoffAddressText(booking.getDropoffAddressText())
-                .oldDropoffLat(booking.getDropoffLat())
-                .oldDropoffLng(booking.getDropoffLng())
                 .oldNote(booking.getNote())
                 // Dữ liệu mới đề xuất
                 .newPickupAddressText(request.getPickupAddressText())
-                .newPickupLat(request.getPickupLat())
-                .newPickupLng(request.getPickupLng())
                 .newPickupWardId(request.getPickupWardId())
                 .newDropoffAddressText(request.getDropoffAddressText())
-                .newDropoffLat(request.getDropoffLat())
-                .newDropoffLng(request.getDropoffLng())
                 .newDropoffWardId(request.getDropoffWardId())
                 .newPassengerName(request.getPassengerName())
                 .newPassengerPhone(request.getPassengerPhone())
@@ -261,13 +241,9 @@ public class BookingModificationService {
 
         // Cập nhật thông tin mới vào Booking
         booking.setPickupAddressText(modification.getNewPickupAddressText());
-        booking.setPickupLat(modification.getNewPickupLat());
-        booking.setPickupLng(modification.getNewPickupLng());
         booking.setPickupWardId(modification.getNewPickupWardId());
 
         booking.setDropoffAddressText(modification.getNewDropoffAddressText());
-        booking.setDropoffLat(modification.getNewDropoffLat());
-        booking.setDropoffLng(modification.getNewDropoffLng());
         booking.setDropoffWardId(modification.getNewDropoffWardId());
 
         if (StringUtils.hasText(modification.getNewPassengerName())) {
@@ -450,22 +426,14 @@ public class BookingModificationService {
                 .customerId(m.getCustomerId())
                 .tripId(m.getTripId())
                 .newPickupAddressText(m.getNewPickupAddressText())
-                .newPickupLat(m.getNewPickupLat())
-                .newPickupLng(m.getNewPickupLng())
                 .newPickupWardId(m.getNewPickupWardId())
                 .newDropoffAddressText(m.getNewDropoffAddressText())
-                .newDropoffLat(m.getNewDropoffLat())
-                .newDropoffLng(m.getNewDropoffLng())
                 .newDropoffWardId(m.getNewDropoffWardId())
                 .newPassengerName(m.getNewPassengerName())
                 .newPassengerPhone(m.getNewPassengerPhone())
                 .newNote(m.getNewNote())
                 .oldPickupAddressText(m.getOldPickupAddressText())
-                .oldPickupLat(m.getOldPickupLat())
-                .oldPickupLng(m.getOldPickupLng())
                 .oldDropoffAddressText(m.getOldDropoffAddressText())
-                .oldDropoffLat(m.getOldDropoffLat())
-                .oldDropoffLng(m.getOldDropoffLng())
                 .oldPassengerName(m.getOldPassengerName())
                 .oldPassengerPhone(m.getOldPassengerPhone())
                 .oldNote(m.getOldNote())
