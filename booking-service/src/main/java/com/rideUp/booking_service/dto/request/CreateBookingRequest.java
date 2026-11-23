@@ -30,23 +30,11 @@ public class CreateBookingRequest {
     @NotNull(message = "Payment method is required")
     PaymentMethod paymentMethod;
 
-    @NotNull(message = "Pickup latitude is required")
-    Double pickupLat;
-
-    @NotNull(message = "Pickup longitude is required")
-    Double pickupLng;
-
     @NotBlank(message = "Pickup ward id is required")
     String pickupWardId;
 
     @NotBlank(message = "Pickup address is required")
     String pickupAddressText;
-
-    @NotNull(message = "Dropoff latitude is required")
-    Double dropoffLat;
-
-    @NotNull(message = "Dropoff longitude is required")
-    Double dropoffLng;
 
     @NotBlank(message = "Dropoff ward id is required")
     String dropoffWardId;

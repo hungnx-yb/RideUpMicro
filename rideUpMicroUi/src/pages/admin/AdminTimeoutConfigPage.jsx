@@ -50,8 +50,8 @@ function AdminTimeoutConfigPage() {
     const errors = {};
     items.forEach((item) => {
       const value = Number(drafts[item.configKey]);
-      if (!Number.isInteger(value) || value < item.minMinutes || value > item.maxMinutes) {
-        errors[item.configKey] = `Cho phép ${item.minMinutes} - ${item.maxMinutes} phút`;
+      if (!Number.isInteger(value) || value < 0) {
+        errors[item.configKey] = "Vui lòng nhập số phút (>= 0)";
       }
     });
     return errors;
@@ -134,7 +134,7 @@ function AdminTimeoutConfigPage() {
                   <th className="py-3 pr-3">Mã cấu hình</th>
                   <th className="py-3 pr-3">Nghiệp vụ</th>
                   <th className="py-3 pr-3">Thời gian (phút)</th>
-                  <th className="py-3 pr-3">Giới hạn</th>
+                  <th className="py-3 pr-3">Mặc định</th>
                   <th className="py-3 pr-3">Khi quá hạn</th>
                   <th className="py-3 text-right">Thao tác</th>
                 </tr>
@@ -158,8 +158,7 @@ function AdminTimeoutConfigPage() {
                       <td className="py-4 pr-3">
                         <input
                           type="number"
-                          min={item.minMinutes}
-                          max={item.maxMinutes}
+                          min="0"
                           value={drafts[item.configKey] ?? ""}
                           onChange={(e) => setDrafts((prev) => ({ ...prev, [item.configKey]: e.target.value }))}
                           className={`${inputClass} w-28 ${error ? "border-red-400" : isChanged ? "border-orange-400" : ""}`}
@@ -169,8 +168,8 @@ function AdminTimeoutConfigPage() {
                         </p>
                       </td>
                       <td className="py-4 pr-3 text-slate-600">
-                        {item.minMinutes} - {item.maxMinutes} phút
-                        <p className="text-xs text-slate-400">Mặc định: {formatMinutes(item.defaultMinutes)}</p>
+                        <span className="font-medium text-slate-700">{formatMinutes(item.defaultMinutes)}</span>
+                        <p className="text-xs text-slate-400">({item.defaultMinutes} phút)</p>
                       </td>
                       <td className="max-w-[280px] py-4 pr-3 text-slate-600">{item.expireAction}</td>
                       <td className="py-4">

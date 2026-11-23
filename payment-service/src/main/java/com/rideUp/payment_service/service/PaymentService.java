@@ -90,7 +90,7 @@ public class PaymentService {
 								.putMetadata("paymentId", savedPayment.getId())
 								.build();
 				PaymentIntent paymentIntent = PaymentIntent.create(params);
-				savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); 
+				savedPayment.setClientSecret(paymentIntent.getClientSecret()); 
 				savedPayment.setTransactionId(paymentIntent.getId());
 				savedPayment = paymentRepository.save(savedPayment);
 			} catch (StripeException e) {
@@ -214,22 +214,26 @@ public class PaymentService {
 		Payment payment = paymentRepository.findByBookingId(bookingId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-		if (payment.getMethod() != PaymentMethod.STRIPE || (payment.getStatus() != PaymentStatus.HOLDING && payment.getStatus() != PaymentStatus.PENDING)) {
-			if (payment.getMethod() == PaymentMethod.CASH) {
-				payment.setStatus(PaymentStatus.VOIDED);
-				paymentRepository.save(payment);
-			}
+		if (payment.getStatus() == PaymentStatus.VOIDED) {
 			return;
 		}
 
-		try {
-			PaymentIntent paymentIntent = PaymentIntent.retrieve(payment.getTransactionId());
-			paymentIntent.cancel();
-			payment.setStatus(PaymentStatus.VOIDED);
-			paymentRepository.save(payment);
-		} catch (StripeException e) {
-			log.error("Failed to cancel payment for bookingId={}", bookingId, e);
+		if (payment.getMethod() == PaymentMethod.STRIPE) {
+			if (payment.getTransactionId() != null && !payment.getTransactionId().isBlank()
+					&& (payment.getStatus() == PaymentStatus.HOLDING || payment.getStatus() == PaymentStatus.PENDING)) {
+				try {
+					PaymentIntent paymentIntent = PaymentIntent.retrieve(payment.getTransactionId());
+					paymentIntent.cancel();
+					log.info("Cancelled Stripe PaymentIntent {} for bookingId={}", payment.getTransactionId(), bookingId);
+				} catch (Exception e) {
+					log.warn("Failed to cancel Stripe PaymentIntent for bookingId={}: {}", bookingId, e.getMessage());
+				}
+			}
 		}
+
+		payment.setStatus(PaymentStatus.VOIDED);
+		paymentRepository.save(payment);
+		log.info("Payment for bookingId={} marked VOIDED", bookingId);
 	}
 
     @Transactional
@@ -250,8 +254,12 @@ public class PaymentService {
             throw new AppException(ErrorCode.INVALID_PAYMENT_AMOUNT); // Cannot deposit if no debt
         }
 
+        // Hủy các lần nạp nợ trước đó còn dang dở (tài xế hủy PaymentSheet, đóng app...)
+        voidPendingDeposits(driverId);
+
+        // bookingId là unique nên mỗi lần nạp phải có mã riêng, nếu không lần nạp thứ 2 sẽ lỗi trùng khóa
         Payment payment = Payment.builder()
-                .bookingId("DEPOSIT-" + driverId) // Mock bookingId for deposit
+                .bookingId(depositPrefix(driverId) + UUID.randomUUID())
                 .correlationId(UUID.randomUUID().toString())
                 .amount(debt)
                 .method(PaymentMethod.STRIPE)
@@ -270,7 +278,7 @@ public class PaymentService {
                             .putMetadata("driverId", driverId)
                             .build();
             PaymentIntent paymentIntent = PaymentIntent.create(params);
-            savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); 
+            savedPayment.setClientSecret(paymentIntent.getClientSecret()); 
             savedPayment.setTransactionId(paymentIntent.getId());
             savedPayment = paymentRepository.save(savedPayment);
         } catch (StripeException e) {
@@ -279,6 +287,33 @@ public class PaymentService {
         }
 
         return modelMapper.map(savedPayment, PaymentResponse.class);
+    }
+
+    private String depositPrefix(String driverId) {
+        return "DEPOSIT-" + driverId + "-";
+    }
+
+    /**
+     * Đánh dấu VOIDED các lần nạp nợ PENDING cũ của tài xế và hủy PaymentIntent tương ứng trên Stripe.
+     * Nếu Stripe không cho hủy (ví dụ khách đã trả xong nhưng chưa confirm) thì giữ nguyên để confirmDeposit xử lý.
+     */
+    private void voidPendingDeposits(String driverId) {
+        // Prefix "DEPOSIT-{driverId}" cũng khớp các bản ghi cũ dùng mã không có hậu tố
+        var pending = paymentRepository.findByBookingIdStartingWithAndStatus(
+                "DEPOSIT-" + driverId, PaymentStatus.PENDING);
+        for (Payment old : pending) {
+            if (old.getTransactionId() != null && !old.getTransactionId().isBlank()) {
+                try {
+                    PaymentIntent.retrieve(old.getTransactionId()).cancel();
+                } catch (Exception e) {
+                    log.warn("Cannot cancel old deposit PaymentIntent {}: {}", old.getTransactionId(), e.getMessage());
+                    continue;
+                }
+            }
+            old.setStatus(PaymentStatus.VOIDED);
+            paymentRepository.save(old);
+            log.info("Voided stale deposit payment {} for driver {}", old.getId(), driverId);
+        }
     }
 
     @Transactional

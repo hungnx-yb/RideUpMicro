@@ -38,13 +38,9 @@ public class BookingModification {
 
     // Proposed new details
     String newPickupAddressText;
-    Double newPickupLat;
-    Double newPickupLng;
     String newPickupWardId;
 
     String newDropoffAddressText;
-    Double newDropoffLat;
-    Double newDropoffLng;
     String newDropoffWardId;
 
     String newPassengerName;
@@ -55,11 +51,7 @@ public class BookingModification {
 
     // Old snapshot details (audit & before/after comparison)
     String oldPickupAddressText;
-    Double oldPickupLat;
-    Double oldPickupLng;
     String oldDropoffAddressText;
-    Double oldDropoffLat;
-    Double oldDropoffLng;
     String oldPassengerName;
     String oldPassengerPhone;
 

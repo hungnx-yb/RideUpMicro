@@ -153,14 +153,6 @@ export async function getRevenueKpisApi({ fromDate, toDate, paymentMethod } = {}
   return unwrapApiResponse(response);
 }
 
-export async function exportRevenueExcelApi({ fromDate, toDate, paymentMethod } = {}) {
-  const response = await axiosClient.get(`${bookingAdminBase}/admin/analytics/export-revenue`, {
-    params: { fromDate, toDate, paymentMethod: paymentMethod || "ALL" },
-    responseType: "blob",
-  });
-  return response.data;
-}
-
 // ---------- ADM-FEAT-03: Timeout SLA (booking-service) ----------
 export async function getSystemTimeoutsApi() {
   const response = await axiosClient.get(`${bookingAdminBase}/admin/system-timeouts`);
@@ -221,11 +213,3 @@ export async function estimateFareApi(startProvinceId, endProvinceId) {
   return unwrapApiResponse(response);
 }
 
-// ---------- ADM-FEAT-06: Nhật ký kiểm toán (identity-service) ----------
-export async function getAuditLogsApi(params = {}) {
-  const cleaned = Object.fromEntries(
-    Object.entries(params).filter(([, value]) => value !== "" && value !== null && value !== undefined),
-  );
-  const response = await axiosClient.get("/admin/audit-logs", { params: cleaned });
-  return unwrapApiResponse(response);
-}

@@ -142,16 +142,10 @@ const BookingDetailScreen = ({ route, navigation }) => {
   const [cancelReason, setCancelReason] = useState('Thay đổi kế hoạch cá nhân');
   const [customCancelReason, setCustomCancelReason] = useState('');
   const [submittingCancel, setSubmittingCancel] = useState(false);
-  const [showPickupMap, setShowPickupMap] = useState(false);
-  const [showDropoffMap, setShowDropoffMap] = useState(false);
   const [editForm, setEditForm] = useState({
     pickupDetailAddress: '',
-    pickupLat: null,
-    pickupLng: null,
     pickupWardId: '',
     dropoffDetailAddress: '',
-    dropoffLat: null,
-    dropoffLng: null,
     dropoffWardId: '',
     passengerName: '',
     passengerPhone: '',
@@ -333,19 +327,13 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
     setEditForm({
       pickupDetailAddress: parsedPickup.detail || '',
-      pickupLat: booking.pickupLat != null ? Number(booking.pickupLat) : 21.0285,
-      pickupLng: booking.pickupLng != null ? Number(booking.pickupLng) : 105.8542,
       pickupWardId: String(booking.pickupWardId || ''),
       dropoffDetailAddress: parsedDropoff.detail || '',
-      dropoffLat: booking.dropoffLat != null ? Number(booking.dropoffLat) : 20.8449,
-      dropoffLng: booking.dropoffLng != null ? Number(booking.dropoffLng) : 106.6881,
       dropoffWardId: String(booking.dropoffWardId || ''),
       passengerName: booking.passengerName || booking.userName || '',
       passengerPhone: booking.passengerPhone || booking.userPhone || '',
       note: booking.note || '',
     });
-    setShowPickupMap(false);
-    setShowDropoffMap(false);
     setIsModalOpen(true);
   };
 
@@ -375,12 +363,8 @@ const BookingDetailScreen = ({ route, navigation }) => {
     try {
       const payload = {
         pickupAddressText: fullPickup,
-        pickupLat: editForm.pickupLat != null ? Number(editForm.pickupLat) : 21.0285,
-        pickupLng: editForm.pickupLng != null ? Number(editForm.pickupLng) : 105.8542,
         pickupWardId: String(editForm.pickupWardId || booking.pickupWardId || '0'),
         dropoffAddressText: fullDropoff,
-        dropoffLat: editForm.dropoffLat != null ? Number(editForm.dropoffLat) : 20.8449,
-        dropoffLng: editForm.dropoffLng != null ? Number(editForm.dropoffLng) : 106.6881,
         dropoffWardId: String(editForm.dropoffWardId || booking.dropoffWardId || '0'),
         passengerName: editForm.passengerName.trim(),
         passengerPhone: editForm.passengerPhone.trim(),
@@ -954,45 +938,10 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
                 {/* Thanh Địa chỉ chi tiết (Được phép sửa) */}
                 <View style={s.formGroup}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={s.formLabel}>
-                      ĐỊA CHỈ CHI TIẾT (SỐ NHÀ, TÊN ĐƯỜNG) <Text style={{ color: COLORS.red }}>*</Text>
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setShowPickupMap(prev => !prev)}
-                      style={s.mapToggleBtn}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name={showPickupMap ? "chevron-up" : "map-outline"} size={13} color={COLORS.primary} />
-                      <Text style={s.mapToggleBtnText}>{showPickupMap ? "Đóng bản đồ" : "Chọn trên bản đồ"}</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <Text style={s.formLabel}>
+                    ĐỊA CHỈ CHI TIẾT (SỐ NHÀ, TÊN ĐƯỜNG) <Text style={{ color: COLORS.red }}>*</Text>
+                  </Text>
 
-                  {showPickupMap && (
-                    <View style={{ marginBottom: 12 }}>
-                      <LocationMapPicker
-                        title="Ghim vị trí điểm đón"
-                        wardOptions={pickupWards.length > 0 ? pickupWards : (booking.pickupWardId ? [{ id: String(booking.pickupWardId), name: pickupWardName || 'Khu vực đón' }] : [])}
-                        wardId={String(editForm.pickupWardId || '')}
-                        onWardChange={(id) => setEditForm(p => ({ ...p, pickupWardId: id }))}
-                        value={{
-                          lat: editForm.pickupLat,
-                          lng: editForm.pickupLng,
-                          addressText: editForm.pickupDetailAddress
-                        }}
-                        onChange={(loc) => {
-                          const parsed = parseAddressComponents(loc.addressText, pickupDisplayWard, pickupDisplayProvince);
-                          setEditForm(p => ({
-                            ...p,
-                            pickupLat: loc.lat,
-                            pickupLng: loc.lng,
-                            pickupDetailAddress: parsed.detail || loc.addressText || p.pickupDetailAddress
-                          }));
-                        }}
-                        accentColor={COLORS.primary}
-                      />
-                    </View>
-                  )}
 
                   <TextInput
                     style={s.formInput}
@@ -1050,45 +999,9 @@ const BookingDetailScreen = ({ route, navigation }) => {
 
                 {/* Thanh Địa chỉ chi tiết (Được phép sửa) */}
                 <View style={s.formGroup}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={[s.formLabel, { color: COLORS.orange }]}>
-                      ĐỊA CHỈ CHI TIẾT (SỐ NHÀ, TÊN ĐƯỜNG) <Text style={{ color: COLORS.red }}>*</Text>
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setShowDropoffMap(prev => !prev)}
-                      style={[s.mapToggleBtn, { borderColor: COLORS.orange, backgroundColor: '#FFF7ED' }]}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name={showDropoffMap ? "chevron-up" : "map-outline"} size={13} color={COLORS.orange} />
-                      <Text style={[s.mapToggleBtnText, { color: COLORS.orange }]}>{showDropoffMap ? "Đóng bản đồ" : "Chọn trên bản đồ"}</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {showDropoffMap && (
-                    <View style={{ marginBottom: 12 }}>
-                      <LocationMapPicker
-                        title="Ghim vị trí điểm trả"
-                        wardOptions={dropoffWards.length > 0 ? dropoffWards : (booking.dropoffWardId ? [{ id: String(booking.dropoffWardId), name: dropoffWardName || 'Khu vực trả' }] : [])}
-                        wardId={String(editForm.dropoffWardId || '')}
-                        onWardChange={(id) => setEditForm(p => ({ ...p, dropoffWardId: id }))}
-                        value={{
-                          lat: editForm.dropoffLat,
-                          lng: editForm.dropoffLng,
-                          addressText: editForm.dropoffDetailAddress
-                        }}
-                        onChange={(loc) => {
-                          const parsed = parseAddressComponents(loc.addressText, dropoffDisplayWard, dropoffDisplayProvince);
-                          setEditForm(p => ({
-                            ...p,
-                            dropoffLat: loc.lat,
-                            dropoffLng: loc.lng,
-                            dropoffDetailAddress: parsed.detail || loc.addressText || p.dropoffDetailAddress
-                          }));
-                        }}
-                        accentColor={COLORS.orange}
-                      />
-                    </View>
-                  )}
+                  <Text style={[s.formLabel, { color: COLORS.orange }]}>
+                    ĐỊA CHỈ CHI TIẾT (SỐ NHÀ, TÊN ĐƯỜNG) <Text style={{ color: COLORS.red }}>*</Text>
+                  </Text>
 
                   <TextInput
                     style={s.formInput}

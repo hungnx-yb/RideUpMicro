@@ -19,13 +19,9 @@ public class BookingModificationResponse {
     String tripId;
 
     String newPickupAddressText;
-    Double newPickupLat;
-    Double newPickupLng;
     String newPickupWardId;
 
     String newDropoffAddressText;
-    Double newDropoffLat;
-    Double newDropoffLng;
     String newDropoffWardId;
 
     String newPassengerName;
@@ -33,11 +29,7 @@ public class BookingModificationResponse {
     String newNote;
 
     String oldPickupAddressText;
-    Double oldPickupLat;
-    Double oldPickupLng;
     String oldDropoffAddressText;
-    Double oldDropoffLat;
-    Double oldDropoffLng;
     String oldPassengerName;
     String oldPassengerPhone;
     String oldNote;

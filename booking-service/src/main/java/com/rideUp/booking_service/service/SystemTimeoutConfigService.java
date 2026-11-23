@@ -97,7 +97,7 @@ public class SystemTimeoutConfigService {
     @Transactional
     public SystemTimeoutConfigResponse update(String configKey, Integer valueMinutes) {
         TimeoutConfigKey key = parseKey(configKey);
-        if (valueMinutes == null || valueMinutes < key.getMinMinutes() || valueMinutes > key.getMaxMinutes()) {
+        if (valueMinutes == null || valueMinutes < 0) {
             throw new AppException(ErrorCode.INVALID_TIMEOUT_CONFIG);
         }
 
@@ -129,10 +129,8 @@ public class SystemTimeoutConfigService {
     @Transactional
     public List<SystemTimeoutConfigResponse> updateAll(List<UpdateSystemTimeoutRequest> requests) {
         for (UpdateSystemTimeoutRequest req : requests) {
-            TimeoutConfigKey key = parseKey(req.getConfigKey());
-            if (req.getValueMinutes() == null
-                    || req.getValueMinutes() < key.getMinMinutes()
-                    || req.getValueMinutes() > key.getMaxMinutes()) {
+            parseKey(req.getConfigKey());
+            if (req.getValueMinutes() == null || req.getValueMinutes() < 0) {
                 throw new AppException(ErrorCode.INVALID_TIMEOUT_CONFIG);
             }
         }
@@ -171,7 +169,7 @@ public class SystemTimeoutConfigService {
         if (value == null) {
             return key.getDefaultMinutes();
         }
-        return Math.max(key.getMinMinutes(), Math.min(key.getMaxMinutes(), value));
+        return Math.max(0, value);
     }
 
     private SystemTimeoutConfigResponse toResponse(TimeoutConfigKey key, SystemTimeoutConfig stored) {
@@ -181,8 +179,8 @@ public class SystemTimeoutConfigService {
                 .valueMinutes(stored != null && stored.getValueMinutes() != null
                         ? stored.getValueMinutes() : key.getDefaultMinutes())
                 .defaultMinutes(key.getDefaultMinutes())
-                .minMinutes(key.getMinMinutes())
-                .maxMinutes(key.getMaxMinutes())
+                .minMinutes(0)
+                .maxMinutes(null)
                 .ownerService(key.getOwnerService())
                 .expireAction(key.getExpireAction())
                 .updatedBy(stored != null ? stored.getUpdatedBy() : null)

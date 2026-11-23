@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { Client } from '@stomp/stompjs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../config/api';
@@ -38,6 +39,17 @@ class NotificationSocketService {
               } catch (e) { console.error('Parse notification error', e); }
             }
           });
+
+          // ADM-FEAT-04: Thông báo phát sóng từ Quản trị viên (Popup realtime)
+          const showAnnouncement = (message) => {
+            try {
+              const data = JSON.parse(message.body || '{}');
+              if (data.targetRole && !['ALL', 'CUSTOMER', 'DIRECT'].includes(data.targetRole)) return;
+              Alert.alert(data.title || 'Thông báo từ RideUp', data.summary || data.content || '');
+            } catch (e) { console.error('Parse announcement error', e); }
+          };
+          this.client.subscribe('/topic/announcements', showAnnouncement);
+          this.client.subscribe('/user/queue/announcements', showAnnouncement);
         },
         onStompError: (frame) => {
           this.isConnected = false;

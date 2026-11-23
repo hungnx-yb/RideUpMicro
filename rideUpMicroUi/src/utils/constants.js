@@ -1,1 +1,1 @@
-export const APP_NAME = "RideUp Micro UI";
+export const APP_NAME = "RideUp Admin Portal";

@@ -32,16 +32,11 @@ public class BookingResponse {
     PaymentStatus paymentStatus;
 
     Integer seatCount;
-    BigDecimal pricePerSeat;
     BigDecimal totalAmount;
 
-    Double pickupLat;
-    Double pickupLng;
     String pickupWardId;
     String pickupAddressText;
 
-    Double dropoffLat;
-    Double dropoffLng;
     String dropoffWardId;
     String dropoffAddressText;
 
@@ -52,7 +47,6 @@ public class BookingResponse {
     String userName;
 
     String note;
-    LocalDateTime reservedAt;
     LocalDateTime expiresAt;
     LocalDateTime cancelledAt;
     String cancelReason;

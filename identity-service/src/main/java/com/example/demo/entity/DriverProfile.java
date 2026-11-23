@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -23,8 +24,16 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class DriverProfile {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue(generator = "driver-profile-id-generator")
+    @GenericGenerator(name = "driver-profile-id-generator", type = com.example.demo.util.DriverProfileIdGenerator.class)
     String id;
+
+    @PrePersist
+    public void ensureId() {
+        if (this.id == null || this.id.isBlank()) {
+            this.id = com.example.demo.util.IdStandardizer.generateDriverProfileId();
+        }
+    }
     String cccd;
     String cccdImageFront;
     String cccdImageBack;

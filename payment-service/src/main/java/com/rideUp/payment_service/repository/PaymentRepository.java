@@ -7,4 +7,6 @@ import java.util.Optional;
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, String> {
     Optional<Payment> findByBookingId(String bookingId);
+
+    java.util.List<Payment> findByBookingIdStartingWithAndStatus(String bookingIdPrefix, com.rideUp.payment_service.enums.PaymentStatus status);
 }

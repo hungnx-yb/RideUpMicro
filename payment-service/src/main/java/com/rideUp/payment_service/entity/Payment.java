@@ -49,7 +49,7 @@ public class Payment {
     String transactionId;
 
     @Column(columnDefinition = "TEXT")
-    String paymentUrl;
+    String clientSecret;
 
     LocalDateTime paidAt;
 

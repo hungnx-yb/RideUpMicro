@@ -1,6 +1,7 @@
 package com.rideUp.booking_service.entity;
 
 import com.rideUp.booking_service.enums.BookingStatus;
+import com.rideUp.booking_service.enums.PaymentMethod;
 import com.rideUp.booking_service.enums.PaymentStatus;
 
 import jakarta.persistence.*;
@@ -39,27 +40,23 @@ public class Booking {
     String paymentId;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method")
+    PaymentMethod paymentMethod;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     PaymentStatus paymentStatus;
 
     Integer seatCount;
 
-    BigDecimal pricePerSeat;
-
     BigDecimal totalAmount;
 
-    LocalDateTime reservedAt;
     LocalDateTime expiresAt;
 
-
     String pickupWardId;
-    Double pickupLat;
-    Double pickupLng;
     String pickupAddressText;
 
     String dropoffWardId;
-    Double dropoffLat;
-    Double dropoffLng;
     String dropoffAddressText;
 
     String passengerName;
@@ -73,8 +70,6 @@ public class Booking {
     /** ADM-FEAT-02: thời điểm hoàn thành chuyến (phục vụ thống kê doanh thu theo kỳ) */
     @Column(name = "completed_at")
     LocalDateTime completedAt;
-
-    Integer tripVersionAtReserve;
 
     @Version
     Integer version;
