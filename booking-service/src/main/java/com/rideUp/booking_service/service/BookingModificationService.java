@@ -432,7 +432,7 @@ public class BookingModificationService {
                                 .customerId(mod.getCustomerId())
                                 .tripId(mod.getTripId())
                                 .status(ModificationStatus.EXPIRED)
-                                .reason("Yêu cầu hết hạn do tài xế không phản hồi trong 15 phút")
+                                .reason("Yêu cầu hết hạn do tài xế không phản hồi trong thời hạn quy định")
                                 .resolvedAt(now)
                                 .correlationId(UUID.randomUUID().toString())
                                 .build()

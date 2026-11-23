@@ -27,11 +27,12 @@ public class TripLifecycleScheduler {
 
     TripRepository tripRepository;
     TripServicePublisher tripServicePublisher;
+    MarketplaceTimeoutReader timeoutReader;
 
     /**
      * Quét định kỳ mỗi 1 phút:
-     * 1. Hủy chuyến nếu quá 1 tiếng sau giờ khởi hành mà tài xế chưa bấm Bắt đầu (OPEN/FULL -> CANCELED).
-     * 2. Tự động hoàn thành chuyến nếu quá 30 phút sau thời gian đến dự kiến mà tài xế chưa bấm Hoàn thành (STARTED -> COMPLETED).
+     * 1. Hủy chuyến nếu quá hạn sau giờ khởi hành theo cấu hình SLA của Admin mà tài xế chưa bấm Bắt đầu (OPEN/FULL -> CANCELED).
+     * 2. Tự động hoàn thành chuyến nếu quá hạn sau thời gian đến dự kiến theo cấu hình SLA của Admin mà tài xế chưa bấm Hoàn thành (STARTED -> COMPLETED).
      */
     @Scheduled(cron = "0 */1 * * * *")
     @SchedulerLock(name = "TripLifecycleScheduler_sweepTripLifecycle", lockAtLeastFor = "20s", lockAtMostFor = "50s")
@@ -39,26 +40,28 @@ public class TripLifecycleScheduler {
     public void sweepTripLifecycle() {
         LocalDateTime now = LocalDateTime.now();
 
-        // 1. Quá 1 tiếng sau giờ khởi hành: Tự động hủy chuyến, hoàn tiền cho khách
+        // 1. Quá hạn sau giờ khởi hành: Tự động hủy chuyến, hoàn tiền cho khách
         cancelUnstartedTrips(now);
 
-        // 2. Quá 30 phút sau giờ đến dự kiến: Tự động hoàn thành chuyến và quyết toán tiền
+        // 2. Quá hạn sau giờ đến dự kiến: Tự động hoàn thành chuyến và quyết toán tiền
         autoCompleteFinishedTrips(now);
     }
 
     private void cancelUnstartedTrips(LocalDateTime now) {
-        LocalDateTime unstartedCutoff = now.minusHours(1);
+        int cancelMinutes = timeoutReader.getTripUnstartedAutoCancelMinutes();
+        LocalDateTime unstartedCutoff = now.minusMinutes(cancelMinutes);
         List<Trip> unstartedTrips = tripRepository.findByStatusInAndDepartureTimeLessThanEqual(
                 List.of(TripStatus.OPEN, TripStatus.FULL),
                 unstartedCutoff
         );
 
         if (!unstartedTrips.isEmpty()) {
-            log.info("[TripLifecycleScheduler] Found {} unstarted trips past 1 hour from departureTime to cancel", unstartedTrips.size());
+            log.info("[TripLifecycleScheduler] Found {} unstarted trips past {} minutes from departureTime to cancel",
+                    unstartedTrips.size(), cancelMinutes);
             for (Trip trip : unstartedTrips) {
                 try {
                     trip.setStatus(TripStatus.CANCELED);
-                    trip.setCancelReason("Tự động hủy chuyến: Quá 1 tiếng sau giờ khởi hành mà tài xế không bắt đầu chuyến");
+                    trip.setCancelReason("Tự động hủy chuyến: Quá " + cancelMinutes + " phút sau giờ khởi hành mà tài xế không bắt đầu chuyến");
                     trip.setCancelledAt(now);
                     tripRepository.save(trip);
 
@@ -71,8 +74,8 @@ public class TripLifecycleScheduler {
                             .cancelledAt(trip.getCancelledAt())
                             .build();
                     tripServicePublisher.publishTripCancelled(event);
-                    log.info("[TripLifecycleScheduler] Auto-cancelled tripId={} due to no-start after 1 hour from departureTime={}",
-                            trip.getId(), trip.getDepartureTime());
+                    log.info("[TripLifecycleScheduler] Auto-cancelled tripId={} due to no-start after {} minutes from departureTime={}",
+                            trip.getId(), cancelMinutes, trip.getDepartureTime());
                 } catch (Exception ex) {
                     log.error("[TripLifecycleScheduler] Failed to auto-cancel tripId={}: {}", trip.getId(), ex.getMessage(), ex);
                 }
@@ -81,13 +84,16 @@ public class TripLifecycleScheduler {
     }
 
     private void autoCompleteFinishedTrips(LocalDateTime now) {
-        LocalDateTime arrivalCutoff = now.minusMinutes(30);
-        LocalDateTime departureFallbackCutoff = now.minusHours(4);
+        int completeMinutes = timeoutReader.getTripAutoCompleteMinutes();
+        LocalDateTime arrivalCutoff = now.minusMinutes(completeMinutes);
+        // Fallback: nếu không có estimatedArrivalTime, dùng 4 giờ hoặc max(4h, completeMinutes)
+        LocalDateTime departureFallbackCutoff = now.minusMinutes(Math.max(240, completeMinutes * 2));
 
         List<Trip> tripsToComplete = tripRepository.findStartedTripsToComplete(arrivalCutoff, departureFallbackCutoff);
 
         if (!tripsToComplete.isEmpty()) {
-            log.info("[TripLifecycleScheduler] Found {} started trips past 30 minutes from estimatedArrivalTime to auto-complete", tripsToComplete.size());
+            log.info("[TripLifecycleScheduler] Found {} started trips past {} minutes from estimatedArrivalTime to auto-complete",
+                    tripsToComplete.size(), completeMinutes);
             for (Trip trip : tripsToComplete) {
                 try {
                     trip.setStatus(TripStatus.COMPLETED);

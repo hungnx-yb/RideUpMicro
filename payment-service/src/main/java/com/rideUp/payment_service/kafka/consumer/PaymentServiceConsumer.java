@@ -5,12 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rideUp.payment_service.dto.event.BookingCancellRequestEvent;
 import com.rideUp.payment_service.dto.event.PaymentRequestedEvent;
 import com.rideUp.payment_service.dto.request.CreatePaymentRequest;
-import com.rideUp.payment_service.dto.request.RefundRequest;
 import com.rideUp.payment_service.enums.PaymentMethod;
 import com.rideUp.payment_service.exception.AppException;
 import com.rideUp.payment_service.exception.ErrorCode;
 import com.rideUp.payment_service.service.PaymentService;
-import com.rideUp.payment_service.service.RefundService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -32,7 +30,6 @@ public class PaymentServiceConsumer {
 
     PaymentService paymentService;
     ObjectMapper objectMapper;
-    RefundService refundService;
     com.rideUp.payment_service.service.PayoutService payoutService;
     com.rideUp.payment_service.repository.PaymentRepository paymentRepository;
 
@@ -95,18 +92,11 @@ public class PaymentServiceConsumer {
         log.info("[BookingCancellRequest] eventId={}, bookingId={}, correlationId={}",
                 event.getEventId(), event.getBookingId(), event.getCorrelationId());
         try {
-            refundService.refundPayment(
-                RefundRequest.builder()
-                    .bookingId(event.getBookingId())
-                    .correlationId(event.getCorrelationId())
-                    .build()
-            );
+            paymentService.cancelPayment(event.getBookingId());
         } catch (AppException ex) {
             if (ex.getErrorCode() == ErrorCode.PAYMENT_NOT_FOUND
-                || ex.getErrorCode() == ErrorCode.PAYMENT_STATUS_INVALID
-                || ex.getErrorCode() == ErrorCode.PAYMENT_ALREADY_REFUNDED
-                || ex.getErrorCode() == ErrorCode.REFUND_FAILED) {
-                log.info("Skip refund for bookingId={} due to {}, correlationId={}",
+                || ex.getErrorCode() == ErrorCode.PAYMENT_STATUS_INVALID) {
+                log.info("Skip cancel payment for bookingId={} due to {}, correlationId={}",
                     event.getBookingId(), ex.getErrorCode(), event.getCorrelationId());
                 ack.acknowledge(); // Lỗi nghiệp vụ đã biết -> bỏ qua
                 return;

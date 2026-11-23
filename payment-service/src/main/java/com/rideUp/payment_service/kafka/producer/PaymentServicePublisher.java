@@ -6,7 +6,6 @@ import com.rideUp.payment_service.dto.event.PaymentCompletedEvent;
 import com.rideUp.payment_service.dto.event.PaymentFailedEvent;
 import com.rideUp.payment_service.dto.event.RefundCompletedEvent;
 import com.rideUp.payment_service.entity.Payment;
-import com.rideUp.payment_service.entity.Refund;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -79,24 +78,22 @@ public class PaymentServicePublisher {
         }
     }
 
-
-    public void publishRefundCompleted(Refund refund, String bookingId) {
+    public void publishRefundCompleted(String bookingId, String paymentId, String refundId, String correlationId) {
         RefundCompletedEvent event = RefundCompletedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
-                .correlationId(refund.getCorrelationId())
+                .correlationId(correlationId)
                 .bookingId(bookingId)
-                .refundId(refund.getId())
-                .paymentId(refund.getPayment().getId())
+                .refundId(refundId)
+                .paymentId(paymentId)
                 .processedAt(LocalDateTime.now())
                 .build();
 
-        try{
+        try {
             String payload = objectMapper.writeValueAsString(event);
             kafkaTemplate.send(refundCompletedTopic, event.getBookingId(), payload);
-            log.info("Published RefundCompletedEvent eventId={}, bookingId={}, refundId={}, correlationId={}",
+            log.info("Published RefundCompletedEvent (void) eventId={}, bookingId={}, refundId={}, correlationId={}",
                     event.getEventId(), event.getBookingId(), event.getRefundId(), event.getCorrelationId());
-        }
-        catch (JsonProcessingException ex) {
+        } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize RefundCompletedEvent", ex);
         }
     }

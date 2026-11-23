@@ -214,22 +214,26 @@ public class PaymentService {
 		Payment payment = paymentRepository.findByBookingId(bookingId)
 				.orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
-		if (payment.getMethod() != PaymentMethod.STRIPE || (payment.getStatus() != PaymentStatus.HOLDING && payment.getStatus() != PaymentStatus.PENDING)) {
-			if (payment.getMethod() == PaymentMethod.CASH) {
-				payment.setStatus(PaymentStatus.VOIDED);
-				paymentRepository.save(payment);
-			}
+		if (payment.getStatus() == PaymentStatus.VOIDED) {
 			return;
 		}
 
-		try {
-			PaymentIntent paymentIntent = PaymentIntent.retrieve(payment.getTransactionId());
-			paymentIntent.cancel();
-			payment.setStatus(PaymentStatus.VOIDED);
-			paymentRepository.save(payment);
-		} catch (StripeException e) {
-			log.error("Failed to cancel payment for bookingId={}", bookingId, e);
+		if (payment.getMethod() == PaymentMethod.STRIPE) {
+			if (payment.getTransactionId() != null && !payment.getTransactionId().isBlank()
+					&& (payment.getStatus() == PaymentStatus.HOLDING || payment.getStatus() == PaymentStatus.PENDING)) {
+				try {
+					PaymentIntent paymentIntent = PaymentIntent.retrieve(payment.getTransactionId());
+					paymentIntent.cancel();
+					log.info("Cancelled Stripe PaymentIntent {} for bookingId={}", payment.getTransactionId(), bookingId);
+				} catch (Exception e) {
+					log.warn("Failed to cancel Stripe PaymentIntent for bookingId={}: {}", bookingId, e.getMessage());
+				}
+			}
 		}
+
+		payment.setStatus(PaymentStatus.VOIDED);
+		paymentRepository.save(payment);
+		log.info("Payment for bookingId={} marked VOIDED", bookingId);
 	}
 
     @Transactional

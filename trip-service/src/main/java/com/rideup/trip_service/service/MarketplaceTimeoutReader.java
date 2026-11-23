@@ -23,18 +23,40 @@ public class MarketplaceTimeoutReader {
     private static final int MIN_TTL_MINUTES = 30;
     private static final int MAX_TTL_MINUTES = 4320;
 
+    private static final String TRIP_UNSTARTED_AUTO_CANCEL_TIMEOUT = "TRIP_UNSTARTED_AUTO_CANCEL_TIMEOUT";
+    private static final int DEFAULT_UNSTARTED_CANCEL_MINUTES = 60;
+    private static final int MIN_UNSTARTED_CANCEL_MINUTES = 15;
+    private static final int MAX_UNSTARTED_CANCEL_MINUTES = 360;
+
+    private static final String TRIP_AUTO_COMPLETE_TIMEOUT = "TRIP_AUTO_COMPLETE_TIMEOUT";
+    private static final int DEFAULT_AUTO_COMPLETE_MINUTES = 30;
+    private static final int MIN_AUTO_COMPLETE_MINUTES = 15;
+    private static final int MAX_AUTO_COMPLETE_MINUTES = 240;
+
     RedisTemplate<String, Object> redisTemplate;
 
     public int getMarketplaceRequestTtlMinutes() {
+        return readMinutes(MARKETPLACE_REQUEST_TTL, DEFAULT_TTL_MINUTES);
+    }
+
+    public int getTripUnstartedAutoCancelMinutes() {
+        return readMinutes(TRIP_UNSTARTED_AUTO_CANCEL_TIMEOUT, DEFAULT_UNSTARTED_CANCEL_MINUTES);
+    }
+
+    public int getTripAutoCompleteMinutes() {
+        return readMinutes(TRIP_AUTO_COMPLETE_TIMEOUT, DEFAULT_AUTO_COMPLETE_MINUTES);
+    }
+
+    private int readMinutes(String configKey, int defaultMinutes) {
         try {
-            Object value = redisTemplate.opsForHash().get(REDIS_KEY_SYSTEM_TIMEOUTS, MARKETPLACE_REQUEST_TTL);
+            Object value = redisTemplate.opsForHash().get(REDIS_KEY_SYSTEM_TIMEOUTS, configKey);
             if (value instanceof Number number) {
-                return Math.max(MIN_TTL_MINUTES, Math.min(MAX_TTL_MINUTES, number.intValue()));
+                return Math.max(0, number.intValue());
             }
         } catch (Exception e) {
             log.warn("[TimeoutConfig] Cannot read {} from Redis, fallback {} minutes: {}",
-                    MARKETPLACE_REQUEST_TTL, DEFAULT_TTL_MINUTES, e.getMessage());
+                    configKey, defaultMinutes, e.getMessage());
         }
-        return DEFAULT_TTL_MINUTES;
+        return defaultMinutes;
     }
 }

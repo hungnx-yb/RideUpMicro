@@ -32,7 +32,17 @@ public enum TimeoutConfigKey {
     MARKETPLACE_REQUEST_TTL(
             "Thời gian tồn tại của yêu cầu tìm xe trên Chợ nhu cầu",
             1440, 30, 4320, "trip-service",
-            "Yêu cầu chợ hết hạn (EXPIRED), tài xế không thể mời thêm.");
+            "Yêu cầu chợ hết hạn (EXPIRED), tài xế không thể mời thêm."),
+
+    TRIP_UNSTARTED_AUTO_CANCEL_TIMEOUT(
+            "Thời gian tự hủy chuyến nếu tài xế không bắt đầu (sau giờ khởi hành)",
+            60, 15, 360, "trip-service",
+            "Tự động hủy chuyến (CANCELED) và hoàn tiền nếu quá thời gian sau giờ khởi hành mà tài xế không bắt đầu."),
+
+    TRIP_AUTO_COMPLETE_TIMEOUT(
+            "Thời gian tự hoàn thành chuyến sau giờ đến dự kiến",
+            30, 15, 240, "trip-service",
+            "Tự động hoàn thành chuyến (COMPLETED) và quyết toán nếu tài xế không bấm hoàn thành.");
 
     private final String displayName;
     private final int defaultMinutes;
