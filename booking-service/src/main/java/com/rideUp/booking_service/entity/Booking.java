@@ -49,8 +49,6 @@ public class Booking {
 
     Integer seatCount;
 
-    BigDecimal pricePerSeat;
-
     BigDecimal totalAmount;
 
     LocalDateTime reservedAt;
@@ -78,8 +76,6 @@ public class Booking {
     /** ADM-FEAT-02: thời điểm hoàn thành chuyến (phục vụ thống kê doanh thu theo kỳ) */
     @Column(name = "completed_at")
     LocalDateTime completedAt;
-
-    Integer tripVersionAtReserve;
 
     @Version
     Integer version;

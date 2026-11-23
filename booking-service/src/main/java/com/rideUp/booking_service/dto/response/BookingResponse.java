@@ -32,7 +32,6 @@ public class BookingResponse {
     PaymentStatus paymentStatus;
 
     Integer seatCount;
-    BigDecimal pricePerSeat;
     BigDecimal totalAmount;
 
     Double pickupLat;

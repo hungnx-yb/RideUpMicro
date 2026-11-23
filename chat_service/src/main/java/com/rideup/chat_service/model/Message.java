@@ -34,10 +34,6 @@ public class Message {
 
     String mediaUrl;
 
-    LocalDateTime deletedAt;
-
-    String deletedBy;
-
     @CreatedDate
     LocalDateTime createdAt;
 }

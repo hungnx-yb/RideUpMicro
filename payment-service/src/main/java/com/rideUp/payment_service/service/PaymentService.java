@@ -90,7 +90,7 @@ public class PaymentService {
 								.putMetadata("paymentId", savedPayment.getId())
 								.build();
 				PaymentIntent paymentIntent = PaymentIntent.create(params);
-				savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); 
+				savedPayment.setClientSecret(paymentIntent.getClientSecret()); 
 				savedPayment.setTransactionId(paymentIntent.getId());
 				savedPayment = paymentRepository.save(savedPayment);
 			} catch (StripeException e) {
@@ -278,7 +278,7 @@ public class PaymentService {
                             .putMetadata("driverId", driverId)
                             .build();
             PaymentIntent paymentIntent = PaymentIntent.create(params);
-            savedPayment.setPaymentUrl(paymentIntent.getClientSecret()); 
+            savedPayment.setClientSecret(paymentIntent.getClientSecret()); 
             savedPayment.setTransactionId(paymentIntent.getId());
             savedPayment = paymentRepository.save(savedPayment);
         } catch (StripeException e) {
