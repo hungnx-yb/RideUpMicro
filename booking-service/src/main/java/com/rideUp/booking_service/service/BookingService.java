@@ -52,6 +52,7 @@ public class BookingService {
     ModelMapper modelMapper;
     IdentityServiceClient identityServiceClient;
     SystemTimeoutConfigService timeoutConfigService;
+    BookingModificationService bookingModificationService;
 
     /** ADM-FEAT-03: Hạn thanh toán Stripe (phút) đọc động từ cấu hình SLA */
     private LocalDateTime paymentDeadlineFrom(LocalDateTime now) {
@@ -558,6 +559,7 @@ public class BookingService {
 
         // Luôn gửi yêu cầu hoàn tiền / huỷ giữ cọc qua payment-service
         publishBookingCancellRequested(saved, correlationId, cancelReason);
+        bookingModificationService.rejectPendingModificationsByBooking(saved.getId(), "Đặt chỗ đã bị hủy");
         return modelMapper.map(saved, BookingResponse.class);
     }
 
@@ -724,8 +726,6 @@ public class BookingService {
 
         for (Booking booking : bookingsToCancel) {
             String correlationId = UUID.randomUUID().toString();
-            PaymentStatus oldPaymentStatus = booking.getPaymentStatus();
-            BookingStatus oldStatus = booking.getStatus();
 
             booking.setStatus(BookingStatus.CANCELLED_DRIVER);
             booking.setCancelledAt(now);
@@ -734,18 +734,13 @@ public class BookingService {
 
             // Xử lý hoàn tiền / giải phóng cọc tự động qua payment-service
             publishBookingCancellRequested(booking, correlationId, reason);
-            com.rideUp.booking_service.dto.event.BookingRejectedEvent rejectedEvent = com.rideUp.booking_service.dto.event.BookingRejectedEvent.builder()
-                    .eventId(UUID.randomUUID().toString())
-                    .correlationId(correlationId)
-                    .bookingId(booking.getId())
-                    .build();
-            bookingServicePublisher.publishBookingRejected(rejectedEvent);
 
             // Bắn event báo huỷ vé để notification-service gửi thông báo push/SMS đến khách hàng
             publishBookingCancelled(booking, correlationId, reason);
         }
 
         bookingRepository.saveAll(bookingsToCancel);
+        bookingModificationService.rejectPendingModificationsByTrip(tripId, reason);
         log.info("Successfully cancelled {} bookings and triggered refunds for tripId={}", bookingsToCancel.size(), tripId);
     }
 

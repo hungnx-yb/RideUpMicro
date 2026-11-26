@@ -12,6 +12,7 @@ import java.util.Optional;
 public interface TripRequestInvitationRepository extends JpaRepository<TripRequestInvitation, String> {
     boolean existsByTripRequestIdAndTripId(String tripRequestId, String tripId);
     List<TripRequestInvitation> findByTripRequestIdAndStatus(String tripRequestId, InvitationStatus status);
+    List<TripRequestInvitation> findByTripIdAndStatus(String tripId, InvitationStatus status);
     List<TripRequestInvitation> findByDriverIdAndStatus(String driverId, InvitationStatus status);
     long countByTripRequestIdAndStatus(String tripRequestId, InvitationStatus status);
 }

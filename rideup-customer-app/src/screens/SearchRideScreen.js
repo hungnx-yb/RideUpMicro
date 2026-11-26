@@ -166,7 +166,7 @@ const DropdownSelect = ({ label, placeholder, value, options, onSelect, disabled
 };
 
 
-// ===== COMPONENT: Custom Calendar =====
+// ===== COMPONENT: Single Date Calendar (CustomCalendar) =====
 const DAYS_OF_WEEK = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 
@@ -189,8 +189,15 @@ const CustomCalendar = ({ visible, selectedDate, onSelect, onClose }) => {
     d1.getMonth() === d2.getMonth() &&
     d1.getFullYear() === d2.getFullYear();
 
+  const isSelected = (day) => isSameDay(new Date(year, month, day), selectedDate);
   const isToday = (day) => isSameDay(new Date(year, month, day), today);
   const isPast = (day) => new Date(year, month, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const handleSelectDay = (day) => {
+    if (!day || isPast(day)) return;
+    onSelect(new Date(year, month, day));
+    onClose();
+  };
 
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
@@ -226,29 +233,26 @@ const CustomCalendar = ({ visible, selectedDate, onSelect, onClose }) => {
         {rows.map((row, ri) => (
           <View key={ri} style={styles.calRow}>
             {row.map((day, di) => {
-              const isSelected = day && isSameDay(new Date(year, month, day), selectedDate);
+              const selected = day && isSelected(day);
               const past = day && isPast(day);
               const todayDay = day && isToday(day);
+
               return (
                 <TouchableOpacity
                   key={di}
                   style={[
                     styles.calCell,
-                    isSelected && styles.calCellSelected,
-                    todayDay && !isSelected && styles.calCellToday,
+                    selected && styles.calCellSelected,
+                    todayDay && !selected && styles.calCellToday,
                   ]}
-                  onPress={() => {
-                    if (!day || past) return;
-                    onSelect(new Date(year, month, day));
-                    onClose();
-                  }}
+                  onPress={() => handleSelectDay(day)}
                   disabled={!day || past}
                 >
                   <Text style={[
                     styles.calDayText,
-                    isSelected && styles.calDayTextSelected,
+                    selected && styles.calDayTextSelected,
                     past && styles.calDayTextPast,
-                    todayDay && !isSelected && styles.calDayTextToday,
+                    todayDay && !selected && styles.calDayTextToday,
                   ]}>{day || ''}</Text>
                 </TouchableOpacity>
               );
@@ -263,6 +267,147 @@ const CustomCalendar = ({ visible, selectedDate, onSelect, onClose }) => {
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { onSelect(today); onClose(); }}>
             <Text style={styles.calTodayBtn}>Hôm nay</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+
+// ===== COMPONENT: Range Calendar (RangeCalendar) =====
+const RangeCalendar = ({ visible, startDate, endDate, onSelectRange, onClose }) => {
+  const today = new Date();
+  const [viewDate, setViewDate] = useState(startDate || today);
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
+
+  const isSameDay = (d1, d2) =>
+    d1 && d2 &&
+    d1.getDate() === d2.getDate() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getFullYear() === d2.getFullYear();
+
+  const isToday = (day) => isSameDay(new Date(year, month, day), today);
+  const isPast = (day) => new Date(year, month, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const isInRange = (d) => {
+    if (!startDate || !endDate || !d) return false;
+    const startZero = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
+    const endZero = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
+    const curZero = d.getTime();
+    return curZero >= startZero && curZero <= endZero;
+  };
+
+  const handleDayPress = (day) => {
+    if (!day || isPast(day)) return;
+    const clickedDate = new Date(year, month, day);
+
+    if (!startDate || (startDate && endDate)) {
+      // Bắt đầu chọn khoảng mới
+      onSelectRange(clickedDate, null);
+    } else if (startDate && !endDate) {
+      if (clickedDate < startDate) {
+        // Nếu chọn ngày trước startDate thì đặt lại startDate
+        onSelectRange(clickedDate, null);
+      } else {
+        // Đã chọn xong khoảng ngày (startDate -> endDate)
+        onSelectRange(startDate, clickedDate);
+      }
+    }
+  };
+
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const rows = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.calOverlay} activeOpacity={1} onPress={onClose} />
+      <View style={styles.calSheet}>
+        {/* Header tháng/năm */}
+        <View style={styles.calHeader}>
+          <TouchableOpacity onPress={prevMonth} style={styles.calNavBtn}>
+            <Ionicons name="chevron-back" size={20} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.calMonthTitle}>{MONTHS_VN[month]} {year}</Text>
+          <TouchableOpacity onPress={nextMonth} style={styles.calNavBtn}>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.text} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Ngày trong tuần */}
+        <View style={styles.calWeekRow}>
+          {DAYS_OF_WEEK.map(d => (
+            <Text key={d} style={styles.calWeekDay}>{d}</Text>
+          ))}
+        </View>
+
+        {/* Grid ngày */}
+        {rows.map((row, ri) => (
+          <View key={ri} style={styles.calRow}>
+            {row.map((day, di) => {
+              const curDate = day ? new Date(year, month, day) : null;
+              const isStart = curDate && isSameDay(curDate, startDate);
+              const isEnd = curDate && isSameDay(curDate, endDate);
+              const inRange = curDate && isInRange(curDate);
+              const past = day && isPast(day);
+              const todayDay = day && isToday(day);
+
+              return (
+                <TouchableOpacity
+                  key={di}
+                  style={[
+                    styles.calCell,
+                    inRange && styles.calCellInRange,
+                    (isStart || isEnd) && styles.calCellSelected,
+                    todayDay && !isStart && !isEnd && !inRange && styles.calCellToday,
+                  ]}
+                  onPress={() => handleDayPress(day)}
+                  disabled={!day || past}
+                >
+                  <Text style={[
+                    styles.calDayText,
+                    (isStart || isEnd) && styles.calDayTextSelected,
+                    inRange && !isStart && !isEnd && styles.calDayTextInRange,
+                    past && styles.calDayTextPast,
+                    todayDay && !isStart && !isEnd && styles.calDayTextToday,
+                  ]}>{day || ''}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+
+        {/* Note hướng dẫn chọn */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          <Text style={{ fontSize: 11, color: COLORS.textMuted, textAlign: 'center' }}>
+            {!startDate
+              ? 'Chạm để chọn Ngày bắt đầu'
+              : !endDate
+                ? 'Chạm ngày tiếp theo để chọn Ngày kết thúc (hoặc bấm Xong nếu chỉ đi 1 ngày)'
+                : 'Đã chọn khoảng ngày thành công'}
+          </Text>
+        </View>
+
+        {/* Footer buttons */}
+        <View style={styles.calFooter}>
+          <TouchableOpacity onPress={() => { onSelectRange(null, null); onClose(); }}>
+            <Text style={styles.calClearBtn}>Xóa lọc</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: COLORS.primary, borderRadius: 8 }}>
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Xong</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -289,7 +434,8 @@ export default function SearchRideScreen({ navigation, route }) {
   const [startWardId, setStartWardId] = useState('');
   const [endProvinceId, setEndProvinceId] = useState('');
   const [endWardId, setEndWardId] = useState('');
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loadingStartWards, setLoadingStartWards] = useState(false);
   const [loadingEndWards, setLoadingEndWards] = useState(false);
@@ -299,12 +445,17 @@ export default function SearchRideScreen({ navigation, route }) {
   const [isBooking, setIsBooking] = useState(false);
   const [seatCount, setSeatCount] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [bookingPassengerName, setBookingPassengerName] = useState('');
+  const [bookingPassengerPhone, setBookingPassengerPhone] = useState('');
   const [bookingNote, setBookingNote] = useState('');
   const [bookingIdempotencyKey, setBookingIdempotencyKey] = useState('');
   const [acceptedInvitationId, setAcceptedInvitationId] = useState(null);
   const [isStripeAllowed, setIsStripeAllowed] = useState(true);
   const [stripeDisabledReason, setStripeDisabledReason] = useState('');
   const [checkingPaymentOptions, setCheckingPaymentOptions] = useState(false);
+
+  // Current User Info Cache
+  const [currentUserInfo, setCurrentUserInfo] = useState(null);
 
   // Success Modal State
   const [successBooking, setSuccessBooking] = useState(null);
@@ -317,6 +468,8 @@ export default function SearchRideScreen({ navigation, route }) {
   const [isRadarVisible, setIsRadarVisible] = useState(false);
   const [isCreatingRequest, setIsCreatingRequest] = useState(false);
   const [requestSeatCount, setRequestSeatCount] = useState(1);
+  const [requestPassengerName, setRequestPassengerName] = useState('');
+  const [requestPassengerPhone, setRequestPassengerPhone] = useState('');
   const [requestStartAddress, setRequestStartAddress] = useState('');
   const [requestEndAddress, setRequestEndAddress] = useState('');
   const [requestDepartureDate, setRequestDepartureDate] = useState(new Date());
@@ -347,8 +500,8 @@ export default function SearchRideScreen({ navigation, route }) {
     // Xử lý thời gian khởi hành hợp lệ (> now + 30 phút theo yêu cầu backend)
     const now = new Date();
     let initialDate;
-    if (selectedDate) {
-      initialDate = new Date(selectedDate);
+    if (startDate) {
+      initialDate = new Date(startDate);
       if (initialDate.toDateString() === now.toDateString()) {
         initialDate = new Date(now.getTime() + 60 * 60 * 1000); // 1 tiếng sau hiện tại
       } else {
@@ -360,6 +513,8 @@ export default function SearchRideScreen({ navigation, route }) {
 
     setRequestDepartureDate(initialDate);
     setRequestSeatCount(1);
+    setRequestPassengerName(currentUserInfo?.fullName || '');
+    setRequestPassengerPhone(currentUserInfo?.phoneNumber || '');
     setRequestNote('');
     setIsRequestModalVisible(true);
   };
@@ -413,6 +568,8 @@ export default function SearchRideScreen({ navigation, route }) {
         endAddressText: requestEndAddress.trim(),
         departureTime: localISOTime,
         seatTotal: requestSeatCount,
+        passengerName: requestPassengerName.trim() || undefined,
+        passengerPhone: requestPassengerPhone.trim() || undefined,
         note: requestNote.trim() || 'Khách đang tìm xe ghép nhanh',
       };
 
@@ -443,6 +600,13 @@ export default function SearchRideScreen({ navigation, route }) {
   useEffect(() => {
     fetchTrips(0, false); // Không thu gọn bộ lọc trong lần tải đầu tiên
     fetchProvinces();
+    apiService.getMyUserInfo()
+      .then(res => {
+        if (res?.data?.result) {
+          setCurrentUserInfo(res.data.result);
+        }
+      })
+      .catch(e => console.log('Fetch user info error:', e));
   }, []);
 
   useEffect(() => {
@@ -479,6 +643,8 @@ export default function SearchRideScreen({ navigation, route }) {
 
             setSeatCount(tripRequest.seatTotal || 1);
             setPaymentMethod('CASH');
+            setBookingPassengerName(tripRequest.passengerName || currentUserInfo?.fullName || '');
+            setBookingPassengerPhone(tripRequest.passengerPhone || currentUserInfo?.phoneNumber || '');
             setBookingNote(tripRequest.note || '');
             setBookingIdempotencyKey(generateUuid());
             setAcceptedInvitationId(prefillInvitation.id);
@@ -533,6 +699,8 @@ export default function SearchRideScreen({ navigation, route }) {
         setDropoffLocation({ lat: NaN, lng: NaN, addressText: tripRequest.endAddressText || '' });
         setSeatCount(tripRequest.seatTotal || 1);
         setPaymentMethod('CASH');
+        setBookingPassengerName(tripRequest.passengerName || currentUserInfo?.fullName || '');
+        setBookingPassengerPhone(tripRequest.passengerPhone || currentUserInfo?.phoneNumber || '');
         setBookingNote(tripRequest.note || '');
         setBookingIdempotencyKey(generateUuid());
         setAcceptedInvitationId(prefillInvitation.id);
@@ -547,6 +715,9 @@ export default function SearchRideScreen({ navigation, route }) {
       setPickupWardId(targetTrip.stops?.find(s => s.stopType === 'PICKUP')?.wardId || '');
       setDropoffWardId(targetTrip.stops?.find(s => s.stopType === 'DROPOFF')?.wardId || '');
       setSeatCount(1);
+      setPaymentMethod('CASH');
+      setBookingPassengerName(currentUserInfo?.fullName || '');
+      setBookingPassengerPhone(currentUserInfo?.phoneNumber || '');
       setBookingNote('');
       setBookingIdempotencyKey(generateUuid());
       navigation.setParams({ directTrip: undefined });
@@ -609,13 +780,24 @@ export default function SearchRideScreen({ navigation, route }) {
       setIsFilterExpanded(false);
     }
     try {
-      const dateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : undefined;
+      const formatLocalDate = (d) => {
+        if (!d) return undefined;
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      const fromDateStr = formatLocalDate(startDate);
+      const toDateStr = formatLocalDate(endDate) || fromDateStr;
+
       const response = await apiService.getAllTrips({
         startProvinceId: startProvinceId || undefined,
         startWardId: startWardId || undefined,
         endProvinceId: endProvinceId || undefined,
         endWardId: endWardId || undefined,
-        date: dateStr,
+        fromDate: fromDateStr,
+        toDate: toDateStr,
         page: targetPage,
         size: 10
       });
@@ -670,6 +852,8 @@ export default function SearchRideScreen({ navigation, route }) {
     setDropoffLocation({ lat: NaN, lng: NaN, addressText: '' });
     setSeatCount(1);
     setPaymentMethod('CASH');
+    setBookingPassengerName(currentUserInfo?.fullName || '');
+    setBookingPassengerPhone(currentUserInfo?.phoneNumber || '');
     setBookingNote('');
     setBookingIdempotencyKey(generateUuid());
     setAcceptedInvitationId(null); // Reset when manually booking
@@ -752,6 +936,8 @@ export default function SearchRideScreen({ navigation, route }) {
       pickupAddressText: fullPickupAddress,
       dropoffWardId: dropoffWardId,
       dropoffAddressText: fullDropoffAddress,
+      passengerName: bookingPassengerName.trim() || undefined,
+      passengerPhone: bookingPassengerPhone.trim() || undefined,
       note: bookingNote.trim() || 'Đặt qua Mobile App',
     };
 
@@ -1090,27 +1276,35 @@ export default function SearchRideScreen({ navigation, route }) {
               </View>
             </View>
 
-            {/* Row 3: Ngày đi + Nút tìm */}
+            {/* Row 3: Khoảng ngày đi + Nút tìm */}
             <View style={styles.filterRow}>
               <View style={styles.filterCol}>
-                <Text style={styles.filterLabel}>NGÀY ĐI</Text>
+                <Text style={styles.filterLabel}>KHOẢNG NGÀY ĐI</Text>
                 <TouchableOpacity style={styles.dateBox} onPress={() => setShowDatePicker(true)}>
                   <Ionicons name="calendar-outline" size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
-                  <Text style={selectedDate ? styles.dateValue : styles.datePlaceholder}>
-                    {selectedDate
-                      ? selectedDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                      : 'mm/dd/yyyy'}
+                  <Text style={(startDate || endDate) ? styles.dateValue : styles.datePlaceholder} numberOfLines={1}>
+                    {startDate && endDate
+                      ? (startDate.getTime() === endDate.getTime()
+                        ? startDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+                        : `${startDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - ${endDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`)
+                      : startDate
+                        ? `Từ ${startDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`
+                        : 'Chọn khoảng ngày'}
                   </Text>
-                  {selectedDate && (
-                    <TouchableOpacity onPress={() => setSelectedDate(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  {(startDate || endDate) && (
+                    <TouchableOpacity onPress={() => { setStartDate(null); setEndDate(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Ionicons name="close-circle" size={16} color={COLORS.textMuted} />
                     </TouchableOpacity>
                   )}
                 </TouchableOpacity>
-                <CustomCalendar
+                <RangeCalendar
                   visible={showDatePicker}
-                  selectedDate={selectedDate}
-                  onSelect={setSelectedDate}
+                  startDate={startDate}
+                  endDate={endDate}
+                  onSelectRange={(start, end) => {
+                    setStartDate(start);
+                    setEndDate(end);
+                  }}
                   onClose={() => setShowDatePicker(false)}
                 />
               </View>
@@ -1434,6 +1628,32 @@ export default function SearchRideScreen({ navigation, route }) {
               <View style={styles.modalPriceBox}>
                 <Text style={styles.modalPriceLabel}>Tổng thanh toán</Text>
                 <Text style={styles.modalPrice}>{formatMoney((selectedTrip?.priceVnd || 0) * seatCount)}</Text>
+              </View>
+
+              {/* Thông tin người đi */}
+              <View style={styles.passengerBox}>
+                <Text style={styles.noteLabel}>Thông tin người đi</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={styles.passengerInput}
+                      placeholder="Tên người đi"
+                      placeholderTextColor={COLORS.textMuted}
+                      value={bookingPassengerName}
+                      onChangeText={setBookingPassengerName}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={styles.passengerInput}
+                      placeholder="Số điện thoại"
+                      placeholderTextColor={COLORS.textMuted}
+                      value={bookingPassengerPhone}
+                      onChangeText={setBookingPassengerPhone}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                </View>
               </View>
 
               <View style={styles.noteBox}>
@@ -1807,6 +2027,28 @@ export default function SearchRideScreen({ navigation, route }) {
                     <TouchableOpacity onPress={() => setRequestSeatCount(Math.min(10, requestSeatCount + 1))} style={styles.counterBtn}>
                       <Text style={styles.counterText}>+</Text>
                     </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Thông tin người đi */}
+                <View style={styles.reqSectionBox}>
+                  <Text style={styles.reqSectionTitle}>THÔNG TIN NGƯỜI ĐI</Text>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TextInput
+                      style={[styles.reqNoteInput, { flex: 1, minHeight: 44, paddingVertical: 8 }]}
+                      placeholder="Tên người đi"
+                      placeholderTextColor={COLORS.textMuted}
+                      value={requestPassengerName}
+                      onChangeText={setRequestPassengerName}
+                    />
+                    <TextInput
+                      style={[styles.reqNoteInput, { flex: 1, minHeight: 44, paddingVertical: 8 }]}
+                      placeholder="Số điện thoại"
+                      placeholderTextColor={COLORS.textMuted}
+                      value={requestPassengerPhone}
+                      onChangeText={setRequestPassengerPhone}
+                      keyboardType="phone-pad"
+                    />
                   </View>
                 </View>
 
@@ -2368,6 +2610,9 @@ const styles = StyleSheet.create({
   modalPriceLabel: { color: COLORS.textMuted, fontSize: 12, fontWeight: 'bold' },
   modalPrice: { color: COLORS.primary, fontSize: 20, fontWeight: '900' },
 
+  passengerBox: { marginTop: 12 },
+  passengerInput: { backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 10, color: COLORS.text, fontSize: 13 },
+
   noteBox: { marginTop: 12 },
   noteLabel: { color: COLORS.textMuted, fontSize: SIZES.small, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   noteInput: { backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 12, color: COLORS.text, fontSize: SIZES.font, minHeight: 80, lineHeight: 20 },
@@ -2389,9 +2634,11 @@ const styles = StyleSheet.create({
   calRow: { flexDirection: 'row', marginBottom: 4 },
   calCell: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 40, borderRadius: 20 },
   calCellSelected: { backgroundColor: COLORS.primary },
+  calCellInRange: { backgroundColor: 'rgba(14, 165, 233, 0.15)', borderRadius: 0 },
   calCellToday: { borderWidth: 1.5, borderColor: COLORS.primary },
   calDayText: { color: COLORS.text, fontSize: 14 },
   calDayTextSelected: { color: COLORS.background, fontWeight: 'bold' },
+  calDayTextInRange: { color: COLORS.primary, fontWeight: 'bold' },
   calDayTextPast: { color: COLORS.border },
   calDayTextToday: { color: COLORS.primary, fontWeight: 'bold' },
   calFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border },

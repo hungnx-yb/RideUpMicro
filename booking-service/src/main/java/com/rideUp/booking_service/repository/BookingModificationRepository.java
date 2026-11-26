@@ -18,6 +18,8 @@ public interface BookingModificationRepository extends JpaRepository<BookingModi
 
     List<BookingModification> findByBookingIdOrderByCreatedAtDesc(String bookingId);
 
+    List<BookingModification> findByBookingIdAndStatus(String bookingId, ModificationStatus status);
+
     List<BookingModification> findByTripIdAndStatus(String tripId, ModificationStatus status);
 
     List<BookingModification> findByTripIdInAndStatus(List<String> tripIds, ModificationStatus status);

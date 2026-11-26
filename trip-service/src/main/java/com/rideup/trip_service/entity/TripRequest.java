@@ -30,6 +30,8 @@ public class TripRequest {
     String id;
 
     String passengerId;
+    String passengerName;
+    String passengerPhone;
 
     String startProvinceId;
     String startWardId;

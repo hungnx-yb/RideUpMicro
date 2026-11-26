@@ -82,6 +82,8 @@ public class TripRequestService {
         String userId = SecurityUtils.getCurrentUserId();
         TripRequest tripRequest = TripRequest.builder()
                 .passengerId(userId)
+                .passengerName(request.getPassengerName())
+                .passengerPhone(request.getPassengerPhone())
                 .startProvinceId(request.getStartProvinceId())
                 .startWardId(request.getStartWardId())
                 .endProvinceId(request.getEndProvinceId())
@@ -218,6 +220,35 @@ public class TripRequestService {
             // Lưu ý: Không bắn publishTripRequestCancelledEvent ở đây vì đây là hành vi tự động đóng yêu cầu khi khách đã chốt xe/đặt vé thành công.
             // Tránh việc notification-service gửi popup thông báo "Bạn đã hủy yêu cầu thành công" gây hiểu lầm cho khách hàng vừa đặt chuyến.
         }
+    }
+
+    /**
+     * Khi một chuyến đi bị hủy, tự động từ chối toàn bộ lời mời đang chờ từ chuyến đó.
+     */
+    @Transactional
+    public void rejectPendingInvitationsByTrip(String tripId) {
+        List<TripRequestInvitation> pendingInvitations = invitationRepository
+                .findByTripIdAndStatus(tripId, InvitationStatus.PENDING);
+        if (pendingInvitations.isEmpty()) {
+            return;
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        pendingInvitations.forEach(inv -> {
+            inv.setStatus(InvitationStatus.REJECTED);
+            inv.setRespondedAt(now);
+            try {
+                marketplaceEventProducer.publishInvitationRejectedEvent(InvitationRejectedEvent.builder()
+                        .invitationId(inv.getId())
+                        .tripRequestId(inv.getTripRequest().getId())
+                        .driverId(inv.getDriverId())
+                        .passengerId(inv.getTripRequest().getPassengerId())
+                        .build());
+            } catch (Exception ex) {
+                log.warn("Failed to publish InvitationRejectedEvent for invitationId={}: {}", inv.getId(), ex.getMessage());
+            }
+        });
+        invitationRepository.saveAll(pendingInvitations);
+        log.info("Rejected {} pending invitations for cancelled tripId={}", pendingInvitations.size(), tripId);
     }
 
     public TripRequestInvitationResponse getInvitation(String invitationId) {

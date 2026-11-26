@@ -44,6 +44,7 @@ public class TripService {
     IdentityServiceClient  identityServiceClient;
     TripServicePublisher tripServicePublisher;
     FareBoundaryService fareBoundaryService;
+    TripRequestService tripRequestService;
 
     /**
      * Khóa cứng tại backend: tài xế nợ >= hạn mức hoặc uy tín < ngưỡng tối thiểu không được nhận/tạo chuyến.
@@ -169,6 +170,7 @@ public class TripService {
                     .cancelledAt(saved.getCancelledAt())
                     .build();
             tripServicePublisher.publishTripCancelled(event);
+            tripRequestService.rejectPendingInvitationsByTrip(saved.getId());
 
             return modelMapper.map(saved, TripResponse.class);
         }
@@ -289,9 +291,11 @@ public class TripService {
                                                   String endProvinceId,
                                                   String endWardId,
                                                   LocalDate date,
+                                                  LocalDate fromDate,
+                                                  LocalDate toDate,
                                                   Pageable pageable) {
 
-        Page<Trip> tripPage = tripRepository.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date, pageable);
+        Page<Trip> tripPage = tripRepository.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date, fromDate, toDate, pageable);
         List<Trip> trips = tripPage.getContent();
 
         List<String> ids = trips.stream()

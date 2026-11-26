@@ -537,9 +537,12 @@ const MyTripsScreen = ({ navigation, route }) => {
   const [selectedInviteData, setSelectedInviteData] = useState(null); // { invitation, tripRequest }
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
   const [invitePaymentMethod, setInvitePaymentMethod] = useState('CASH');
+  const [invitePassengerName, setInvitePassengerName] = useState('');
+  const [invitePassengerPhone, setInvitePassengerPhone] = useState('');
   const [isStripeAllowedForInvite, setIsStripeAllowedForInvite] = useState(true);
   const [stripeDisabledReasonForInvite, setStripeDisabledReasonForInvite] = useState('');
   const [checkingInvitePaymentOptions, setCheckingInvitePaymentOptions] = useState(false);
+  const [currentUserInfo, setCurrentUserInfo] = useState(null);
 
   // Filter states giống hệt màn Tìm kiếm
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
@@ -696,6 +699,13 @@ const MyTripsScreen = ({ navigation, route }) => {
   useEffect(() => {
     fetchMyBookings();
     fetchProvinces();
+    apiService.getMyUserInfo()
+      .then(res => {
+        if (res?.data?.result) {
+          setCurrentUserInfo(res.data.result);
+        }
+      })
+      .catch(e => console.log('Fetch user info error:', e));
   }, []);
 
   useEffect(() => {
@@ -855,6 +865,8 @@ const MyTripsScreen = ({ navigation, route }) => {
     // Mở modal xác nhận chốt chuyến xe trực tiếp tại đây, không chuyển màn hình tránh nhiều popup
     setSelectedInviteData({ invitation, tripRequest });
     setInvitePaymentMethod('CASH');
+    setInvitePassengerName(tripRequest?.passengerName || currentUserInfo?.fullName || '');
+    setInvitePassengerPhone(tripRequest?.passengerPhone || currentUserInfo?.phoneNumber || '');
     setIsStripeAllowedForInvite(true);
     setStripeDisabledReasonForInvite('');
     setCheckingInvitePaymentOptions(true);
@@ -897,6 +909,8 @@ const MyTripsScreen = ({ navigation, route }) => {
         pickupAddressText: tripRequest.startAddressText || '',
         dropoffWardId: tripRequest.endWardId || '',
         dropoffAddressText: tripRequest.endAddressText || '',
+        passengerName: invitePassengerName.trim() || undefined,
+        passengerPhone: invitePassengerPhone.trim() || undefined,
         note: tripRequest.note || 'Đặt từ lời mời tìm xe',
         invitationId: invitation.id,
       };
@@ -1643,6 +1657,30 @@ const MyTripsScreen = ({ navigation, route }) => {
                   <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.primary }}>
                     {Number(selectedInviteData?.invitation?.price || 0).toLocaleString('vi-VN')} đ
                   </Text>
+                </View>
+              </View>
+
+              {/* Thông tin người đi */}
+              <View style={[styles.confirmPriceBox, { marginTop: 12 }]}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.textMuted, marginBottom: 8, textTransform: 'uppercase' }}>
+                  Thông tin người đi
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TextInput
+                    style={{ flex: 1, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, padding: 8, fontSize: 13, color: COLORS.text }}
+                    placeholder="Tên người đi"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={invitePassengerName}
+                    onChangeText={setInvitePassengerName}
+                  />
+                  <TextInput
+                    style={{ flex: 1, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, padding: 8, fontSize: 13, color: COLORS.text }}
+                    placeholder="Số điện thoại"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={invitePassengerPhone}
+                    onChangeText={setInvitePassengerPhone}
+                    keyboardType="phone-pad"
+                  />
                 </View>
               </View>
             </ScrollView>

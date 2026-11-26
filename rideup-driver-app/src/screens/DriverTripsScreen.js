@@ -779,17 +779,22 @@ export default function DriverTripsScreen({ navigation }) {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
             <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarInitials}>{(item.userName || 'K').charAt(0).toUpperCase()}</Text>
+              <Text style={styles.avatarInitials}>{((item.passengerName || item.userName) || 'K').charAt(0).toUpperCase()}</Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <Text style={styles.bookingName} numberOfLines={1}>{item.userName || 'Khách hàng'}</Text>
+                <Text style={styles.bookingName} numberOfLines={1}>{item.passengerName || item.userName || 'Khách hàng'}</Text>
                 {!!item.bookingCode && (
                   <View style={styles.bookingCodeBadge}>
                     <Text style={styles.bookingCodeText}>#{item.bookingCode}</Text>
                   </View>
                 )}
               </View>
+              {!!item.passengerPhone && (
+                <Text style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 1 }}>
+                  📞 {item.passengerPhone}
+                </Text>
+              )}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <Ionicons name="ticket" size={12} color={COLORS.primary} />
                 <Text style={styles.bookingSub}>{item.seatCount} ghế • {formatMoney(item.totalAmount)}</Text>
@@ -1013,8 +1018,8 @@ export default function DriverTripsScreen({ navigation }) {
                 setSelectedTrip(null);
                 navigation.navigate('Chat', {
                   bookingId: item.id,
-                  passengerName: item.userName || 'Khách hàng',
-                  passengerPhone: item.userPhone || '0987654321',
+                  passengerName: item.passengerName || item.userName || 'Khách hàng',
+                  passengerPhone: item.passengerPhone || item.userPhone || '0987654321',
                   passengerAvatar: item.userAvatarUrl || null
                 });
               }}
