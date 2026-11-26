@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStripe } from '@stripe/stripe-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { apiService } from '../services/apiService';
+import DriverRatingCard from '../components/DriverRatingCard';
 
 const COLORS = {
   background: '#F8FAFC',
@@ -50,6 +51,7 @@ export default function WalletScreen({ navigation }) {
   const [DEBT_LIMIT, setDebtLimit] = useState(DEFAULT_DEBT_LIMIT);
   const WARNING_LIMIT = DEBT_LIMIT * WARNING_RATIO;
   const [reputation, setReputation] = useState(null);
+  const [driverReviews, setDriverReviews] = useState([]);
   const [stripeStatus, setStripeStatus] = useState(null);
   const [payouts, setPayouts] = useState([]);
   const [activeTab, setActiveTab] = useState('ALL'); // 'ALL' | 'COMPLETED' | 'OFFSET'
@@ -72,6 +74,12 @@ export default function WalletScreen({ navigation }) {
       if (repRes?.data?.result) setReputation(repRes.data.result);
       if (stripeRes?.data?.result) setStripeStatus(stripeRes.data.result);
       if (payoutsRes?.data?.result) setPayouts(payoutsRes.data.result);
+
+      const driverId = eligibilityRes?.data?.result?.driverId;
+      if (driverId) {
+        const reviewsRes = await apiService.getDriverReviews(driverId).catch(() => null);
+        setDriverReviews(reviewsRes?.data?.result || []);
+      }
     } catch (error) {
       console.log('Lỗi tải dữ liệu tài chính:', error);
     } finally {
@@ -345,6 +353,14 @@ export default function WalletScreen({ navigation }) {
             ✨ Lái xe an toàn (+1đ/chuyến) và nhận đánh giá 5 sao (+1đ) để được giảm hoa hồng tới mức tối đa 12.0%!
           </Text>
         </View>
+
+        {/* =========================================================================
+            CARD 2B: THỐNG KÊ ĐÁNH GIÁ SAO (1-5 SAO & SAO TRUNG BÌNH TÍNH HOA HỒNG)
+           ========================================================================= */}
+        <DriverRatingCard
+          averageRating={reputation?.driverRating}
+          reviews={driverReviews}
+        />
 
         {/* =========================================================================
             CARD 3: CỔNG NHẬN TIỀN STRIPE CONNECT EXPRESS (GIAI ĐOẠN 3)

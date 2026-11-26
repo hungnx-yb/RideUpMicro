@@ -165,6 +165,9 @@ export const apiService = {
   getDriverReputation: async () => {
     return await apiClient.get('/api/identity/drivers/me/reputation');
   },
+  getDriverReviews: async (driverId) => {
+    return await apiClient.get(`/api/review/reviews/driver/${driverId}`);
+  },
   getStripeAccountStatus: async () => {
     return await apiClient.get('/api/payment/payments/stripe/driver/account-status');
   },
