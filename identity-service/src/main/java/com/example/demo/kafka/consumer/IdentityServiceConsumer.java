@@ -144,6 +144,45 @@ public class IdentityServiceConsumer {
         }
     }
 
+    @RetryableTopic(exclude = {JsonProcessingException.class, IllegalArgumentException.class})
+    @Transactional
+    @KafkaListener(
+            topics = "${app.kafka.topics.driver-reputation-penalty:driver.reputation.penalty}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void consumeDriverReputationPenalty(String payload, Acknowledgment ack) {
+        log.info("[Kafka] Received DriverReputationPenaltyEvent: {}", payload);
+        try {
+            com.example.demo.dto.event.DriverReputationPenaltyEvent event = objectMapper.readValue(
+                    payload, com.example.demo.dto.event.DriverReputationPenaltyEvent.class);
+
+            if (event.getDriverId() != null && event.getPenaltyPoints() != null && event.getPenaltyPoints() > 0) {
+                DriverProfile driverProfile = driverProfileRepository.findById(event.getDriverId())
+                        .or(() -> driverProfileRepository.findByUserId(event.getDriverId()))
+                        .orElse(null);
+
+                if (driverProfile != null) {
+                    int currentRep = driverProfile.getReputationScore();
+                    int newRep = Math.max(0, currentRep - event.getPenaltyPoints());
+                    driverProfile.setReputationScore(newRep);
+                    driverProfileRepository.save(driverProfile);
+                    log.info("[Kafka][Reputation] Deducted -{} reputation for driver {} (tripId={}, reason='{}'). {} -> {}",
+                            event.getPenaltyPoints(), event.getDriverId(), event.getTripId(),
+                            event.getReason(), currentRep, newRep);
+                } else {
+                    log.warn("[Kafka] DriverProfile not found for driverId: {}. Skipping penalty.", event.getDriverId());
+                }
+            }
+            ack.acknowledge();
+        } catch (JsonProcessingException e) {
+            log.error("[Kafka][POISON-PILL] Cannot deserialize DriverReputationPenaltyEvent, sending to DLT. payload={}", payload, e);
+            throw new IllegalArgumentException("Poison pill detected", e);
+        } catch (Exception e) {
+            log.error("[Kafka] Transient error processing DriverReputationPenaltyEvent.", e);
+            throw e;
+        }
+    }
+
     @DltHandler
     public void handleDlt(String payload, Exception ex) {
         log.error("[DLT] Message permanently failed after all retries. " +

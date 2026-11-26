@@ -1,5 +1,6 @@
 package com.rideup.trip_service.service;
 
+import com.rideup.trip_service.dto.event.DriverReputationPenaltyEvent;
 import com.rideup.trip_service.dto.event.TripCancelledEvent;
 import com.rideup.trip_service.dto.event.TripCompletedEvent;
 import com.rideup.trip_service.entity.Trip;
@@ -24,6 +25,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class TripLifecycleScheduler {
+
+    static final int PENALTY_UNSTARTED_TRIP_WITH_PASSENGERS = 5;
+    static final int PENALTY_UNCOMPLETED_TRIP = 2;
 
     TripRepository tripRepository;
     TripServicePublisher tripServicePublisher;
@@ -76,6 +80,13 @@ public class TripLifecycleScheduler {
                             .build();
                     tripServicePublisher.publishTripCancelled(event);
                     tripRequestService.rejectPendingInvitationsByTrip(trip.getId());
+
+                    boolean hasPassengers = trip.getSeatAvailable() != null
+                            && trip.getSeatTotal() != null
+                            && trip.getSeatAvailable() < trip.getSeatTotal();
+                    if (hasPassengers) {
+                        publishPenalty(trip, PENALTY_UNSTARTED_TRIP_WITH_PASSENGERS, trip.getCancelReason());
+                    }
                     log.info("[TripLifecycleScheduler] Auto-cancelled tripId={} due to no-start after {} minutes from departureTime={}",
                             trip.getId(), cancelMinutes, trip.getDepartureTime());
                 } catch (Exception ex) {
@@ -108,6 +119,7 @@ public class TripLifecycleScheduler {
                             .completedAt(now)
                             .build();
                     tripServicePublisher.publishTripCompleted(event);
+                    publishPenalty(trip, PENALTY_UNCOMPLETED_TRIP, "Tự động hoàn thành chuyến do tài xế không bấm hoàn thành đúng hạn");
                     log.info("[TripLifecycleScheduler] Auto-completed tripId={} past {} minutes from estimatedArrivalTime={}",
                             trip.getId(), completeMinutes, trip.getEstimatedArrivalTime());
                 } catch (Exception ex) {
@@ -115,5 +127,20 @@ public class TripLifecycleScheduler {
                 }
             }
         }
+    }
+
+    private void publishPenalty(Trip trip, int penaltyPoints, String reason) {
+        if (trip.getDriverId() == null) {
+            return;
+        }
+        tripServicePublisher.publishDriverReputationPenalty(DriverReputationPenaltyEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .correlationId(UUID.randomUUID().toString())
+                .driverId(trip.getDriverId())
+                .tripId(trip.getId())
+                .penaltyPoints(penaltyPoints)
+                .reason(reason)
+                .createdAt(LocalDateTime.now())
+                .build());
     }
 }

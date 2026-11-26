@@ -2,6 +2,7 @@ package com.rideup.trip_service.kafka.producer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rideup.trip_service.dto.event.DriverReputationPenaltyEvent;
 import com.rideup.trip_service.dto.event.TripCancelledEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,10 @@ public class TripServicePublisher {
     @Value("${app.kafka.topics.trip-completed:trip.completed}")
     String tripCompletedTopic;
 
+    @NonFinal
+    @Value("${app.kafka.topics.driver-reputation-penalty:driver.reputation.penalty}")
+    String driverReputationPenaltyTopic;
+
     public void publishTripCancelled(TripCancelledEvent event) {
         try {
             String payload = objectMapper.writeValueAsString(event);
@@ -50,6 +55,19 @@ public class TripServicePublisher {
         } catch (JsonProcessingException ex) {
             log.error("Failed to serialize TripCompletedEvent for tripId={}", event.getTripId(), ex);
             throw new IllegalStateException("Failed to serialize TripCompletedEvent", ex);
+        }
+    }
+
+    public void publishDriverReputationPenalty(DriverReputationPenaltyEvent event) {
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send(driverReputationPenaltyTopic, event.getDriverId(), payload);
+            log.info("Published DriverReputationPenaltyEvent eventId={}, driverId={}, tripId={}, penaltyPoints={}",
+                    event.getEventId(), event.getDriverId(), event.getTripId(), event.getPenaltyPoints());
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to serialize DriverReputationPenaltyEvent for driverId={}, tripId={}",
+                    event.getDriverId(), event.getTripId(), ex);
+            throw new IllegalStateException("Failed to serialize DriverReputationPenaltyEvent", ex);
         }
     }
 }
