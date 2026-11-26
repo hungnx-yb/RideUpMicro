@@ -22,6 +22,7 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, St
     boolean existsByGplx(String gplx);
     long countByStatus(DriverStatus status);
     List<DriverProfile> findAllByStatus(DriverStatus status);
+    List<DriverProfile> findByStatusAndReputationScoreLessThan(DriverStatus status, Integer reputationScore);
 
     @Query(value = """
         SELECT * FROM driver_profile dp 
