@@ -724,8 +724,6 @@ public class BookingService {
 
         for (Booking booking : bookingsToCancel) {
             String correlationId = UUID.randomUUID().toString();
-            PaymentStatus oldPaymentStatus = booking.getPaymentStatus();
-            BookingStatus oldStatus = booking.getStatus();
 
             booking.setStatus(BookingStatus.CANCELLED_DRIVER);
             booking.setCancelledAt(now);
@@ -734,12 +732,6 @@ public class BookingService {
 
             // Xử lý hoàn tiền / giải phóng cọc tự động qua payment-service
             publishBookingCancellRequested(booking, correlationId, reason);
-            com.rideUp.booking_service.dto.event.BookingRejectedEvent rejectedEvent = com.rideUp.booking_service.dto.event.BookingRejectedEvent.builder()
-                    .eventId(UUID.randomUUID().toString())
-                    .correlationId(correlationId)
-                    .bookingId(booking.getId())
-                    .build();
-            bookingServicePublisher.publishBookingRejected(rejectedEvent);
 
             // Bắn event báo huỷ vé để notification-service gửi thông báo push/SMS đến khách hàng
             publishBookingCancelled(booking, correlationId, reason);
