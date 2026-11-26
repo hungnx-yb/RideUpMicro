@@ -70,14 +70,14 @@ public class SystemTimeoutConfigService {
         try {
             Object cached = redisTemplate.opsForHash().get(REDIS_KEY_SYSTEM_TIMEOUTS, key.name());
             if (cached instanceof Number number) {
-                return clamp(key, number.intValue());
+                return resolveMinutes(key, number.intValue());
             }
         } catch (Exception e) {
             log.warn("[TimeoutConfig] Cannot read {} from Redis: {}", key, e.getMessage());
         }
         try {
             return repository.findById(key.name())
-                    .map(cfg -> clamp(key, cfg.getValueMinutes()))
+                    .map(cfg -> resolveMinutes(key, cfg.getValueMinutes()))
                     .orElse(key.getDefaultMinutes());
         } catch (Exception e) {
             log.warn("[TimeoutConfig] Cannot read {} from DB, fallback default: {}", key, e.getMessage());
@@ -165,11 +165,11 @@ public class SystemTimeoutConfigService {
         }
     }
 
-    private static int clamp(TimeoutConfigKey key, Integer value) {
-        if (value == null) {
+    private static int resolveMinutes(TimeoutConfigKey key, Integer value) {
+        if (value == null || value < 0) {
             return key.getDefaultMinutes();
         }
-        return Math.max(0, value);
+        return value;
     }
 
     private SystemTimeoutConfigResponse toResponse(TimeoutConfigKey key, SystemTimeoutConfig stored) {

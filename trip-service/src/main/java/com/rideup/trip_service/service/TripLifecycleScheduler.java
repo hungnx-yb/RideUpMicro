@@ -88,8 +88,7 @@ public class TripLifecycleScheduler {
     private void autoCompleteFinishedTrips(LocalDateTime now) {
         int completeMinutes = timeoutReader.getTripAutoCompleteMinutes();
         LocalDateTime arrivalCutoff = now.minusMinutes(completeMinutes);
-        // Fallback: nếu không có estimatedArrivalTime, dùng 4 giờ hoặc max(4h, completeMinutes)
-        LocalDateTime departureFallbackCutoff = now.minusMinutes(Math.max(240, completeMinutes * 2));
+        LocalDateTime departureFallbackCutoff = now.minusMinutes(completeMinutes);
 
         List<Trip> tripsToComplete = tripRepository.findStartedTripsToComplete(arrivalCutoff, departureFallbackCutoff);
 
@@ -109,8 +108,8 @@ public class TripLifecycleScheduler {
                             .completedAt(now)
                             .build();
                     tripServicePublisher.publishTripCompleted(event);
-                    log.info("[TripLifecycleScheduler] Auto-completed tripId={} past 30 minutes from estimatedArrivalTime={}",
-                            trip.getId(), trip.getEstimatedArrivalTime());
+                    log.info("[TripLifecycleScheduler] Auto-completed tripId={} past {} minutes from estimatedArrivalTime={}",
+                            trip.getId(), completeMinutes, trip.getEstimatedArrivalTime());
                 } catch (Exception ex) {
                     log.error("[TripLifecycleScheduler] Failed to auto-complete tripId={}: {}", trip.getId(), ex.getMessage(), ex);
                 }

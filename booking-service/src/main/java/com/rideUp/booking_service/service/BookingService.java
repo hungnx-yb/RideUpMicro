@@ -54,10 +54,9 @@ public class BookingService {
     SystemTimeoutConfigService timeoutConfigService;
     BookingModificationService bookingModificationService;
 
-    /** ADM-FEAT-03: Hạn thanh toán Stripe (phút) đọc động từ cấu hình SLA */
+    /** Fallback nội bộ nếu phát sinh luồng PENDING_PAYMENT cũ (không còn cấu hình SLA) */
     private LocalDateTime paymentDeadlineFrom(LocalDateTime now) {
-        return now.plusMinutes(timeoutConfigService.getMinutes(
-                com.rideUp.booking_service.enums.TimeoutConfigKey.BOOKING_PAYMENT_TIMEOUT));
+        return now.plusMinutes(60);
     }
 
     public void checkDuplicateBooking(String tripId) {
@@ -134,23 +133,16 @@ public class BookingService {
         booking.setTotalAmount(tripPricePerSeat.multiply(BigDecimal.valueOf(request.getSeatCount())));
         booking.setCustomerId(SecurityUtils.getCurrentUserId());
 
-        // Đặt TTL (thời gian hết hạn) theo cấu hình SLA động (ADM-FEAT-03):
-        // - WAITING_DRIVER_APPROVAL: sau X phút tài xế chưa duyệt, muộn nhất 1 tiếng trước giờ khởi hành
-        // - PENDING_PAYMENT: sau Y phút chưa thanh toán (hoặc trước khởi hành 1 tiếng nếu cận giờ)
+        // Đặt TTL (thời gian hết hạn) đúng theo cấu hình SLA động của Admin (ADM-FEAT-03):
+        // Vé chờ tài xế duyệt hết hạn tại thời điểm (giờ khởi hành - BOOKING_DRIVER_APPROVAL_TIMEOUT phút)
         if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL) {
-            LocalDateTime approvalDeadline = now.plusMinutes(timeoutConfigService.getMinutes(
-                    com.rideUp.booking_service.enums.TimeoutConfigKey.BOOKING_DRIVER_APPROVAL_TIMEOUT));
-            if (trip.getDepartureTime() != null && trip.getDepartureTime().minusHours(1).isBefore(approvalDeadline)) {
-                approvalDeadline = trip.getDepartureTime().minusHours(1);
-            }
-            booking.setExpiresAt(approvalDeadline);
+            int approvalMinutes = timeoutConfigService.getMinutes(
+                    com.rideUp.booking_service.enums.TimeoutConfigKey.BOOKING_DRIVER_APPROVAL_TIMEOUT);
+            booking.setExpiresAt(trip.getDepartureTime() != null
+                    ? trip.getDepartureTime().minusMinutes(approvalMinutes)
+                    : now.plusMinutes(approvalMinutes));
         } else if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-            LocalDateTime paymentDeadline = paymentDeadlineFrom(now);
-            if (trip.getDepartureTime() != null && trip.getDepartureTime().minusHours(1).isBefore(paymentDeadline)) {
-                booking.setExpiresAt(trip.getDepartureTime().minusHours(1));
-            } else {
-                booking.setExpiresAt(paymentDeadline);
-            }
+            booking.setExpiresAt(paymentDeadlineFrom(now));
         }
         Booking saved = bookingRepository.save(booking);
         publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId, request.getPaymentIntentId());

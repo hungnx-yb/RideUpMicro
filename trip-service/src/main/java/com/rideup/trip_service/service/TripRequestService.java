@@ -68,16 +68,8 @@ public class TripRequestService {
             throw new AppException(ErrorCode.INVALID_SEAT_COUNT);
         }
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime latestPossibleExpire = request.getDepartureTime().minusMinutes(15);
-        // ADM-FEAT-03: thời gian tồn tại yêu cầu trên chợ đọc động từ cấu hình SLA (mặc định 24h)
-        LocalDateTime maxOpenTime = now.plusMinutes(marketplaceTimeoutReader.getMarketplaceRequestTtlMinutes());
-        if (maxOpenTime.isAfter(latestPossibleExpire)) {
-            maxOpenTime = latestPossibleExpire;
-        }
-        LocalDateTime expiresAt = maxOpenTime;
-        if (expiresAt.isBefore(now.plusMinutes(15))) {
-            expiresAt = request.getDepartureTime().minusMinutes(5);
-        }
+        // ADM-FEAT-03: thời gian tồn tại yêu cầu trên chợ tuân theo cấu hình SLA của Admin (mặc định 1440 phút)
+        LocalDateTime expiresAt = now.plusMinutes(marketplaceTimeoutReader.getMarketplaceRequestTtlMinutes());
 
         String userId = SecurityUtils.getCurrentUserId();
         TripRequest tripRequest = TripRequest.builder()
