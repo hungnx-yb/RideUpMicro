@@ -58,11 +58,7 @@ public class TripServiceConsumer {
         com.rideup.trip_service.dto.event.BookingConfirmedEvent event = objectMapper.readValue(payload, com.rideup.trip_service.dto.event.BookingConfirmedEvent.class);
         log.info("[BookingConfirmedEvent] eventId={}, bookingId={}, customerId={}, tripId={}, correlationId={}",
                 event.getEventId(), event.getBookingId(), event.getCustomerId(), event.getTripId(), event.getCorrelationId());
-        
-        if (event.getCustomerId() != null) {
-            tripRequestService.cancelAllOpenRequests(event.getCustomerId(), "Auto-cancelled due to confirmed booking");
-        }
-        
+
         ack.acknowledge();
     }
 
