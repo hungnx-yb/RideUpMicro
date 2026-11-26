@@ -20,18 +20,12 @@ public class MarketplaceTimeoutReader {
     private static final String REDIS_KEY_SYSTEM_TIMEOUTS = "config:system_timeouts";
     private static final String MARKETPLACE_REQUEST_TTL = "MARKETPLACE_REQUEST_TTL";
     private static final int DEFAULT_TTL_MINUTES = 1440;
-    private static final int MIN_TTL_MINUTES = 30;
-    private static final int MAX_TTL_MINUTES = 4320;
 
     private static final String TRIP_UNSTARTED_AUTO_CANCEL_TIMEOUT = "TRIP_UNSTARTED_AUTO_CANCEL_TIMEOUT";
     private static final int DEFAULT_UNSTARTED_CANCEL_MINUTES = 60;
-    private static final int MIN_UNSTARTED_CANCEL_MINUTES = 15;
-    private static final int MAX_UNSTARTED_CANCEL_MINUTES = 360;
 
     private static final String TRIP_AUTO_COMPLETE_TIMEOUT = "TRIP_AUTO_COMPLETE_TIMEOUT";
     private static final int DEFAULT_AUTO_COMPLETE_MINUTES = 30;
-    private static final int MIN_AUTO_COMPLETE_MINUTES = 15;
-    private static final int MAX_AUTO_COMPLETE_MINUTES = 240;
 
     RedisTemplate<String, Object> redisTemplate;
 
@@ -50,8 +44,8 @@ public class MarketplaceTimeoutReader {
     private int readMinutes(String configKey, int defaultMinutes) {
         try {
             Object value = redisTemplate.opsForHash().get(REDIS_KEY_SYSTEM_TIMEOUTS, configKey);
-            if (value instanceof Number number) {
-                return Math.max(0, number.intValue());
+            if (value instanceof Number number && number.intValue() >= 0) {
+                return number.intValue();
             }
         } catch (Exception e) {
             log.warn("[TimeoutConfig] Cannot read {} from Redis, fallback {} minutes: {}",
