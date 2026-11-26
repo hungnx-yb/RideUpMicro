@@ -222,6 +222,35 @@ public class TripRequestService {
         }
     }
 
+    /**
+     * Khi một chuyến đi bị hủy, tự động từ chối toàn bộ lời mời đang chờ từ chuyến đó.
+     */
+    @Transactional
+    public void rejectPendingInvitationsByTrip(String tripId) {
+        List<TripRequestInvitation> pendingInvitations = invitationRepository
+                .findByTripIdAndStatus(tripId, InvitationStatus.PENDING);
+        if (pendingInvitations.isEmpty()) {
+            return;
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        pendingInvitations.forEach(inv -> {
+            inv.setStatus(InvitationStatus.REJECTED);
+            inv.setRespondedAt(now);
+            try {
+                marketplaceEventProducer.publishInvitationRejectedEvent(InvitationRejectedEvent.builder()
+                        .invitationId(inv.getId())
+                        .tripRequestId(inv.getTripRequest().getId())
+                        .driverId(inv.getDriverId())
+                        .passengerId(inv.getTripRequest().getPassengerId())
+                        .build());
+            } catch (Exception ex) {
+                log.warn("Failed to publish InvitationRejectedEvent for invitationId={}: {}", inv.getId(), ex.getMessage());
+            }
+        });
+        invitationRepository.saveAll(pendingInvitations);
+        log.info("Rejected {} pending invitations for cancelled tripId={}", pendingInvitations.size(), tripId);
+    }
+
     public TripRequestInvitationResponse getInvitation(String invitationId) {
         TripRequestInvitation invitation = invitationRepository.findById(invitationId)
                 .orElseThrow(() -> new AppException(ErrorCode.TRIP_REQUEST_INVITATION_NOT_FOUND));

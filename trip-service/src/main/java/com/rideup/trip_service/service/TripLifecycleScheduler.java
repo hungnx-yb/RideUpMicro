@@ -28,6 +28,7 @@ public class TripLifecycleScheduler {
     TripRepository tripRepository;
     TripServicePublisher tripServicePublisher;
     MarketplaceTimeoutReader timeoutReader;
+    TripRequestService tripRequestService;
 
     /**
      * Quét định kỳ mỗi 1 phút:
@@ -74,6 +75,7 @@ public class TripLifecycleScheduler {
                             .cancelledAt(trip.getCancelledAt())
                             .build();
                     tripServicePublisher.publishTripCancelled(event);
+                    tripRequestService.rejectPendingInvitationsByTrip(trip.getId());
                     log.info("[TripLifecycleScheduler] Auto-cancelled tripId={} due to no-start after {} minutes from departureTime={}",
                             trip.getId(), cancelMinutes, trip.getDepartureTime());
                 } catch (Exception ex) {

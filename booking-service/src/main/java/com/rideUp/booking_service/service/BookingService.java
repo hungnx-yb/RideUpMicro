@@ -52,6 +52,7 @@ public class BookingService {
     ModelMapper modelMapper;
     IdentityServiceClient identityServiceClient;
     SystemTimeoutConfigService timeoutConfigService;
+    BookingModificationService bookingModificationService;
 
     /** ADM-FEAT-03: Hạn thanh toán Stripe (phút) đọc động từ cấu hình SLA */
     private LocalDateTime paymentDeadlineFrom(LocalDateTime now) {
@@ -558,6 +559,7 @@ public class BookingService {
 
         // Luôn gửi yêu cầu hoàn tiền / huỷ giữ cọc qua payment-service
         publishBookingCancellRequested(saved, correlationId, cancelReason);
+        bookingModificationService.rejectPendingModificationsByBooking(saved.getId(), "Đặt chỗ đã bị hủy");
         return modelMapper.map(saved, BookingResponse.class);
     }
 
@@ -738,6 +740,7 @@ public class BookingService {
         }
 
         bookingRepository.saveAll(bookingsToCancel);
+        bookingModificationService.rejectPendingModificationsByTrip(tripId, reason);
         log.info("Successfully cancelled {} bookings and triggered refunds for tripId={}", bookingsToCancel.size(), tripId);
     }
 

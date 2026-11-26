@@ -419,6 +419,62 @@ public class BookingModificationService {
         }
     }
 
+    /**
+     * Đóng toàn bộ yêu cầu chỉnh sửa đang chờ duyệt của một booking (khi khách hủy booking).
+     */
+    @Transactional
+    public void rejectPendingModificationsByBooking(String bookingId, String reason) {
+        rejectPendingModifications(
+                bookingModificationRepository.findByBookingIdAndStatus(bookingId, ModificationStatus.PENDING_DRIVER),
+                reason
+        );
+    }
+
+    /**
+     * Đóng toàn bộ yêu cầu chỉnh sửa đang chờ duyệt của một chuyến đi (khi chuyến đi bị hủy).
+     */
+    @Transactional
+    public void rejectPendingModificationsByTrip(String tripId, String reason) {
+        rejectPendingModifications(
+                bookingModificationRepository.findByTripIdAndStatus(tripId, ModificationStatus.PENDING_DRIVER),
+                reason
+        );
+    }
+
+    private void rejectPendingModifications(List<BookingModification> pendingList, String reason) {
+        if (pendingList == null || pendingList.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (BookingModification mod : pendingList) {
+            mod.setStatus(ModificationStatus.REJECTED);
+            mod.setRejectionReason(reason);
+            mod.setResolvedAt(now);
+        }
+        bookingModificationRepository.saveAll(pendingList);
+
+        for (BookingModification mod : pendingList) {
+            try {
+                bookingServicePublisher.publishBookingModificationResolved(
+                        BookingModificationResolvedEvent.builder()
+                                .eventId(UUID.randomUUID().toString())
+                                .modificationId(mod.getId())
+                                .bookingId(mod.getBookingId())
+                                .customerId(mod.getCustomerId())
+                                .tripId(mod.getTripId())
+                                .status(ModificationStatus.REJECTED)
+                                .reason(reason)
+                                .resolvedAt(now)
+                                .correlationId(UUID.randomUUID().toString())
+                                .build()
+                );
+            } catch (Exception e) {
+                log.error("Lỗi bắn Kafka BookingModificationResolvedEvent (REJECTED) cho modId={}: {}", mod.getId(), e.getMessage());
+            }
+        }
+        log.info("Đã tự động đóng {} yêu cầu chỉnh sửa đang chờ duyệt, lý do={}", pendingList.size(), reason);
+    }
+
     private BookingModificationResponse toResponse(BookingModification m) {
         return BookingModificationResponse.builder()
                 .id(m.getId())
