@@ -205,6 +205,10 @@ export default function DriverTripsScreen({ navigation }) {
   const [bookingPickupFilter, setBookingPickupFilter] = useState('');
   const [bookingDropoffFilter, setBookingDropoffFilter] = useState('');
   const [bookingPage, setBookingPage] = useState(0);
+  const [pendingModificationsByBooking, setPendingModificationsByBooking] = useState({});
+  const [selectedModification, setSelectedModification] = useState(null);
+  const [modRejectReason, setModRejectReason] = useState('');
+  const [modActionLoading, setModActionLoading] = useState(false);
 
   useEffect(() => {
     fetchProvinces();
@@ -352,6 +356,16 @@ export default function DriverTripsScreen({ navigation }) {
     fetchTrips(0, activeTab);
   };
 
+  const mapPendingModifications = (list = []) => {
+    const map = {};
+    if (Array.isArray(list)) {
+      list.forEach((mod) => {
+        if (mod?.bookingId) map[mod.bookingId] = mod;
+      });
+    }
+    return map;
+  };
+
   const handleTripPress = async (trip) => {
     setBookingPickupFilter('');
     setBookingDropoffFilter('');
@@ -360,12 +374,14 @@ export default function DriverTripsScreen({ navigation }) {
     setBookingFilterTab('ACTIVE');
     setLoadingBookings(true);
     try {
-      const [res, tRes] = await Promise.all([
+      const [res, tRes, modRes] = await Promise.all([
         apiService.getBookingsByTripId(trip.id),
-        apiService.getTripDetail(trip.id).catch(() => null)
+        apiService.getTripDetail(trip.id).catch(() => null),
+        apiService.getPendingModificationsByTrip(trip.id).catch(() => null)
       ]);
       const currentBookings = res?.data?.result || [];
       setBookings(currentBookings);
+      setPendingModificationsByBooking(mapPendingModifications(modRes?.data?.result));
       if (tRes?.data?.result) {
         setSelectedTrip(tRes.data.result);
       }
@@ -390,12 +406,14 @@ export default function DriverTripsScreen({ navigation }) {
   const refreshBookings = async () => {
     if (!selectedTrip) return;
     try {
-      const [res, tRes] = await Promise.all([
+      const [res, tRes, modRes] = await Promise.all([
         apiService.getBookingsByTripId(selectedTrip.id),
-        apiService.getTripDetail(selectedTrip.id).catch(() => null)
+        apiService.getTripDetail(selectedTrip.id).catch(() => null),
+        apiService.getPendingModificationsByTrip(selectedTrip.id).catch(() => null)
       ]);
       const currentBookings = res?.data?.result || [];
       setBookings(currentBookings);
+      setPendingModificationsByBooking(mapPendingModifications(modRes?.data?.result));
       if (tRes?.data?.result) {
         setSelectedTrip(tRes.data.result);
       }
@@ -767,6 +785,7 @@ export default function DriverTripsScreen({ navigation }) {
     const isCompleted = item.status === 'COMPLETED';
     const isLoading = actionLoading === item.id;
     const canApprove = selectedTrip?.status === 'OPEN' || selectedTrip?.status === 'FULL';
+    const pendingMod = pendingModificationsByBooking[item.id];
 
     const pickupWardName = selectedTrip?.stops?.find(s => String(s.wardId) === String(item.pickupWardId))?.addressText || '';
     const dropoffWardName = selectedTrip?.stops?.find(s => String(s.wardId) === String(item.dropoffWardId))?.addressText || '';
@@ -941,6 +960,33 @@ export default function DriverTripsScreen({ navigation }) {
 
         {/* ── Action Buttons ── */}
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          {/* Nút xem & duyệt yêu cầu chỉnh sửa booking */}
+          {!!pendingMod && (
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: '#FEF3C7',
+                borderWidth: 1,
+                borderColor: '#F59E0B',
+                paddingHorizontal: 10,
+                paddingVertical: 7,
+                borderRadius: 10,
+              }}
+              onPress={() => {
+                setModRejectReason('');
+                setSelectedModification(pendingMod);
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="create-outline" size={15} color="#B45309" />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#B45309' }}>
+                Yêu cầu sửa vé
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* Nút Gọi nếu có số điện thoại */}
           {!!item.userPhone && (
             <TouchableOpacity
@@ -1172,7 +1218,17 @@ export default function DriverTripsScreen({ navigation }) {
       )}
 
       {/* Modal Danh sách khách đặt & Chi tiết chuyến đi (Full Screen) */}
-      <Modal visible={!!selectedTrip} animationType="slide">
+      <Modal
+        visible={!!selectedTrip}
+        animationType="slide"
+        onRequestClose={() => {
+          if (selectedModification) {
+            if (!modActionLoading) setSelectedModification(null);
+          } else {
+            setSelectedTrip(null);
+          }
+        }}
+      >
         <View style={[styles.fullScreenContainer, { paddingTop: Math.max(insets.top, 20) }]}>
           <View style={styles.fullScreenHeader}>
             <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedTrip(null)}>
@@ -1419,6 +1475,141 @@ export default function DriverTripsScreen({ navigation }) {
               />
             );
           })()}
+
+          {/* Modification Detail Overlay (rendered inside Trip Detail Modal so it appears on top) */}
+          {selectedModification && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.55)',
+                justifyContent: 'center',
+                padding: 20,
+                zIndex: 100,
+                elevation: 20,
+              }}
+            >
+              <View style={{ backgroundColor: COLORS.surface, borderRadius: 18, padding: 18, maxHeight: '85%' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="create" size={20} color="#D97706" />
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}>
+                      Yêu cầu chỉnh sửa booking
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    disabled={modActionLoading}
+                    onPress={() => setSelectedModification(null)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="close" size={22} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+                  {[
+                    { label: 'Điểm đón', oldVal: selectedModification?.oldPickupAddressText, newVal: selectedModification?.newPickupAddressText },
+                    { label: 'Điểm trả', oldVal: selectedModification?.oldDropoffAddressText, newVal: selectedModification?.newDropoffAddressText },
+                    { label: 'Tên hành khách', oldVal: selectedModification?.oldPassengerName, newVal: selectedModification?.newPassengerName },
+                    { label: 'Số điện thoại', oldVal: selectedModification?.oldPassengerPhone, newVal: selectedModification?.newPassengerPhone },
+                    { label: 'Ghi chú', oldVal: selectedModification?.oldNote, newVal: selectedModification?.newNote },
+                  ]
+                    .filter(row => row.newVal !== null && row.newVal !== undefined && row.newVal !== '' && row.newVal !== row.oldVal)
+                    .map((row) => (
+                      <View
+                        key={row.label}
+                        style={{
+                          backgroundColor: '#F8FAFC',
+                          borderWidth: 1,
+                          borderColor: COLORS.border,
+                          borderRadius: 10,
+                          padding: 10,
+                          marginBottom: 8,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.text, marginBottom: 4 }}>{row.label}</Text>
+                        <Text style={{ fontSize: 12, color: COLORS.textMuted, textDecorationLine: 'line-through' }}>
+                          Cũ: {row.oldVal || 'Không có'}
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#B45309', marginTop: 2 }}>
+                          Mới: {row.newVal}
+                        </Text>
+                      </View>
+                    ))}
+
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.text, marginTop: 6, marginBottom: 6 }}>
+                    Lý do từ chối (nếu từ chối):
+                  </Text>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      fontSize: 13,
+                      color: COLORS.text,
+                      backgroundColor: '#FFF',
+                    }}
+                    placeholder="Nhập lý do từ chối..."
+                    placeholderTextColor={COLORS.textMuted}
+                    value={modRejectReason}
+                    onChangeText={setModRejectReason}
+                    editable={!modActionLoading}
+                  />
+                </ScrollView>
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                  <TouchableOpacity
+                    style={[styles.actionBtnReject, { flex: 1, justifyContent: 'center', paddingVertical: 11 }]}
+                    disabled={modActionLoading}
+                    onPress={async () => {
+                      try {
+                        setModActionLoading(true);
+                        const reason = modRejectReason.trim() || 'Tài xế từ chối yêu cầu chỉnh sửa';
+                        await apiService.rejectBookingModification(selectedModification.id, reason);
+                        setSelectedModification(null);
+                        await refreshBookings();
+                        Alert.alert('Thành công', 'Đã từ chối yêu cầu chỉnh sửa.');
+                      } catch (e) {
+                        Alert.alert('Lỗi', e.response?.data?.message || 'Không thể từ chối yêu cầu.');
+                      } finally {
+                        setModActionLoading(false);
+                      }
+                    }}
+                  >
+                    {modActionLoading ? <ActivityIndicator size="small" color={COLORS.error} /> : (
+                      <Text style={styles.actionBtnRejectText}>Từ chối</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtnApprove, { flex: 1, justifyContent: 'center', paddingVertical: 11 }]}
+                    disabled={modActionLoading}
+                    onPress={async () => {
+                      try {
+                        setModActionLoading(true);
+                        await apiService.approveBookingModification(selectedModification.id);
+                        setSelectedModification(null);
+                        await refreshBookings();
+                        Alert.alert('Thành công', 'Đã duyệt yêu cầu chỉnh sửa booking.');
+                      } catch (e) {
+                        Alert.alert('Lỗi', e.response?.data?.message || 'Không thể duyệt yêu cầu.');
+                      } finally {
+                        setModActionLoading(false);
+                      }
+                    }}
+                  >
+                    {modActionLoading ? <ActivityIndicator size="small" color="#fff" /> : (
+                      <Text style={styles.actionBtnApproveText}>Duyệt thay đổi</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       </Modal>
 
