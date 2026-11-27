@@ -149,9 +149,6 @@ function AdminLayout({ title, subtitle, icon: TitleIcon, actions, children }) {
               <span className="text-lg font-extrabold tracking-tight text-slate-900">
                 Ride<span className="text-orange-500">Up</span>
               </span>
-              <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-extrabold text-orange-700">
-                ADMIN
-              </span>
             </div>
             <p className="text-[11px] font-medium text-slate-400">Hệ thống điều hành</p>
           </div>
