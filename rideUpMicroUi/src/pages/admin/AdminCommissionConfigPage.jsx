@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FaCalculator, FaPercentage, FaSave, FaShieldAlt, FaUndo, FaWallet } from "react-icons/fa";
+import { FaCalculator, FaPercentage, FaQuestionCircle, FaSave, FaShieldAlt, FaWallet } from "react-icons/fa";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { Button, Card, Field, formatDateTime, formatVnd, inputClass, useToast } from "../../components/admin/AdminUi";
 import { getCommissionConfigApi, updateCommissionConfigApi } from "../../services/adminApi";
@@ -52,7 +52,7 @@ function validate(form) {
   if (!(min > 0)) errors.minRate = "Tỷ lệ sàn phải lớn hơn 0%";
   if (base < min) errors.baseRate = "Tỷ lệ cơ sở phải ≥ tỷ lệ sàn";
   if (max < base) errors.maxRate = "Tỷ lệ trần phải ≥ tỷ lệ cơ sở";
-  if (max > 50) errors.maxRate = "Tỷ lệ trần không vượt quá 50%";
+  if (max > 50) errors.maxRate = "Tỷ lệ trần không vượt quá mức cho phép";
   if (Number(form.ratingBenchmark) < 1 || Number(form.ratingBenchmark) > 5) errors.ratingBenchmark = "Rating chuẩn trong khoảng 1 - 5 sao";
   if (Number(form.ratingStep) < 0 || Number(form.ratingStep) > 10) errors.ratingStep = "Bước nhảy trong khoảng 0 - 10%";
   if (Number(form.reputationBenchmark) < 0 || Number(form.reputationBenchmark) > 100) errors.reputationBenchmark = "Uy tín chuẩn trong khoảng 0 - 100";
@@ -79,6 +79,44 @@ function AdminCommissionConfigPage() {
   const [simReputation, setSimReputation] = useState(80);
   const simulatorRef = useRef(null);
   const { showToast, toastElement } = useToast();
+
+  // Bật/tắt phần giải thích tham số, ghi nhớ lựa chọn trên trình duyệt
+  const [showHelp, setShowHelp] = useState(() => {
+    try {
+      return localStorage.getItem("admin.commission.showHelp") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleHelp = () => {
+    setShowHelp((prev) => {
+      try {
+        localStorage.setItem("admin.commission.showHelp", prev ? "0" : "1");
+      } catch {
+        // Bỏ qua nếu trình duyệt chặn localStorage
+      }
+      return !prev;
+    });
+  };
+
+  // Lời giải thích từng tham số, ví dụ tính theo đúng giá trị đang nhập
+  const help = useMemo(() => {
+    const rb = Number(form.ratingBenchmark);
+    const rs = Number(form.ratingStep);
+    const pb = Number(form.reputationBenchmark);
+    const ps = Number(form.reputationStep);
+    return {
+      baseRate: `Mức hoa hồng mặc định sàn thu trên mỗi cuốc. Tài xế đúng chuẩn (${rb} sao, ${pb} điểm uy tín) trả đúng ${form.baseRate}%.`,
+      minRate: `Mức thấp nhất sàn được thu, dù tài xế tốt đến đâu. Đây là ưu đãi tối đa cho đối tác vàng.`,
+      maxRate: `Mức cao nhất sàn được thu, dù tài xế kém đến đâu. Không vượt quá mức cho phép.`,
+      ratingBenchmark: `Mốc so sánh số sao. Rating cao hơn ${rb} sao được giảm hoa hồng, thấp hơn thì bị tăng.`,
+      ratingStep: `Mỗi 1 sao chênh so với mốc ${rb} sao thì hoa hồng đổi ${rs}%. VD: tài xế 5 sao được giảm ${round2((5 - rb) * rs)}%.`,
+      reputationBenchmark: `Mốc so sánh điểm uy tín (0–100). Cao hơn ${pb} điểm được giảm hoa hồng, thấp hơn thì bị tăng.`,
+      reputationStep: `Mỗi 10 điểm uy tín chênh so với mốc ${pb} thì hoa hồng đổi ${ps}%. VD: 100 điểm được giảm ${round2(((100 - pb) / 10) * ps)}%.`,
+    };
+  }, [form]);
+  const helpExample = useMemo(() => simulateRate(form, 5, 100), [form]);
+  const helpBadExample = useMemo(() => simulateRate(form, 3.5, 50), [form]);
 
   const errors = useMemo(() => validate(form), [form]);
   const hasErrors = Object.keys(errors).length > 0;
@@ -139,21 +177,20 @@ function AdminCommissionConfigPage() {
       subtitle="Thiết lập chính sách hoa hồng cá nhân hóa theo Rating và Điểm uy tín, hạn mức nợ tiền mặt và ngưỡng uy tín tối thiểu nhận chuyến. Thay đổi có hiệu lực ngay, không cần triển khai lại hệ thống."
       icon={FaPercentage}
       actions={(
-        <>
-          <Button variant="secondary" onClick={() => setForm(DEFAULT_FORM)} disabled={isLoading || isSaving}>
-            <FaUndo /> Khôi phục mặc định
-          </Button>
-          <Button variant="secondary" onClick={() => simulatorRef.current?.scrollIntoView({ behavior: "smooth" })}>
-            <FaCalculator /> Xem trước mô phỏng
-          </Button>
-          <Button onClick={handleSave} disabled={isLoading || isSaving || hasErrors}>
-            <FaSave /> {isSaving ? "Đang lưu..." : "Lưu & Áp dụng ngay"}
-          </Button>
-        </>
+        <Button onClick={handleSave} disabled={isLoading || isSaving || hasErrors}>
+          <FaSave /> {isSaving ? "Đang lưu..." : "Lưu & Áp dụng ngay"}
+        </Button>
       )}
     >
       {savedConfig?.updatedAt ? (
-        <p className="mb-4 text-xs text-slate-500">Cập nhật lần cuối: {formatDateTime(savedConfig.updatedAt)}</p>
+        <p className="mb-4 text-xs text-slate-500">
+          Cập nhật lần cuối: {formatDateTime(savedConfig.updatedAt)}
+          {savedConfig.updatedByName ? (
+            <>
+              {" "}bởi <strong className="font-semibold text-slate-700">{savedConfig.updatedByName}</strong>
+            </>
+          ) : savedConfig.updatedBy ? null : " bởi Hệ thống (giá trị khởi tạo)"}
+        </p>
       ) : null}
 
       {/* Hộp công thức toán học chuẩn hóa R_final */}
@@ -218,16 +255,56 @@ function AdminCommissionConfigPage() {
             title="Tham số hoa hồng & đòn bẩy"
             description="Cấu hình các hệ số tỷ lệ chiết khấu, ngưỡng rating và điểm uy tín chuẩn áp dụng cho thuật toán."
             icon={FaPercentage}
+            actions={(
+              <button
+                type="button"
+                onClick={toggleHelp}
+                aria-pressed={showHelp}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                  showHelp
+                    ? "border-orange-300 bg-orange-50 text-orange-700"
+                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <FaQuestionCircle /> {showHelp ? "Ẩn giải thích" : "Hiện giải thích"}
+              </button>
+            )}
           >
+            {showHelp ? (
+              <div className="mb-5 space-y-3 rounded-2xl border border-orange-200 bg-orange-50/60 p-4 text-sm leading-relaxed text-slate-700">
+                <p className="font-bold text-slate-900">Cách tính bằng lời</p>
+                <ol className="list-decimal space-y-1 pl-5">
+                  <li>Bắt đầu từ <strong>tỷ lệ cơ sở</strong> ({form.baseRate}%).</li>
+                  <li>Tài xế có <strong>số sao</strong> và <strong>điểm uy tín</strong> cao hơn mốc chuẩn thì được <strong>giảm</strong> hoa hồng; thấp hơn mốc thì bị <strong>tăng</strong>.</li>
+                  <li>Kết quả luôn bị giới hạn trong khoảng <strong>{form.minRate}% – {form.maxRate}%</strong> (sàn và trần).</li>
+                </ol>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl bg-white p-3 text-xs">
+                    <p className="font-bold text-emerald-700">Ví dụ tài xế xuất sắc: 5 sao, 100 điểm</p>
+                    <p className="mt-1">
+                      {form.baseRate}% − {helpExample.deltaRating}% (sao) − {helpExample.deltaReputation}% (uy tín) = {helpExample.applied}%
+                      {helpExample.applied !== helpExample.final ? ` → giới hạn về sàn ${helpExample.final}%` : ""}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-white p-3 text-xs">
+                    <p className="font-bold text-red-600">Ví dụ tài xế kém: 3.5 sao, 50 điểm</p>
+                    <p className="mt-1">
+                      {form.baseRate}% + {round2(-helpBadExample.deltaRating)}% (sao) + {round2(-helpBadExample.deltaReputation)}% (uy tín) = {helpBadExample.applied}%
+                      {helpBadExample.applied !== helpBadExample.final ? ` → giới hạn về trần ${helpBadExample.final}%` : ""}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Tỷ lệ cơ sở R_base (%)" error={errors.baseRate}>{numberInput("baseRate", { step: 0.5, min: 0 })}</Field>
-              <Field label="Tỷ lệ sàn R_min (%)" hint="Ưu đãi tối đa cho đối tác vàng" error={errors.minRate}>{numberInput("minRate", { step: 0.5, min: 0 })}</Field>
-              <Field label="Tỷ lệ trần R_max (%)" hint="Mức phạt tối đa, ≤ 50%" error={errors.maxRate}>{numberInput("maxRate", { step: 0.5, min: 0, max: 50 })}</Field>
-              <Field label="Rating chuẩn Rate_base (sao)" error={errors.ratingBenchmark}>{numberInput("ratingBenchmark", { step: 0.1, min: 1, max: 5 })}</Field>
-              <Field label="Bước nhảy W_rate (% / sao)" error={errors.ratingStep}>{numberInput("ratingStep", { step: 0.1, min: 0 })}</Field>
+              <Field label="Tỷ lệ cơ sở R_base (%)" hint={showHelp ? help.baseRate : undefined} error={errors.baseRate}>{numberInput("baseRate", { step: 0.5, min: 0 })}</Field>
+              <Field label="Tỷ lệ sàn R_min (%)" hint={showHelp ? help.minRate : "Ưu đãi tối đa cho đối tác vàng"} error={errors.minRate}>{numberInput("minRate", { step: 0.5, min: 0 })}</Field>
+              <Field label="Tỷ lệ trần R_max (%)" hint={showHelp ? help.maxRate : "Mức phạt tối đa, ≤ 50%"} error={errors.maxRate}>{numberInput("maxRate", { step: 0.5, min: 0, max: 50 })}</Field>
+              <Field label="Rating chuẩn Rate_base (sao)" hint={showHelp ? help.ratingBenchmark : undefined} error={errors.ratingBenchmark}>{numberInput("ratingBenchmark", { step: 0.1, min: 1, max: 5 })}</Field>
+              <Field label="Bước nhảy W_rate (% / sao)" hint={showHelp ? help.ratingStep : undefined} error={errors.ratingStep}>{numberInput("ratingStep", { step: 0.1, min: 0 })}</Field>
               <div className="hidden sm:block" />
-              <Field label="Uy tín chuẩn Rep_base (điểm)" error={errors.reputationBenchmark}>{numberInput("reputationBenchmark", { step: 1, min: 0, max: 100 })}</Field>
-              <Field label="Bước nhảy W_rep (% / 10 điểm)" error={errors.reputationStep}>{numberInput("reputationStep", { step: 0.1, min: 0 })}</Field>
+              <Field label="Uy tín chuẩn Rep_base (điểm)" hint={showHelp ? help.reputationBenchmark : undefined} error={errors.reputationBenchmark}>{numberInput("reputationBenchmark", { step: 1, min: 0, max: 100 })}</Field>
+              <Field label="Bước nhảy W_rep (% / 10 điểm)" hint={showHelp ? help.reputationStep : undefined} error={errors.reputationStep}>{numberInput("reputationStep", { step: 0.1, min: 0 })}</Field>
             </div>
           </Card>
 

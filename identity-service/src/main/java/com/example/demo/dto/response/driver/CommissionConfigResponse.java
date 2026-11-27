@@ -22,6 +22,8 @@ public class CommissionConfigResponse implements Serializable {
     BigDecimal creditLimit;
     Integer minAcceptScore;
     String updatedBy;
+    /** Họ tên của admin cập nhật lần cuối */
+    String updatedByName;
     /** ISO-8601, lưu dạng chuỗi để cache Redis an toàn */
     String updatedAt;
 }
