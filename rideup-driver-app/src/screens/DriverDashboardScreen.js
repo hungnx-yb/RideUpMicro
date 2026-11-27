@@ -220,26 +220,13 @@ export default function DriverDashboardScreen() {
         const notiType = (meta.type || msg?.type || '').toUpperCase();
         const titleLower = (msg?.title || '').toLowerCase();
 
-        // 1. Chỉ hiện popup "CÓ YÊU CẦU ĐẶT XE!" khi THỰC SỰ là đơn mới đang CHỜ DUYỆT (BOOKING_WAITING_APPROVAL)
-        // Tuyệt đối không hiển thị popup này khi tài xế vừa duyệt xong (BOOKING_CONFIRMED) hoặc thông báo khác
+        // 1. Khi có yêu cầu đặt xe mới (BOOKING_WAITING_APPROVAL): không hiện Alert popup nữa
+        // vì đã có thông báo chuông, chỉ âm thầm làm mới danh sách chờ duyệt trên Dashboard
         const isWaitingApproval = notiType === 'BOOKING_WAITING_APPROVAL' ||
           (titleLower.includes('yêu cầu đặt xe mới') && notiType !== 'BOOKING_CONFIRMED');
 
         if (isWaitingApproval) {
-          Alert.alert(
-            "🚀 CÓ YÊU CẦU ĐẶT XE!",
-            "Bạn vừa nhận được một yêu cầu đặt chỗ mới từ khách hàng. Vui lòng kiểm tra ngay!",
-            [
-              {
-                text: "Để sau",
-                style: "cancel",
-              },
-              {
-                text: "Xem ngay",
-                onPress: () => handleIncomingBooking(msg)
-              }
-            ]
-          );
+          setTimeout(() => fetchDashboardData(true), 500);
         } else if (notiType === 'BOOKING_MODIFICATION_REQUESTED' || titleLower.includes('đổi') || titleLower.includes('lộ trình') || titleLower.includes('chỉnh sửa')) {
           Alert.alert(
             "🔔 YÊU CẦU ĐỔI LỘ TRÌNH!",
