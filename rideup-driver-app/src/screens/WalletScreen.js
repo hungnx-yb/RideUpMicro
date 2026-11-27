@@ -122,7 +122,6 @@ export default function WalletScreen({ navigation }) {
   const [driverReviews, setDriverReviews] = useState([]);
   const [stripeStatus, setStripeStatus] = useState(null);
   const [payouts, setPayouts] = useState([]);
-  const [activeTab, setActiveTab] = useState('ALL'); // 'ALL' | 'COMPLETED' | 'OFFSET'
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 5;
   const [expandedPayouts, setExpandedPayouts] = useState({});
@@ -270,17 +269,11 @@ export default function WalletScreen({ navigation }) {
   const debtStatus = getDebtStatus();
   const debtProgress = Math.min(Math.max((debt / DEBT_LIMIT) * 100, 0), 100);
 
-  // Lọc danh sách giải ngân
-  const filteredPayouts = payouts.filter((p) => {
-    if (activeTab === 'COMPLETED') return p.status === 'COMPLETED';
-    if (activeTab === 'OFFSET') return p.status === 'FULL_DEBT_OFFSET';
-    return true;
-  });
-
-  const totalPages = Math.ceil(filteredPayouts.length / ITEMS_PER_PAGE) || 1;
+  // Phân trang danh sách giao dịch
+  const totalPages = Math.ceil(payouts.length / ITEMS_PER_PAGE) || 1;
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedPayouts = filteredPayouts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const paginatedPayouts = payouts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   if (loading && !refreshing) {
     return (
@@ -482,40 +475,14 @@ export default function WalletScreen({ navigation }) {
         </View>
 
         {/* =========================================================================
-            CARD 4: LỊCH SỬ GIAO DỊCH (SEGMENTED CONTROL + GROUPED LIST CARD)
+            CARD 4: LỊCH SỬ GIAO DỊCH (GROUPED LIST CARD)
            ========================================================================= */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Lịch sử giao dịch</Text>
-          <Text style={styles.sectionSubCount}>{filteredPayouts.length} giao dịch</Text>
+          <Text style={styles.sectionSubCount}>{payouts.length} giao dịch</Text>
         </View>
 
-        {/* iOS Segmented Control */}
-        <View style={styles.segmentedControl}>
-          {[
-            { key: 'ALL', label: 'Tất cả' },
-            { key: 'COMPLETED', label: 'Đã nhận' },
-            { key: 'OFFSET', label: 'Cấn trừ nợ' }
-          ].map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.segmentItem, isActive && styles.segmentItemActive]}
-                onPress={() => {
-                  setActiveTab(tab.key);
-                  setCurrentPage(1);
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {filteredPayouts.length === 0 ? (
+        {payouts.length === 0 ? (
           <View style={styles.emptyBox}>
             <Ionicons name="receipt-outline" size={30} color={COLORS.textMuted} />
             <Text style={styles.emptyTextTitle}>Chưa có giao dịch</Text>
@@ -612,7 +579,7 @@ export default function WalletScreen({ navigation }) {
         )}
 
         {/* Pagination */}
-        {filteredPayouts.length > 0 && (
+        {payouts.length > 0 && (
           <View style={styles.paginationRow}>
             <TouchableOpacity
               style={[styles.pageBtn, safeCurrentPage === 1 && styles.pageBtnDisabled]}
@@ -845,38 +812,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: COLORS.textMuted
-  },
-
-  // iOS SEGMENTED CONTROL
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.cardBgLight,
-    borderRadius: 10,
-    padding: 3,
-    marginBottom: 12
-  },
-  segmentItem: {
-    flex: 1,
-    paddingVertical: 7,
-    alignItems: 'center',
-    borderRadius: 8
-  },
-  segmentItemActive: {
-    backgroundColor: COLORS.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1
-  },
-  segmentText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textMuted
-  },
-  segmentTextActive: {
-    fontWeight: '600',
-    color: COLORS.text
   },
 
   emptyBox: {
