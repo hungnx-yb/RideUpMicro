@@ -8,7 +8,8 @@ import {
   Alert,
   SafeAreaView,
   ScrollView,
-  RefreshControl
+  RefreshControl,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStripe } from '@stripe/stripe-react-native';
@@ -40,6 +41,79 @@ const formatMoney = (val) => {
   return Number(val).toLocaleString('vi-VN') + ' đ';
 };
 
+const formatBookingCode = (code) => {
+  if (!code) return 'N/A';
+  const parts = code.split('-');
+  return parts[parts.length - 1]?.toUpperCase() || code.slice(-7).toUpperCase();
+};
+
+const formatStripeAccountId = (id) => {
+  if (!id) return '';
+  if (id.length <= 12) return id;
+  return `${id.slice(0, 9)}••••${id.slice(-4)}`;
+};
+
+const getPayoutStatusMeta = (status) => {
+  switch (status) {
+    case 'COMPLETED':
+      return {
+        label: 'ĐÃ GIẢI NGÂN',
+        color: COLORS.success,
+        bgColor: 'rgba(16, 185, 129, 0.12)',
+        icon: 'arrow-down',
+        iconBg: 'rgba(16, 185, 129, 0.12)',
+        desc: 'Đã giải ngân về tài khoản Stripe của bạn'
+      };
+    case 'FULL_DEBT_OFFSET':
+      return {
+        label: 'CẤN TRỪ HẾT NỢ',
+        color: COLORS.primary,
+        bgColor: 'rgba(14, 165, 233, 0.12)',
+        icon: 'swap-horizontal',
+        iconBg: 'rgba(14, 165, 233, 0.12)',
+        desc: 'Đã bù trừ 100% vào dư nợ hoa hồng tiền mặt'
+      };
+    case 'PARTIAL_OFFSET':
+      return {
+        label: 'TRỪ NỢ 1 PHẦN',
+        color: COLORS.warning,
+        bgColor: 'rgba(245, 158, 11, 0.12)',
+        icon: 'pie-chart',
+        iconBg: 'rgba(245, 158, 11, 0.12)',
+        desc: 'Đã trừ một phần dư nợ và giải ngân phần còn lại'
+      };
+    case 'SKIPPED_NOT_ONBOARDED':
+    case 'SKIPPED_NOT_CONNECTED':
+      return {
+        label: null,
+        color: COLORS.danger,
+        bgColor: 'transparent',
+        icon: 'alert-circle',
+        iconBg: 'rgba(239, 68, 68, 0.12)',
+        desc: 'Hệ thống chưa thể giải ngân do chưa liên kết thẻ Stripe'
+      };
+    default:
+      if (status && status.startsWith('SKIPPED')) {
+        return {
+          label: null,
+          color: COLORS.danger,
+          bgColor: 'transparent',
+          icon: 'alert-circle',
+          iconBg: 'rgba(239, 68, 68, 0.12)',
+          desc: 'Hệ thống chưa thể giải ngân do chưa liên kết thẻ Stripe'
+        };
+      }
+      return {
+        label: status || 'KHÁC',
+        color: COLORS.textMuted,
+        bgColor: 'rgba(100, 116, 139, 0.12)',
+        icon: 'receipt',
+        iconBg: 'rgba(100, 116, 139, 0.12)',
+        desc: ''
+      };
+  }
+};
+
 export default function WalletScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,6 +129,14 @@ export default function WalletScreen({ navigation }) {
   const [stripeStatus, setStripeStatus] = useState(null);
   const [payouts, setPayouts] = useState([]);
   const [activeTab, setActiveTab] = useState('ALL'); // 'ALL' | 'COMPLETED' | 'OFFSET'
+  const [expandedPayouts, setExpandedPayouts] = useState({});
+
+  const toggleExpandPayout = (id) => {
+    setExpandedPayouts((prev) => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
@@ -385,47 +467,84 @@ export default function WalletScreen({ navigation }) {
           </View>
 
           {isStripeActive ? (
-            /* Trạng thái ĐÃ KÍCH HOẠT */
-            <View style={styles.stripeActiveBox}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Text style={styles.stripeInfoLabel}>Mã tài khoản:</Text>
-                <Text style={styles.stripeInfoVal}>{stripeStatus?.stripeAccountId}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-                <Text style={styles.stripeInfoLabel}>Rút tiền về thẻ ATM:</Text>
-                <Text style={[styles.stripeInfoVal, { color: COLORS.success, fontWeight: '700' }]}>Tự động giải ngân</Text>
+            /* Trạng thái ĐÃ KÍCH HOẠT: Digital Card Hiện Đại */
+            <View>
+              <View style={styles.digitalCard}>
+                <View style={styles.digitalCardTop}>
+                  <View style={styles.digitalCardChip}>
+                    <Ionicons name="hardware-chip-outline" size={24} color="#CBD5E1" />
+                    <Ionicons name="wifi" size={17} color="#94A3B8" style={{ transform: [{ rotate: '90deg' }], marginLeft: 6 }} />
+                  </View>
+                  <View style={styles.digitalCardBadge}>
+                    <Ionicons name="shield-checkmark" size={12} color="#10B981" />
+                    <Text style={styles.digitalCardBadgeText}>SẴN SÀNG NHẬN TIỀN</Text>
+                  </View>
+                </View>
+
+                <View style={styles.digitalCardMiddle}>
+                  <Text style={styles.digitalCardNumber}>
+                    {formatStripeAccountId(stripeStatus?.stripeAccountId)}
+                  </Text>
+                  <Text style={styles.digitalCardBrand}>STRIPE EXPRESS PAYOUT</Text>
+                </View>
+
+                <View style={styles.digitalCardBottom}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="flash" size={14} color="#38BDF8" />
+                    <Text style={styles.digitalCardPayoutText}>Tự động giải ngân về thẻ ATM</Text>
+                  </View>
+                  <View style={styles.digitalCardLogoWrap}>
+                    <Text style={styles.digitalCardLogoText}>stripe</Text>
+                  </View>
+                </View>
               </View>
 
               <TouchableOpacity
                 style={styles.stripeDashboardBtn}
                 onPress={handleOpenStripeDashboard}
+                activeOpacity={0.8}
               >
-                <Ionicons name="settings-outline" size={16} color={COLORS.stripeBrand} />
-                <Text style={styles.stripeDashboardBtnText}>Quản lý thẻ ATM / Rút tiền trên Stripe Portal</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="settings-outline" size={16} color={COLORS.stripeBrand} />
+                  <Text style={styles.stripeDashboardBtnText}>Cài đặt thẻ ATM & Rút tiền</Text>
+                </View>
                 <Ionicons name="open-outline" size={16} color={COLORS.stripeBrand} />
               </TouchableOpacity>
             </View>
           ) : (
             /* Trạng thái CHƯA LIÊN KẾT */
             <View style={styles.stripeInactiveBox}>
-              <Text style={styles.stripeInactiveDesc}>
-                Bạn cần liên kết tài khoản ngân hàng để hệ thống tự động chuyển tiền các cuốc xe khách thanh toán qua thẻ.
-              </Text>
-              <Text style={styles.stripeTestNote}>
-                💡 <Text style={{ fontWeight: '700' }}>Chế độ đồ án:</Text> Bấm nút "Skip this account form" ở đầu trang để kích hoạt ngay mà không cần giấy tờ thật.
-              </Text>
+              <View style={styles.stripeInactiveHeader}>
+                <View style={styles.stripeIconCircle}>
+                  <Ionicons name="link-outline" size={22} color={COLORS.stripeBrand} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stripeInactiveTitle}>Liên kết tài khoản ngân hàng</Text>
+                  <Text style={styles.stripeInactiveDesc}>
+                    Hệ thống sẽ tự động giải ngân doanh thu các cuốc xe trực tuyến về thẻ ATM của bạn.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.stripeTestHintBox}>
+                <Ionicons name="bulb-outline" size={15} color={COLORS.stripeBrand} />
+                <Text style={styles.stripeTestHintText}>
+                  <Text style={{ fontWeight: '700' }}>Chế độ thử nghiệm:</Text> Bấm "Skip this account form" trên trang Stripe để kích hoạt tức thì.
+                </Text>
+              </View>
 
               <TouchableOpacity
                 style={styles.stripeOnboardBtn}
                 onPress={handleConnectStripe}
                 disabled={connectingStripe}
+                activeOpacity={0.8}
               >
                 {connectingStripe ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="link" size={18} color="#FFF" />
-                    <Text style={styles.stripeOnboardBtnText}>Liên kết tài khoản Stripe Express ngay</Text>
+                    <Ionicons name="flash" size={17} color="#FFF" />
+                    <Text style={styles.stripeOnboardBtnText}>Liên kết tài khoản Stripe ngay</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -438,7 +557,7 @@ export default function WalletScreen({ navigation }) {
            ========================================================================= */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Lịch Sử Nhận Tiền & Bù Trừ Nợ</Text>
-          <Text style={{ fontSize: 13, color: COLORS.textMuted }}>{filteredPayouts.length} giao dịch</Text>
+          <Text style={styles.sectionSubCount}>{filteredPayouts.length} giao dịch</Text>
         </View>
 
         {/* Tabs Filter */}
@@ -446,18 +565,21 @@ export default function WalletScreen({ navigation }) {
           <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'ALL' && styles.tabBtnActive]}
             onPress={() => setActiveTab('ALL')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.tabBtnText, activeTab === 'ALL' && styles.tabBtnTextActive]}>Tất cả</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'COMPLETED' && styles.tabBtnActive]}
             onPress={() => setActiveTab('COMPLETED')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.tabBtnText, activeTab === 'COMPLETED' && styles.tabBtnTextActive]}>Đã nhận tiền</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'OFFSET' && styles.tabBtnActive]}
             onPress={() => setActiveTab('OFFSET')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.tabBtnText, activeTab === 'OFFSET' && styles.tabBtnTextActive]}>Cấn trừ nợ</Text>
           </TouchableOpacity>
@@ -465,92 +587,118 @@ export default function WalletScreen({ navigation }) {
 
         {filteredPayouts.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Ionicons name="receipt-outline" size={40} color={COLORS.border} />
-            <Text style={styles.emptyText}>Chưa có giao dịch giải ngân nào phát sinh</Text>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="receipt-outline" size={28} color={COLORS.textMuted} />
+            </View>
+            <Text style={styles.emptyTextTitle}>Chưa có giao dịch</Text>
+            <Text style={styles.emptyText}>Chưa có giao dịch giải ngân hoặc cấn trừ nợ nào phát sinh</Text>
           </View>
         ) : (
-          filteredPayouts.map((tx) => (
-            <View key={tx.id} style={styles.payoutCard}>
-              <View style={styles.payoutTop}>
-                <View>
-                  <Text style={styles.payoutBookingCode}>Mã vé #{tx.bookingId}</Text>
-                  <Text style={styles.payoutTime}>
-                    {tx.createdAt ? new Date(tx.createdAt).toLocaleString('vi-VN') : 'Mới hoàn tất'}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.statusPill,
-                    {
-                      backgroundColor:
-                        tx.status === 'COMPLETED'
-                          ? 'rgba(16, 185, 129, 0.12)'
-                          : tx.status === 'FULL_DEBT_OFFSET'
-                          ? 'rgba(14, 165, 233, 0.12)'
-                          : 'rgba(239, 68, 68, 0.12)'
-                    }
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusPillText,
-                      {
-                        color:
-                          tx.status === 'COMPLETED'
-                            ? COLORS.success
-                            : tx.status === 'FULL_DEBT_OFFSET'
-                            ? COLORS.primary
-                            : COLORS.danger,
-                        fontWeight: '700'
-                      }
-                    ]}
-                  >
-                    {tx.status === 'COMPLETED'
-                      ? 'ĐÃ GIẢI NGÂN'
-                      : tx.status === 'FULL_DEBT_OFFSET'
-                      ? 'CẤN TRỪ HẾT NỢ'
-                      : tx.status}
-                  </Text>
-                </View>
-              </View>
+          filteredPayouts.map((tx) => {
+            const isExpanded = !!expandedPayouts[tx.id];
+            const meta = getPayoutStatusMeta(tx.status);
+            const bookingShort = formatBookingCode(tx.bookingId);
+            const payoutAmount = Number(tx.finalPayoutAmount) || 0;
 
-              <View style={styles.divider} />
+            return (
+              <TouchableOpacity
+                key={tx.id}
+                style={[styles.payoutCard, isExpanded && styles.payoutCardExpanded]}
+                onPress={() => toggleExpandPayout(tx.id)}
+                activeOpacity={0.85}
+              >
+                {/* Header Row: Icon + Title + Amount */}
+                <View style={styles.payoutHeaderRow}>
+                  <View style={[styles.payoutIconCircle, { backgroundColor: meta.iconBg }]}>
+                    <Ionicons name={meta.icon} size={18} color={meta.color} />
+                  </View>
 
-              <View style={styles.payoutBreakdown}>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Giá vé khách trả (STRIPE):</Text>
-                  <Text style={styles.breakdownVal}>+{formatMoney(tx.totalFare)}</Text>
-                </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>
-                    Hoa hồng sàn ({((Number(tx.commissionRate) || 0.18) * 100).toFixed(1)}%):
-                  </Text>
-                  <Text style={[styles.breakdownVal, { color: COLORS.danger }]}>
-                    -{formatMoney(tx.commissionAmount)}
-                  </Text>
-                </View>
-                {tx.debtDeducted > 0 && (
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>Cấn trừ nợ tiền mặt cuốc trước:</Text>
-                    <Text style={[styles.breakdownVal, { color: COLORS.warning }]}>
-                      -{formatMoney(tx.debtDeducted)}
+                  <View style={styles.payoutMainInfo}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text style={styles.payoutBookingTitle}>Cuốc #{bookingShort}</Text>
+                      {meta.label ? (
+                        <View style={[styles.miniStatusPill, { backgroundColor: meta.bgColor }]}>
+                          <Text style={[styles.miniStatusText, { color: meta.color }]}>{meta.label}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={styles.payoutTimeText}>
+                      {tx.createdAt ? new Date(tx.createdAt).toLocaleString('vi-VN') : 'Mới hoàn tất'}
                     </Text>
                   </View>
-                )}
-                <View style={styles.breakdownTotalRow}>
-                  <Text style={styles.breakdownTotalLabel}>Thực nhận về tài khoản Stripe:</Text>
-                  <Text style={styles.breakdownTotalVal}>+{formatMoney(tx.finalPayoutAmount)}</Text>
-                </View>
-              </View>
 
-              {tx.stripeTransferId && tx.stripeTransferId !== 'N/A_FULL_OFFSET' && (
-                <View style={styles.transferCodeRow}>
-                  <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
-                  <Text style={styles.transferCodeText}>Mã chuyển tiền: {tx.stripeTransferId}</Text>
+                  <View style={styles.payoutAmountWrap}>
+                    <Text style={[styles.payoutAmountText, { color: payoutAmount > 0 ? COLORS.success : COLORS.text }]}>
+                      {payoutAmount > 0 ? `+${formatMoney(payoutAmount)}` : formatMoney(payoutAmount)}
+                    </Text>
+                    <Ionicons
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={15}
+                      color={COLORS.textMuted}
+                      style={{ alignSelf: 'flex-end', marginTop: 3 }}
+                    />
+                  </View>
                 </View>
-              )}
-            </View>
-          ))
+
+                {/* Expanded Breakdown */}
+                {isExpanded && (
+                  <View style={styles.payoutDetailBox}>
+                    <View style={styles.detailReceiptHeader}>
+                      <Text style={styles.detailReceiptTitle}>CHI TIẾT ĐỐI SOÁT CUỐC XE</Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Giá vé khách thanh toán (Stripe):</Text>
+                      <Text style={styles.detailVal}>+{formatMoney(tx.totalFare)}</Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>
+                        Phí sàn ({((Number(tx.commissionRate) || 0.18) * 100).toFixed(1)}%):
+                      </Text>
+                      <Text style={[styles.detailVal, { color: COLORS.danger }]}>
+                        -{formatMoney(tx.commissionAmount)}
+                      </Text>
+                    </View>
+
+                    {tx.debtDeducted > 0 && (
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Cấn trừ dư nợ hoa hồng cũ:</Text>
+                        <Text style={[styles.detailVal, { color: COLORS.warning, fontWeight: '700' }]}>
+                          -{formatMoney(tx.debtDeducted)}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.detailDivider} />
+
+                    <View style={styles.detailTotalRow}>
+                      <Text style={styles.detailTotalLabel}>Thực nhận về ví Stripe:</Text>
+                      <Text style={[styles.detailTotalVal, { color: payoutAmount > 0 ? COLORS.success : COLORS.text }]}>
+                        +{formatMoney(payoutAmount)}
+                      </Text>
+                    </View>
+
+                    {meta.desc ? (
+                      <View style={styles.detailDescBox}>
+                        <Ionicons name="information-circle-outline" size={14} color={COLORS.textMuted} />
+                        <Text style={styles.detailDescText}>{meta.desc}</Text>
+                      </View>
+                    ) : null}
+
+                    {tx.stripeTransferId && tx.stripeTransferId.startsWith('tr_') ? (
+                      <View style={styles.detailTransferBox}>
+                        <Ionicons name="checkmark-done" size={14} color={COLORS.success} />
+                        <Text style={styles.detailTransferText}>
+                          Mã GD Stripe: <Text style={{ fontWeight: '700' }}>{tx.stripeTransferId}</Text>
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
     </SafeAreaView>
@@ -676,58 +824,188 @@ const styles = StyleSheet.create({
   discountBadgeText: { fontSize: 12, fontWeight: '700', color: COLORS.success },
   reputationHint: { fontSize: 12, color: COLORS.textMuted, marginTop: 10, lineHeight: 18 },
 
-  // STRIPE CARD
-  stripeActiveBox: {
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
-    padding: 14,
-    borderRadius: 10,
+  // STRIPE DIGITAL CARD
+  digitalCard: {
+    backgroundColor: '#1E1B4B',
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: '#1E1B4B',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)'
+    borderColor: '#3730A3'
   },
-  stripeInfoLabel: { fontSize: 13, color: COLORS.textMuted },
-  stripeInfoVal: { fontSize: 13, color: COLORS.text, fontWeight: '600' },
+  digitalCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  digitalCardChip: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  digitalCardBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)'
+  },
+  digitalCardBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#34D399',
+    letterSpacing: 0.5
+  },
+  digitalCardMiddle: {
+    marginVertical: 16
+  },
+  digitalCardNumber: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace'
+  },
+  digitalCardBrand: {
+    fontSize: 10,
+    color: '#A5B4FC',
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: 4
+  },
+  digitalCardBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
+    paddingTop: 12
+  },
+  digitalCardPayoutText: {
+    fontSize: 11,
+    color: '#E0E7FF',
+    fontWeight: '600'
+  },
+  digitalCardLogoWrap: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  digitalCardLogoText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5
+  },
   stripeDashboardBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: COLORS.stripeBrand,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 4
+    borderColor: '#E2E8F0',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginTop: 12
   },
-  stripeDashboardBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.stripeBrand },
+  stripeDashboardBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text
+  },
 
   stripeInactiveBox: {
-    backgroundColor: 'rgba(99, 102, 241, 0.05)',
-    padding: 14,
-    borderRadius: 10,
+    backgroundColor: 'rgba(99, 102, 241, 0.04)',
+    padding: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)'
+    borderColor: 'rgba(99, 102, 241, 0.15)'
   },
-  stripeInactiveDesc: { fontSize: 13, color: COLORS.text, lineHeight: 18, marginBottom: 8 },
-  stripeTestNote: { fontSize: 12, color: COLORS.stripeBrand, lineHeight: 16, marginBottom: 12 },
-  stripeOnboardBtn: {
-    backgroundColor: COLORS.stripeBrand,
-    paddingVertical: 12,
-    borderRadius: 10,
+  stripeInactiveHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12
+  },
+  stripeIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
     alignItems: 'center',
     justifyContent: 'center'
   },
-  stripeOnboardBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  stripeInactiveTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4
+  },
+  stripeInactiveDesc: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    lineHeight: 17
+  },
+  stripeTestHintBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 14
+  },
+  stripeTestHintText: {
+    flex: 1,
+    fontSize: 11,
+    color: COLORS.stripeBrand,
+    lineHeight: 16
+  },
+  stripeOnboardBtn: {
+    backgroundColor: COLORS.stripeBrand,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  stripeOnboardBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700'
+  },
 
   // PAYOUT LEDGER LIST
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 10
+    marginTop: 10,
+    marginBottom: 12
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  tabsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text
+  },
+  sectionSubCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12
+  },
   tabBtn: {
     paddingVertical: 6,
     paddingHorizontal: 14,
@@ -736,54 +1014,186 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border
   },
-  tabBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabBtnText: { fontSize: 12, fontWeight: '600', color: COLORS.textMuted },
-  tabBtnTextActive: { color: '#FFF', fontWeight: '700' },
+  tabBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary
+  },
+  tabBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMuted
+  },
+  tabBtnTextActive: {
+    color: '#FFF',
+    fontWeight: '700'
+  },
 
   emptyBox: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 30,
+    borderRadius: 14,
+    padding: 32,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border
   },
-  emptyText: { marginTop: 8, fontSize: 13, color: COLORS.textMuted },
+  emptyIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: COLORS.cardBgLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10
+  },
+  emptyTextTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4
+  },
+  emptyText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center'
+  },
 
   payoutCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.border
   },
-  payoutTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  payoutBookingCode: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  payoutTime: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
-  divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 10 },
-  payoutBreakdown: { gap: 4 },
-  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  breakdownLabel: { fontSize: 12, color: COLORS.textMuted },
-  breakdownVal: { fontSize: 12, fontWeight: '600', color: COLORS.text },
-  breakdownTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.cardBgLight
+  payoutCardExpanded: {
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2
   },
-  breakdownTotalLabel: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  breakdownTotalVal: { fontSize: 14, fontWeight: '800', color: COLORS.success },
-  transferCodeRow: {
+  payoutHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.cardBgLight
+    gap: 10
   },
-  transferCodeText: { fontSize: 11, color: COLORS.textMuted }
+  payoutIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  payoutMainInfo: {
+    flex: 1
+  },
+  payoutBookingTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text
+  },
+  miniStatusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  miniStatusText: {
+    fontSize: 9,
+    fontWeight: '700'
+  },
+  payoutTimeText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2
+  },
+  payoutAmountWrap: {
+    alignItems: 'flex-end'
+  },
+  payoutAmountText: {
+    fontSize: 15,
+    fontWeight: '800'
+  },
+
+  payoutDetailBox: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.cardBgLight,
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 10
+  },
+  detailReceiptHeader: {
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0'
+  },
+  detailReceiptTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    letterSpacing: 0.8
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted
+  },
+  detailVal: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 8
+  },
+  detailTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  detailTotalLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text
+  },
+  detailTotalVal: {
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  detailDescBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 6
+  },
+  detailDescText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#1E40AF',
+    lineHeight: 15
+  },
+  detailTransferBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingHorizontal: 4
+  },
+  detailTransferText: {
+    fontSize: 11,
+    color: COLORS.textMuted
+  }
 });

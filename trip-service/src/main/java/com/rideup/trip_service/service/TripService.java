@@ -18,6 +18,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -41,14 +42,16 @@ public class TripService {
 
     TripRepository tripRepository;
     ModelMapper modelMapper;
-    IdentityServiceClient  identityServiceClient;
+    IdentityServiceClient identityServiceClient;
     TripServicePublisher tripServicePublisher;
     FareBoundaryService fareBoundaryService;
-    TripRequestService tripRequestService;
+    ApplicationContext applicationContext;
 
     /**
-     * Khóa cứng tại backend: tài xế nợ >= hạn mức hoặc uy tín < ngưỡng tối thiểu không được nhận/tạo chuyến.
-     * Nếu identity-service không phản hồi thì cho qua (không chặn vận hành vì lỗi hạ tầng).
+     * Khóa cứng tại backend: tài xế nợ >= hạn mức hoặc uy tín < ngưỡng tối thiểu
+     * không được nhận/tạo chuyến.
+     * Nếu identity-service không phản hồi thì cho qua (không chặn vận hành vì lỗi
+     * hạ tầng).
      */
     public void ensureDriverEligible() {
         try {
@@ -75,19 +78,19 @@ public class TripService {
         ensureDriverEligible();
 
         // ADM-FEAT-05: chặn phá giá / đội giá so với khung giá cước theo km
-        fareBoundaryService.validateTripPrice(request.getStartProvinceId(), request.getEndProvinceId(), request.getPriceVnd());
+        fareBoundaryService.validateTripPrice(request.getStartProvinceId(), request.getEndProvinceId(),
+                request.getPriceVnd());
 
         UserResponse userResponse = identityServiceClient.getUserInfo().getResult();
         List<String> userIds = List.of(userResponse.getId());
         List<DriverResponse> driverResponses = identityServiceClient.getDriverDetail(userIds).getResult();
-        Map<String, DriverResponse> driverMap =
-                driverResponses.stream()
-                        .collect(Collectors.toMap(
-                                DriverResponse::getUserId,
-                                Function.identity()
-                        ));
+        Map<String, DriverResponse> driverMap = driverResponses.stream()
+                .collect(Collectors.toMap(
+                        DriverResponse::getUserId,
+                        Function.identity()));
         DriverResponse driver = driverMap.get(userResponse.getId());
-        if (driver == null || !Boolean.TRUE.equals(driver.getIsVehicleVerified()) || !Boolean.TRUE.equals(driver.getIsVehicleActive())) {
+        if (driver == null || !Boolean.TRUE.equals(driver.getIsVehicleVerified())
+                || !Boolean.TRUE.equals(driver.getIsVehicleActive())) {
             throw new AppException(ErrorCode.VEHICLE_NOT_VERIFIED);
         }
 
@@ -131,7 +134,6 @@ public class TripService {
         trip.setStatus(TripStatus.OPEN);
         trip.setSeatAvailable(request.getSeatTotal());
 
-
         if (request.getStops() != null && !request.getStops().isEmpty()) {
             request.getStops().forEach(stopReq -> {
                 TripStop stop = modelMapper.map(stopReq, TripStop.class);
@@ -156,7 +158,8 @@ public class TripService {
             }
             trip.setStatus(TripStatus.CANCELED);
             trip.setCancelReason(request.getCancelReason() != null && !request.getCancelReason().isBlank()
-                    ? request.getCancelReason() : "Tài xế huỷ chuyến");
+                    ? request.getCancelReason()
+                    : "Tài xế huỷ chuyến");
             trip.setCancelledAt(LocalDateTime.now());
             Trip saved = tripRepository.save(trip);
 
@@ -170,12 +173,13 @@ public class TripService {
                     .cancelledAt(saved.getCancelledAt())
                     .build();
             tripServicePublisher.publishTripCancelled(event);
-            tripRequestService.rejectPendingInvitationsByTrip(saved.getId());
+            applicationContext.getBean(TripRequestService.class).rejectPendingInvitationsByTrip(saved.getId());
 
             return modelMapper.map(saved, TripResponse.class);
         }
 
-        // Chặn bắt đầu chuyến khi chưa có khách (seatAvailable == seatTotal => chưa có ai đặt)
+        // Chặn bắt đầu chuyến khi chưa có khách (seatAvailable == seatTotal => chưa có
+        // ai đặt)
         if (request.getStatus() == TripStatus.STARTED) {
             if (trip.getSeatAvailable() != null && trip.getSeatTotal() != null
                     && trip.getSeatAvailable().equals(trip.getSeatTotal())) {
@@ -187,7 +191,8 @@ public class TripService {
         Trip saved = tripRepository.save(trip);
 
         if (request.getStatus() == TripStatus.COMPLETED) {
-            com.rideup.trip_service.dto.event.TripCompletedEvent completedEvent = com.rideup.trip_service.dto.event.TripCompletedEvent.builder()
+            com.rideup.trip_service.dto.event.TripCompletedEvent completedEvent = com.rideup.trip_service.dto.event.TripCompletedEvent
+                    .builder()
                     .eventId(UUID.randomUUID().toString())
                     .correlationId(UUID.randomUUID().toString())
                     .tripId(saved.getId())
@@ -226,13 +231,13 @@ public class TripService {
         return response;
     }
 
-
     @Transactional
     public SeatResponse reserveSeats(SeatReserveRequest request) {
         int maxRetry = 3;
         for (int i = 0; i < maxRetry; i++) {
             try {
-                Trip trip = tripRepository.findById(request.getTripId()).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
+                Trip trip = tripRepository.findById(request.getTripId())
+                        .orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
                 if (request.getSeatCount() == null || request.getSeatCount() <= 0) {
                     throw new AppException(ErrorCode.INVALID_SEAT_COUNT);
                 }
@@ -269,7 +274,8 @@ public class TripService {
 
     @Transactional
     public SeatResponse releaseSeats(SeatReleaseRequest request) {
-        Trip trip = tripRepository.findById(request.getTripId()).orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
+        Trip trip = tripRepository.findById(request.getTripId())
+                .orElseThrow(() -> new AppException(ErrorCode.TRIP_NOT_FOUND));
         if (request.getSeatCount() == null || request.getSeatCount() <= 0) {
             throw new AppException(ErrorCode.INVALID_SEAT_COUNT);
         }
@@ -287,15 +293,16 @@ public class TripService {
     }
 
     public PageResponse<TripResponse> getAllTrips(String startProvinceId,
-                                                  String startWardId,
-                                                  String endProvinceId,
-                                                  String endWardId,
-                                                  LocalDate date,
-                                                  LocalDate fromDate,
-                                                  LocalDate toDate,
-                                                  Pageable pageable) {
+            String startWardId,
+            String endProvinceId,
+            String endWardId,
+            LocalDate date,
+            LocalDate fromDate,
+            LocalDate toDate,
+            Pageable pageable) {
 
-        Page<Trip> tripPage = tripRepository.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date, fromDate, toDate, pageable);
+        Page<Trip> tripPage = tripRepository.getAllTrips(startProvinceId, startWardId, endProvinceId, endWardId, date,
+                fromDate, toDate, pageable);
         List<Trip> trips = tripPage.getContent();
 
         List<String> ids = trips.stream()
@@ -312,8 +319,7 @@ public class TripService {
                 .collect(Collectors.toMap(
                         DriverResponse::getUserId,
                         Function.identity(),
-                        (a, b) -> a
-                ));
+                        (a, b) -> a));
 
         List<TripResponse> tripResponses = trips.stream()
                 .map(trip -> {
@@ -349,7 +355,6 @@ public class TripService {
         return pageResponse;
     }
 
-
     public Page<TripResponse> searchDriveTrip(SearchTripDriveRequest request) {
         Page<Trip> page = tripRepository.searchDriveTrip(request);
         return page.map(trip -> modelMapper.map(trip, TripResponse.class));
@@ -374,11 +379,13 @@ public class TripService {
             if (profileRes != null && profileRes.getResult() != null) {
                 var profile = profileRes.getResult();
                 boolean isActive = "ACTIVE".equalsIgnoreCase(profile.getStripeAccountStatus())
-                        || (profile.getStripeAccountStatus() != null && profile.getStripeAccountStatus().contains("ACTIVE"));
+                        || (profile.getStripeAccountStatus() != null
+                                && profile.getStripeAccountStatus().contains("ACTIVE"));
                 stripeEnabled = isActive && Boolean.TRUE.equals(profile.getStripePayoutsEnabled());
             }
         } catch (Exception e) {
-            log.warn("[TripService] Failed to check Stripe profile for driver {}: {}", trip.getDriverId(), e.getMessage());
+            log.warn("[TripService] Failed to check Stripe profile for driver {}: {}", trip.getDriverId(),
+                    e.getMessage());
         }
 
         return TripPaymentOptionsResponse.builder()
