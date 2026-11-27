@@ -202,8 +202,6 @@ export default function DriverTripsScreen({ navigation }) {
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [actionLoading, setActionLoading] = useState(null); // track which action is loading
   const [bookingFilterTab, setBookingFilterTab] = useState('ACTIVE'); // 'ACTIVE' or 'CANCELLED'
-  const [bookingPickupFilter, setBookingPickupFilter] = useState('');
-  const [bookingDropoffFilter, setBookingDropoffFilter] = useState('');
   const [bookingPage, setBookingPage] = useState(0);
   const [pendingModificationsByBooking, setPendingModificationsByBooking] = useState({});
   const [selectedModification, setSelectedModification] = useState(null);
@@ -367,8 +365,6 @@ export default function DriverTripsScreen({ navigation }) {
   };
 
   const handleTripPress = async (trip) => {
-    setBookingPickupFilter('');
-    setBookingDropoffFilter('');
     setBookingPage(0);
     setSelectedTrip(trip);
     setBookingFilterTab('ACTIVE');
@@ -1252,20 +1248,8 @@ export default function DriverTripsScreen({ navigation }) {
                 return timeB - timeA;
               });
 
-            const filteredBookings = validBookings.filter(b => {
-              if (bookingPickupFilter.trim()) {
-                const q = bookingPickupFilter.trim().toLowerCase();
-                if (!b.pickupAddressText || !b.pickupAddressText.toLowerCase().includes(q)) return false;
-              }
-              if (bookingDropoffFilter.trim()) {
-                const q = bookingDropoffFilter.trim().toLowerCase();
-                if (!b.dropoffAddressText || !b.dropoffAddressText.toLowerCase().includes(q)) return false;
-              }
-              return true;
-            });
-
-            const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / 10));
-            const paginatedBookings = filteredBookings.slice(bookingPage * 10, (bookingPage + 1) * 10);
+            const totalBookingPages = Math.max(1, Math.ceil(validBookings.length / 10));
+            const paginatedBookings = validBookings.slice(bookingPage * 10, (bookingPage + 1) * 10);
 
             return (
               <FlatList
@@ -1396,43 +1380,11 @@ export default function DriverTripsScreen({ navigation }) {
                         </TouchableOpacity>
                       )}
 
-                      {/* Lọc điểm đón/trả của khách trong chuyến */}
+                      {/* Danh sách khách trong chuyến */}
                       <View style={{ marginTop: 20, marginBottom: 12 }}>
-                        <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>
-                          Danh sách khách ({filteredBookings.length})
+                        <Text style={{ fontSize: 15, fontWeight: 'bold', color: COLORS.text }}>
+                          Danh sách khách ({validBookings.length})
                         </Text>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 8, height: 36 }}>
-                            <Ionicons name="location" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
-                            <TextInput
-                              style={{ flex: 1, fontSize: 12, color: COLORS.text, paddingVertical: 0 }}
-                              placeholder="Lọc đón..."
-                              placeholderTextColor={COLORS.textMuted}
-                              value={bookingPickupFilter}
-                              onChangeText={(t) => { setBookingPickupFilter(t); setBookingPage(0); }}
-                            />
-                            {bookingPickupFilter ? (
-                              <TouchableOpacity onPress={() => { setBookingPickupFilter(''); setBookingPage(0); }}>
-                                <Ionicons name="close-circle" size={14} color={COLORS.textMuted} />
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
-                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 8, height: 36 }}>
-                            <Ionicons name="flag" size={14} color="#F59E0B" style={{ marginRight: 4 }} />
-                            <TextInput
-                              style={{ flex: 1, fontSize: 12, color: COLORS.text, paddingVertical: 0 }}
-                              placeholder="Lọc trả..."
-                              placeholderTextColor={COLORS.textMuted}
-                              value={bookingDropoffFilter}
-                              onChangeText={(t) => { setBookingDropoffFilter(t); setBookingPage(0); }}
-                            />
-                            {bookingDropoffFilter ? (
-                              <TouchableOpacity onPress={() => { setBookingDropoffFilter(''); setBookingPage(0); }}>
-                                <Ionicons name="close-circle" size={14} color={COLORS.textMuted} />
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
-                        </View>
                       </View>
                     </View>
                   );
@@ -1440,7 +1392,7 @@ export default function DriverTripsScreen({ navigation }) {
                 renderItem={renderBookingItem}
                 showsVerticalScrollIndicator={false}
                 ListFooterComponent={
-                  filteredBookings.length > 10 ? (
+                  validBookings.length > 10 ? (
                     <View style={styles.paginationRow}>
                       <TouchableOpacity
                         style={[styles.pageBtn, bookingPage === 0 && styles.pageBtnDisabled]}
@@ -1468,7 +1420,7 @@ export default function DriverTripsScreen({ navigation }) {
                   <View style={styles.emptyBookingBox}>
                     <Ionicons name="people-circle-outline" size={60} color={COLORS.border} />
                     <Text style={styles.emptyBookingText}>
-                      {bookingPickupFilter || bookingDropoffFilter ? 'Không tìm thấy khách theo điểm đón/trả.' : 'Chưa có khách nào đặt vé chuyến này.'}
+                      Chưa có khách nào đặt vé chuyến này.
                     </Text>
                   </View>
                 }
