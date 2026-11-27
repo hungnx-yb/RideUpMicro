@@ -68,11 +68,11 @@ const formatExpireTime = (expiresAt, fallbackDepartureTime) => {
     d.getFullYear() === now.getFullYear();
 
   if (isSameDay) {
-    return `Tự hủy lúc ${timeStr} (1h trước giờ chạy)`;
+    return `Tự hủy lúc ${timeStr}`;
   }
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `Tự hủy lúc ${timeStr} ${day}/${month} (1h trước giờ chạy)`;
+  return `Tự hủy lúc ${timeStr} ${day}/${month}`;
 };
 
 const calculateRevenueFromTrips = (tripsList) => {
@@ -211,36 +211,10 @@ export default function DriverDashboardScreen() {
       // Setup Socket
       await notificationSocket.connect();
 
-      unsubscribe = notificationSocket.subscribe((msg) => {
-        let meta = {};
-        try {
-          meta = typeof msg?.metadata === 'string' ? JSON.parse(msg.metadata) : (msg?.metadata || {});
-        } catch (e) {}
-
-        const notiType = (meta.type || msg?.type || '').toUpperCase();
-        const titleLower = (msg?.title || '').toLowerCase();
-
-        // 1. Khi có yêu cầu đặt xe mới (BOOKING_WAITING_APPROVAL): không hiện Alert popup nữa
-        // vì đã có thông báo chuông, chỉ âm thầm làm mới danh sách chờ duyệt trên Dashboard
-        const isWaitingApproval = notiType === 'BOOKING_WAITING_APPROVAL' ||
-          (titleLower.includes('yêu cầu đặt xe mới') && notiType !== 'BOOKING_CONFIRMED');
-
-        if (isWaitingApproval) {
-          setTimeout(() => fetchDashboardData(true), 500);
-        } else if (notiType === 'BOOKING_MODIFICATION_REQUESTED' || titleLower.includes('đổi') || titleLower.includes('lộ trình') || titleLower.includes('chỉnh sửa')) {
-          Alert.alert(
-            "🔔 YÊU CẦU ĐỔI LỘ TRÌNH!",
-            "Khách hàng vừa gửi yêu cầu đổi điểm đón/trả. Vui lòng kiểm tra và phản hồi trong 15 phút.",
-            [
-              { text: "Để sau", style: "cancel" },
-              { text: "Xem ngay", onPress: () => fetchDashboardData(true) }
-            ]
-          );
-        } else {
-          // Các thông báo khác (đã duyệt thành công, hủy, cập nhật chuyến xe...)
-          // Không hiện popup phiền nhiễu, chỉ âm thầm đồng bộ lại dữ liệu
-          setTimeout(() => fetchDashboardData(true), 1200);
-        }
+      unsubscribe = notificationSocket.subscribe(() => {
+        // Không hiện Alert popup gây phiền nhiễu (đã có thông báo chuông),
+        // chỉ âm thầm làm mới danh sách chờ duyệt / đổi lộ trình / chuyến xe trên Dashboard
+        setTimeout(() => fetchDashboardData(true), 600);
       });
     };
     setup();

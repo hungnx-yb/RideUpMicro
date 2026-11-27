@@ -51,7 +51,7 @@ export const NotificationProvider = ({ children }) => {
       unsubscribe = notificationSocket.subscribe((newNoti) => {
         if (!isMounted) return;
         
-        // Cập nhật số đỏ ngay lập tức
+        // Cập nhật số đỏ trên chuông thông báo ngay lập tức
         incrementUnreadCount();
         
         let metadata = {};
@@ -61,21 +61,11 @@ export const NotificationProvider = ({ children }) => {
 
         const targetRequestId = metadata.tripRequestId || metadata.requestId || metadata.id;
         const notiType = (metadata.type || newNoti?.type || '').toUpperCase();
-        const titleLower = (newNoti?.title || '').toLowerCase();
 
-        // 1. Đơn hàng đã xác nhận (BOOKING_CONFIRMED): Tài xế vừa duyệt xong hoặc chuyến đã thành công
-        // Màn hình nghiệp vụ (Dashboard/Trips) đã có modal xác nhận riêng -> KHÔNG hiện Alert popup nữa
-        if (notiType === 'BOOKING_CONFIRMED' || titleLower.includes('đặt chỗ mới') || titleLower.includes('đã được xác nhận')) {
-          return;
-        }
-
-        // 2. Đơn chờ duyệt (BOOKING_WAITING_APPROVAL): DriverDashboardScreen đã tự quản lý hiển thị popup
-        // Bỏ qua ở context để tránh bị hiện lặp 2 popup cùng lúc
-        if (notiType === 'BOOKING_WAITING_APPROVAL' || titleLower.includes('yêu cầu đặt xe mới')) {
-          return;
-        }
-
-        if (targetRequestId || metadata.type === 'TRIP_REQUEST_CREATED') {
+        // Chỉ hiện gợi ý nhanh cho tin tìm xe mới trên Chợ chuyến xe (TRIP_REQUEST_CREATED).
+        // Toàn bộ các thông báo khác (hủy chuyến, hủy vé, hoàn tiền, duyệt đơn, đổi lộ trình...)
+        // KHÔNG bật Alert popup gây phiền nhiễu mà chỉ cập nhật chuông thông báo.
+        if (notiType === 'TRIP_REQUEST_CREATED' && targetRequestId) {
           Alert.alert(
             `🔔 ${newNoti.title || 'Có khách tìm xe mới!'}`,
             newNoti.message || 'Có khách vừa đăng nhu cầu chuyến đi trên tuyến bạn chạy.',
@@ -96,10 +86,6 @@ export const NotificationProvider = ({ children }) => {
               },
             ]
           );
-        } else if (newNoti?.title && newNoti?.message) {
-           Alert.alert(`🔔 ${newNoti.title}`, newNoti.message);
-        } else if (newNoti?.content) {
-           Alert.alert(`🔔 Thông báo`, newNoti.content);
         }
       });
     };
