@@ -32,7 +32,7 @@ import {
   rejectVehicleApi,
 } from "../../services/adminApi";
 import { getApiErrorMessage } from "../../services/authApi";
-import { resolveImageUrl } from "../../utils/imageUrl";
+import { resolveImageUrl, vehicleBackAndExtraDocs } from "../../utils/imageUrl";
 import { formatVehicleId } from "../../utils/formatId";
 
 function AdminVehicleApprovalPage() {
@@ -375,8 +375,8 @@ function AdminVehicleApprovalPage() {
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
                     {[
                       { label: "Ảnh xe", url: resolveImageUrl(selectedVehicle?.vehicleImage) },
-                      { label: "Đăng kiểm", url: resolveImageUrl(selectedVehicle?.registrationImage) },
-                      { label: "Bảo hiểm", url: resolveImageUrl(selectedVehicle?.insuranceImage) },
+                      { label: "Đăng ký xe mặt trước", url: resolveImageUrl(selectedVehicle?.registrationImage) },
+                      ...vehicleBackAndExtraDocs(selectedVehicle),
                     ].map((doc) => (
                       <div key={doc.label} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                         {doc.url ? (

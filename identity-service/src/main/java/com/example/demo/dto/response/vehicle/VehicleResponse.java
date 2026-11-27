@@ -24,6 +24,8 @@ public class VehicleResponse {
     VehicleType vehicleType;
     String vehicleImage;
     String registrationImage;
+    String registrationImageBack;
+    String inspectionImage;
     LocalDate registrationExpiryDate;
     String insuranceImage;
     LocalDate insuranceExpiryDate;

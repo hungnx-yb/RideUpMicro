@@ -56,8 +56,14 @@ public class Vehicle {
     // Ảnh xe
     String vehicleImage;
 
-    // Ảnh đăng ký xe
+    // Ảnh đăng ký xe (mặt trước)
     String registrationImage;
+
+    // Ảnh đăng ký xe (mặt sau)
+    String registrationImageBack;
+
+    // Ảnh giấy chứng nhận đăng kiểm
+    String inspectionImage;
 
     // Ngày hết hạn đăng ký xe
     LocalDate registrationExpiryDate;

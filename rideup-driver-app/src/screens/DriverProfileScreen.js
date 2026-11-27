@@ -780,42 +780,43 @@ export default function DriverProfileScreen({ navigation, route }) {
                     <Text style={[styles.infoValue, { color: COLORS.primary }]}>{vehicle.insuranceExpiryDate || 'Chưa cập nhật'}</Text>
                   </View>
 
-              {/* Ảnh Giấy Đăng Ký Xe / Giấy tờ xe */}
-              {(vehicle.registrationImage || vehicle.insuranceImage || vehicle.registrationImageBack) && (
-                <View style={{ marginTop: 16, marginBottom: 12 }}>
-                  <Text style={[styles.infoLabel, { marginBottom: 10, fontSize: 14, fontWeight: 'bold', color: COLORS.text }]}>
-                    Giấy đăng ký xe
-                  </Text>
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    {vehicle.registrationImage && (
-                      <View style={{ flex: 1 }}>
-                        <Image
-                          source={{
-                            uri: vehicle.registrationImage.startsWith('http')
-                              ? vehicle.registrationImage
-                              : `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${vehicle.registrationImage}`
-                          }}
-                          style={styles.documentImage}
-                          resizeMode="cover"
-                        />
-                      </View>
-                    )}
-                    {(vehicle.registrationImageBack || vehicle.insuranceImage) && (
-                      <View style={{ flex: 1 }}>
-                        <Image
-                          source={{
-                            uri: (vehicle.registrationImageBack || vehicle.insuranceImage).startsWith('http')
-                              ? (vehicle.registrationImageBack || vehicle.insuranceImage)
-                              : `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${vehicle.registrationImageBack || vehicle.insuranceImage}`
-                          }}
-                          style={styles.documentImage}
-                          resizeMode="cover"
-                        />
-                      </View>
-                    )}
+              {/* Ảnh giấy tờ xe: đăng ký (2 mặt), đăng kiểm, bảo hiểm */}
+              {(() => {
+                // Hồ sơ cũ lưu mặt sau đăng ký xe vào insuranceImage (chưa có registrationImageBack)
+                const isLegacy = !vehicle.registrationImageBack && !vehicle.inspectionImage;
+                const toUri = (path) =>
+                  path.startsWith('http')
+                    ? path
+                    : `https://tgbtragwxkulpittcjzw.supabase.co/storage/v1/object/public/Ride_Up_Micro/${path}`;
+                const groups = [
+                  {
+                    title: 'Giấy đăng ký xe',
+                    images: [
+                      vehicle.registrationImage,
+                      isLegacy ? vehicle.insuranceImage : vehicle.registrationImageBack,
+                    ].filter(Boolean),
+                  },
+                  {
+                    title: 'Đăng kiểm & Bảo hiểm',
+                    images: isLegacy ? [] : [vehicle.inspectionImage, vehicle.insuranceImage].filter(Boolean),
+                  },
+                ].filter((group) => group.images.length > 0);
+
+                return groups.map((group) => (
+                  <View key={group.title} style={{ marginTop: 16, marginBottom: 12 }}>
+                    <Text style={[styles.infoLabel, { marginBottom: 10, fontSize: 14, fontWeight: 'bold', color: COLORS.text }]}>
+                      {group.title}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      {group.images.map((path) => (
+                        <View key={path} style={{ flex: 1 }}>
+                          <Image source={{ uri: toUri(path) }} style={styles.documentImage} resizeMode="cover" />
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                </View>
-              )}
+                ));
+              })()}
             </ScrollView>
           ) : (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>

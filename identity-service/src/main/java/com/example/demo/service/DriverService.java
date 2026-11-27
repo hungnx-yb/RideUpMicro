@@ -135,8 +135,9 @@ public class DriverService {
             MultipartFile regFrontFile = request.getRegistrationImageFront() != null ? request.getRegistrationImageFront() : request.getRegistrationImage();
             String regImg = regFrontFile != null ? fileService.upload(regFrontFile, "vehicles/documents") : gplxImageFrontUrl;
             
-            MultipartFile regBackFile = request.getRegistrationImageBack() != null ? request.getRegistrationImageBack() : request.getInsuranceImage();
-            String insImg = regBackFile != null ? fileService.upload(regBackFile, "vehicles/documents") : null;
+            String regBackImg = uploadIfPresent(request.getRegistrationImageBack(), "vehicles/documents");
+            String inspectionImg = uploadIfPresent(request.getInspectionImage(), "vehicles/documents");
+            String insImg = uploadIfPresent(request.getInsuranceImage(), "vehicles/documents");
             Vehicle vehicle = driverProfile.getVehicle() != null ? driverProfile.getVehicle() : new Vehicle();
             vehicle.setDriver(driverProfile);
             vehicle.setPlateNumber(request.getPlateNumber());
@@ -148,6 +149,8 @@ public class DriverService {
             vehicle.setVehicleType(request.getVehicleType() != null ? request.getVehicleType() : com.example.demo.enums.VehicleType.CAR_4_SEAT);
             vehicle.setVehicleImage(vehImg);
             vehicle.setRegistrationImage(regImg);
+            vehicle.setRegistrationImageBack(regBackImg);
+            vehicle.setInspectionImage(inspectionImg);
             vehicle.setInsuranceImage(insImg);
             vehicle.setIsVerified(false);
             vehicle.setRejectedAt(null);
@@ -303,6 +306,10 @@ public class DriverService {
         return  driverProfileRepository.countByStatus(DriverStatus.valueOf(status));
     }
 
+    private String uploadIfPresent(MultipartFile file, String prefix) {
+        return file != null && !file.isEmpty() ? fileService.upload(file, prefix) : null;
+    }
+
     private DriverResponse mapToDriverResponse(DriverProfile driverProfile) {
 
         DriverResponse response = modelMapper.map(driverProfile, DriverResponse.class);
@@ -327,6 +334,8 @@ public class DriverService {
             response.setVehicleType(vehicle.getVehicleType() != null ? vehicle.getVehicleType().name() : null);
             response.setVehicleImage(vehicle.getVehicleImage());
             response.setRegistrationImage(vehicle.getRegistrationImage());
+            response.setRegistrationImageBack(vehicle.getRegistrationImageBack());
+            response.setInspectionImage(vehicle.getInspectionImage());
             response.setInsuranceImage(vehicle.getInsuranceImage());
             response.setIsVehicleVerified(vehicle.getIsVerified());
             response.setIsVehicleActive(vehicle.getIsActive());

@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import LoginPage from "../pages/LoginPage";
+import AuthVerifyAccountPage from "../pages/AuthVerifyAccountPage";
 import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
 import AdminDriverApprovalPage from "../pages/admin/AdminDriverApprovalPage";
 import AdminVehicleApprovalPage from "../pages/admin/AdminVehicleApprovalPage";
@@ -26,6 +27,8 @@ function AppRouter() {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/login" element={<Navigate to="/login" replace />} />
+      {/* Link xác thực tài khoản gửi qua email (người dùng app khách hàng / tài xế) */}
+      <Route path="/auth/verify" element={<AuthVerifyAccountPage />} />
 
       {/* Tuyến đường quản trị được bảo vệ */}
       <Route element={<ProtectedRoute />}>

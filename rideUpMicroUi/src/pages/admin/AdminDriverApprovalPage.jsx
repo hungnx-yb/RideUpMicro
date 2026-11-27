@@ -32,7 +32,7 @@ import {
   rejectDriverApi,
 } from "../../services/adminApi";
 import { getApiErrorMessage } from "../../services/authApi";
-import { resolveImageUrl } from "../../utils/imageUrl";
+import { resolveImageUrl, vehicleBackAndExtraDocs } from "../../utils/imageUrl";
 import { formatDriverProfileId } from "../../utils/formatId";
 
 function AdminDriverApprovalPage() {
@@ -507,7 +507,7 @@ function AdminDriverApprovalPage() {
                       { label: "GPLX mặt trước", url: resolveImageUrl(selectedDriver?.gplxImageFront || selectedDriver?.gplxImage) },
                       { label: "GPLX mặt sau", url: resolveImageUrl(selectedDriver?.gplxImageBack) },
                       { label: "Đăng ký xe mặt trước", url: resolveImageUrl(selectedDriver?.registrationImage) },
-                      { label: "Đăng ký xe mặt sau", url: resolveImageUrl(selectedDriver?.insuranceImage || selectedDriver?.registrationImageBack) },
+                      ...vehicleBackAndExtraDocs(selectedDriver),
                       { label: "Hình ảnh xe", url: resolveImageUrl(selectedDriver?.vehicleImage) },
                     ].map((doc) => (
                       <div key={doc.label} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">

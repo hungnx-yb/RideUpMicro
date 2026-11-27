@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,55 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import Svg, { Path } from 'react-native-svg';
 import { apiService } from '../services/apiService';
 
 const { width } = Dimensions.get('window');
+
+// Khung camera trong modal (modal rộng width - 32, padding 20 mỗi bên)
+const CAMERA_BOX_WIDTH = Math.min(width - 72, 320);
+const CAMERA_BOX_HEIGHT = Math.round(CAMERA_BOX_WIDTH * 1.4);
+// Khung khuôn mặt dạng kim cương bo cong: hẹp ở trán, rộng nhất ở gò má, thon dần xuống cằm
+const FACE_GUIDE_WIDTH = Math.round(CAMERA_BOX_WIDTH * 0.66);
+const FACE_GUIDE_HEIGHT = Math.round(FACE_GUIDE_WIDTH * 1.45);
+// Vị trí khung khuôn mặt: căn giữa ngang, hơi lệch lên để chừa chỗ cho dòng gợi ý ở đáy
+const HINT_SPACE = 24;
+const FACE_GUIDE_X = (CAMERA_BOX_WIDTH - FACE_GUIDE_WIDTH) / 2;
+const FACE_GUIDE_Y = (CAMERA_BOX_HEIGHT - FACE_GUIDE_HEIGHT - HINT_SPACE) / 2;
+
+const buildDiamondFacePath = (x, y, w, h) => {
+  const cx = x + w / 2;
+  const top = y;
+  const bottom = y + h;
+  const cheekY = y + h * 0.42; // Ngang gò má = điểm rộng nhất
+  const left = x;
+  const right = x + w;
+  // Tay nắm ngắn => góc kim cương rõ nét nhưng vẫn bo mềm
+  const topHandle = w * 0.31;
+  const chinHandle = w * 0.23;
+  const upperSideHandle = h * 0.23;
+  const lowerSideHandle = h * 0.29;
+  return [
+    `M ${cx} ${top}`,
+    `C ${cx + topHandle} ${top} ${right} ${cheekY - upperSideHandle} ${right} ${cheekY}`,
+    `C ${right} ${cheekY + lowerSideHandle} ${cx + chinHandle} ${bottom} ${cx} ${bottom}`,
+    `C ${cx - chinHandle} ${bottom} ${left} ${cheekY + lowerSideHandle} ${left} ${cheekY}`,
+    `C ${left} ${cheekY - upperSideHandle} ${cx - topHandle} ${top} ${cx} ${top}`,
+    'Z',
+  ].join(' ');
+};
+
+const FACE_GUIDE_PATH = buildDiamondFacePath(FACE_GUIDE_X, FACE_GUIDE_Y, FACE_GUIDE_WIDTH, FACE_GUIDE_HEIGHT);
+// Lớp phủ tối = cả khung camera trừ đi lỗ hình khuôn mặt (fillRule evenodd)
+// AI service trả điểm theo thang 0-100 (vd 63.39); vẫn hỗ trợ thang 0-1 cho dữ liệu cũ
+const toPercent = (score) => {
+  if (score == null || Number.isNaN(Number(score))) return null;
+  const value = Number(score);
+  return Math.round(value > 1 ? value : value * 100);
+};
+
+const FACE_MASK_PATH =`M 0 0 H ${CAMERA_BOX_WIDTH} V ${CAMERA_BOX_HEIGHT} H 0 Z ${FACE_GUIDE_PATH}`;
 
 const COLORS = {
   background: '#F8FAFC',
@@ -40,6 +85,21 @@ export default function FaceVerificationModal({
   const [capturedImage, setCapturedImage] = useState(null); // { uri, base64 }
   const [loading, setLoading] = useState(false);
   const [verificationResult, setVerificationResult] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [takingPhoto, setTakingPhoto] = useState(false);
+  const cameraRef = useRef(null);
+
+  // Trên Android, CameraView cần mount sau khi hiệu ứng slide của modal xong để tránh màn hình đen
+  const [isModalReady, setIsModalReady] = useState(false);
+  useEffect(() => {
+    if (!visible) {
+      setIsModalReady(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setIsModalReady(true), 350);
+    return () => clearTimeout(timer);
+  }, [visible]);
 
   const isEnrollMode = mode === 'enroll';
   const modalTitle = isEnrollMode ? 'Chụp ảnh chân dung' : 'Xác minh khuôn mặt';
@@ -48,6 +108,8 @@ export default function FaceVerificationModal({
     setCapturedImage(null);
     setLoading(false);
     setVerificationResult(null);
+    setIsCameraReady(false);
+    setTakingPhoto(false);
   };
 
   const handleClose = () => {
@@ -56,33 +118,92 @@ export default function FaceVerificationModal({
   };
 
   const takePhotoWithCamera = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Cấp quyền camera', 'Ứng dụng cần quyền sử dụng camera để quét khuôn mặt tài xế.');
-        return;
-      }
+    if (!cameraRef.current || !isCameraReady || takingPhoto) return;
 
-      const result = await ImagePicker.launchCameraAsync({
-        cameraType: ImagePicker.CameraType.front,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
+    setTakingPhoto(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.7,
         base64: true,
       });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setCapturedImage({
-          uri: asset.uri,
-          base64: asset.base64,
-        });
+      if (photo?.uri) {
+        setCapturedImage({ uri: photo.uri, base64: photo.base64 });
         setVerificationResult(null);
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Lỗi', 'Không thể khởi động camera. Vui lòng thử lại.');
+      Alert.alert('Lỗi', 'Không thể chụp ảnh. Vui lòng thử lại.');
+    } finally {
+      setTakingPhoto(false);
     }
+  };
+
+  const handleRetake = () => {
+    setCapturedImage(null);
+    setVerificationResult(null);
+    setIsCameraReady(false);
+  };
+
+  const renderCameraArea = () => {
+    if (!permission) {
+      return (
+        <View style={styles.cameraPlaceholder}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      );
+    }
+
+    if (!permission.granted) {
+      return (
+        <View style={styles.cameraPlaceholder}>
+          <Ionicons name="camera-outline" size={48} color="#94A3B8" />
+          <Text style={styles.permissionText}>
+            Ứng dụng cần quyền camera để chụp ảnh khuôn mặt tài xế.
+          </Text>
+          <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+            <Text style={styles.permissionBtnText}>Cho phép truy cập Camera</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.cameraBox}>
+        {isModalReady ? (
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing="front"
+            onCameraReady={() => setIsCameraReady(true)}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.cameraLoading]}>
+            <ActivityIndicator size="large" color="#FFF" />
+          </View>
+        )}
+
+        {/* Lớp phủ tối xung quanh + viền nét đứt đánh dấu vị trí khuôn mặt */}
+        <Svg
+          pointerEvents="none"
+          style={StyleSheet.absoluteFill}
+          width={CAMERA_BOX_WIDTH}
+          height={CAMERA_BOX_HEIGHT}
+        >
+          <Path d={FACE_MASK_PATH} fill="rgba(15, 23, 42, 0.55)" fillRule="evenodd" />
+          <Path
+            d={FACE_GUIDE_PATH}
+            fill="none"
+            stroke="#38BDF8"
+            strokeWidth={3}
+            strokeDasharray="10 8"
+          />
+        </Svg>
+
+        <View pointerEvents="none" style={styles.cameraHint}>
+          <Text style={styles.cameraHintText}>Đặt khuôn mặt vừa khung hình</Text>
+        </View>
+      </View>
+    );
   };
 
 
@@ -107,7 +228,7 @@ export default function FaceVerificationModal({
       const resultData = res?.data?.result;
 
       if (isEnrollMode) {
-        const similarityPercent = resultData?.faceMatchScore ? Math.round(resultData.faceMatchScore * 100) : null;
+        const similarityPercent = toPercent(resultData?.faceMatchScore);
         setVerificationResult({
           success: true,
           title: 'Đăng ký thành công',
@@ -120,8 +241,7 @@ export default function FaceVerificationModal({
         setVerificationResult({
           success: true,
           title: 'Xác thực thành công',
-          similarity: resultData?.similarity,
-          livenessScore: resultData?.livenessScore,
+          similarity: toPercent(resultData?.similarity),
           message: resultData?.message || 'Xác minh danh tính tài xế thành công!',
         });
       }
@@ -164,16 +284,7 @@ export default function FaceVerificationModal({
             {!capturedImage ? (
               // Trạng thái chuẩn bị chụp
               <View style={styles.emptyState}>
-                <View style={styles.scanTargetBox}>
-                  <View style={styles.faceOvalPlaceholder}>
-                    <Ionicons name="person-outline" size={80} color="#94A3B8" />
-                  </View>
-                  {/* Bốn góc viền sinh trắc học */}
-                  <View style={[styles.corner, styles.cornerTL]} />
-                  <View style={[styles.corner, styles.cornerTR]} />
-                  <View style={[styles.corner, styles.cornerBL]} />
-                  <View style={[styles.corner, styles.cornerBR]} />
-                </View>
+                {renderCameraArea()}
 
                 <View style={styles.tipsList}>
                   <View style={styles.tipRow}>
@@ -187,9 +298,22 @@ export default function FaceVerificationModal({
                 </View>
 
                 <View style={styles.captureActions}>
-                  <TouchableOpacity style={styles.primaryCaptureBtn} onPress={takePhotoWithCamera}>
-                    <Ionicons name="camera" size={20} color="#FFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.primaryCaptureBtnText}>Chụp ảnh</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryCaptureBtn,
+                      (!permission?.granted || !isCameraReady || takingPhoto) && { opacity: 0.6 },
+                    ]}
+                    onPress={takePhotoWithCamera}
+                    disabled={!permission?.granted || !isCameraReady || takingPhoto}
+                  >
+                    {takingPhoto ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="camera" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.primaryCaptureBtnText}>Chụp ảnh</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -234,12 +358,15 @@ export default function FaceVerificationModal({
                       >
                         {verificationResult.title}
                       </Text>
-                      {verificationResult.similarity !== undefined && (
+                      {verificationResult.similarity != null && (
                         <Text style={styles.resultMetrics}>
-                          Độ tương đồng: <Text style={{ fontWeight: '700' }}>{verificationResult.similarity}%</Text> | Người thật: <Text style={{ fontWeight: '700' }}>{verificationResult.livenessScore}%</Text>
+                          Độ tương đồng: <Text style={{ fontWeight: '700' }}>{verificationResult.similarity}%</Text>
                         </Text>
                       )}
-                      <Text style={styles.resultMessage}>{verificationResult.message}</Text>
+                      {/* Chỉ hiện lời giải thích khi thất bại; khi thành công đã có tiêu đề + độ tương đồng */}
+                      {!verificationResult.success && (
+                        <Text style={styles.resultMessage}>{verificationResult.message}</Text>
+                      )}
                     </View>
                   </View>
                 )}
@@ -248,7 +375,7 @@ export default function FaceVerificationModal({
                 <View style={styles.actionRow}>
                   <TouchableOpacity
                     style={[styles.btnRetake, loading && { opacity: 0.5 }]}
-                    onPress={() => setCapturedImage(null)}
+                    onPress={handleRetake}
                     disabled={loading}
                   >
                     <Ionicons name="refresh" size={18} color={COLORS.textMuted} style={{ marginRight: 6 }} />
@@ -352,24 +479,65 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
-  scanTargetBox: {
-    width: 200,
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
+  cameraBox: {
+    width: CAMERA_BOX_WIDTH,
+    height: CAMERA_BOX_HEIGHT,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#1E293B',
     marginVertical: 12,
-    position: 'relative',
   },
-  faceOvalPlaceholder: {
-    width: 160,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-    borderStyle: 'dashed',
+  cameraLoading: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#1E293B',
+  },
+  cameraPlaceholder: {
+    width: CAMERA_BOX_WIDTH,
+    height: CAMERA_BOX_HEIGHT,
+    borderRadius: 18,
+    marginVertical: 12,
+    padding: 20,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  permissionText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  permissionBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+  },
+  permissionBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cameraHint: {
+    position: 'absolute',
+    bottom: 12,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  cameraHintText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   corner: {
     position: 'absolute',
@@ -450,8 +618,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   previewImageContainer: {
-    width: 200,
-    height: 200,
+    width: CAMERA_BOX_WIDTH,
+    height: CAMERA_BOX_HEIGHT,
     borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
