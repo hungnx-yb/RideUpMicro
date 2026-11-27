@@ -114,15 +114,9 @@ public class IdentityServiceConsumer {
                             event.getTotalAmount(), dynamicRate, commission,
                             debtBefore, driverProfile.getSystemDebt() != null ? driverProfile.getSystemDebt() : debtBefore);
 
-                    // 3. Tăng tổng số chuyến hoàn thành của tài xế
+                    // 3. Tăng tổng số cuốc hoàn thành của tài xế
                     int currentRides = driverProfile.getTotalDriverRides() != null ? driverProfile.getTotalDriverRides() : 0;
                     driverProfile.setTotalDriverRides(currentRides + 1);
-
-                    // 4. Thưởng +1 điểm uy tín khi hoàn thành chuyến đi (tối đa 100)
-                    int currentRep = driverProfile.getReputationScore();
-                    if (currentRep < 100) {
-                        driverProfile.setReputationScore(currentRep + 1);
-                    }
 
                     driverProfileRepository.save(driverProfile);
                     log.info("[Kafka][Commission] Applied dynamic rate {} (commission: {}) to driver {}. Total debt: {}, total rides: {}, reputation: {}",
@@ -140,6 +134,46 @@ public class IdentityServiceConsumer {
             throw new IllegalArgumentException("Poison pill detected", e);
         } catch (Exception e) {
             log.error("[Kafka] Transient error processing BookingCompletedEvent.", e);
+            throw e;
+        }
+    }
+
+    @RetryableTopic(exclude = {JsonProcessingException.class, IllegalArgumentException.class})
+    @Transactional
+    @KafkaListener(
+            topics = "${app.kafka.topics.trip-completed:trip.completed}",
+            groupId = "${spring.kafka.consumer.group-id}"
+    )
+    public void consumeTripCompleted(String payload, Acknowledgment ack) {
+        log.info("[Kafka] Received TripCompletedEvent: {}", payload);
+        try {
+            com.example.demo.dto.event.TripCompletedEvent event = objectMapper.readValue(
+                    payload, com.example.demo.dto.event.TripCompletedEvent.class);
+
+            if (event.getDriverId() != null) {
+                DriverProfile driverProfile = driverProfileRepository.findById(event.getDriverId())
+                        .or(() -> driverProfileRepository.findByUserId(event.getDriverId()))
+                        .orElse(null);
+
+                if (driverProfile != null) {
+                    // Thưởng +1 điểm uy tín khi hoàn thành toàn bộ chuyến đi (tối đa 100)
+                    int currentRep = driverProfile.getReputationScore() != null ? driverProfile.getReputationScore() : 80;
+                    if (currentRep < 100) {
+                        driverProfile.setReputationScore(currentRep + 1);
+                        driverProfileRepository.save(driverProfile);
+                        log.info("[Kafka][Reputation] Rewarded +1 reputation on trip completion (tripId={}) for driver {}. New score: {}",
+                                event.getTripId(), event.getDriverId(), driverProfile.getReputationScore());
+                    }
+                } else {
+                    log.warn("[Kafka] DriverProfile not found for driverId: {} on TripCompletedEvent.", event.getDriverId());
+                }
+            }
+            ack.acknowledge();
+        } catch (JsonProcessingException e) {
+            log.error("[Kafka][POISON-PILL] Cannot deserialize TripCompletedEvent, sending to DLT. payload={}", payload, e);
+            throw new IllegalArgumentException("Poison pill detected", e);
+        } catch (Exception e) {
+            log.error("[Kafka] Transient error processing TripCompletedEvent.", e);
             throw e;
         }
     }
