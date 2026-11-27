@@ -1,8 +1,6 @@
 import React, { createContext, useState, useCallback, useEffect } from 'react';
-import { Alert } from 'react-native';
 import { apiService } from '../services/apiService';
 import { notificationSocket } from '../services/notificationSocket';
-import { navigate } from '../services/navigationRef';
 
 export const NotificationContext = createContext();
 
@@ -48,45 +46,10 @@ export const NotificationProvider = ({ children }) => {
       }
 
       // 3. Subscribe to real-time events
-      unsubscribe = notificationSocket.subscribe((newNoti) => {
+      unsubscribe = notificationSocket.subscribe(() => {
         if (!isMounted) return;
-        
-        // Cập nhật số đỏ trên chuông thông báo ngay lập tức
+        // Chỉ cập nhật số đỏ trên chuông thông báo, không bật Alert popup gây phiền nhiễu
         incrementUnreadCount();
-        
-        let metadata = {};
-        try {
-          metadata = typeof newNoti?.metadata === 'string' ? JSON.parse(newNoti.metadata) : (newNoti?.metadata || {});
-        } catch (e) {}
-
-        const targetRequestId = metadata.tripRequestId || metadata.requestId || metadata.id;
-        const notiType = (metadata.type || newNoti?.type || '').toUpperCase();
-
-        // Chỉ hiện gợi ý nhanh cho tin tìm xe mới trên Chợ chuyến xe (TRIP_REQUEST_CREATED).
-        // Toàn bộ các thông báo khác (hủy chuyến, hủy vé, hoàn tiền, duyệt đơn, đổi lộ trình...)
-        // KHÔNG bật Alert popup gây phiền nhiễu mà chỉ cập nhật chuông thông báo.
-        if (notiType === 'TRIP_REQUEST_CREATED' && targetRequestId) {
-          Alert.alert(
-            `🔔 ${newNoti.title || 'Có khách tìm xe mới!'}`,
-            newNoti.message || 'Có khách vừa đăng nhu cầu chuyến đi trên tuyến bạn chạy.',
-            [
-              { text: 'Để sau', style: 'cancel' },
-              {
-                text: 'Xem & Báo Giá',
-                onPress: () => {
-                  navigate('MainTabs', {
-                    screen: 'Marketplace',
-                    params: { 
-                      targetRequestId: targetRequestId,
-                      startProvinceId: metadata.startProvinceId,
-                      endProvinceId: metadata.endProvinceId,
-                    },
-                  });
-                },
-              },
-            ]
-          );
-        }
       });
     };
 

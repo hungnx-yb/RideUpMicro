@@ -1,5 +1,4 @@
 import React, { createContext, useState, useCallback, useEffect } from 'react';
-import { Alert } from 'react-native';
 import { apiService } from '../services/apiService';
 import { notificationSocket } from '../services/notificationSocket';
 
@@ -47,26 +46,10 @@ export const NotificationProvider = ({ children }) => {
       }
 
       // 3. Subscribe to real-time events
-      unsubscribe = notificationSocket.subscribe((newNoti) => {
+      unsubscribe = notificationSocket.subscribe(() => {
         if (!isMounted) return;
-        
-        // Cập nhật số đỏ ngay lập tức
+        // Chỉ cập nhật số đỏ trên chuông thông báo, không bật Alert popup gây phiền nhiễu
         incrementUnreadCount();
-        
-        // Bỏ qua popup Alert đối với thông báo hủy yêu cầu tìm xe để tránh làm gián đoạn trải nghiệm người dùng
-        const title = newNoti?.title || '';
-        const msg = newNoti?.message || newNoti?.content || '';
-        if (title.toLowerCase().includes('hủy yêu cầu') || msg.toLowerCase().includes('hủy yêu cầu')) {
-          return;
-        }
-
-        if (newNoti?.title && newNoti?.message) {
-           Alert.alert(`🔔 ${newNoti.title}`, newNoti.message);
-        } else if (newNoti?.content) {
-           Alert.alert(`🔔 Thông báo`, newNoti.content);
-        } else {
-           Alert.alert('🔔 Cập nhật Marketplace', 'Có tin nhắn hoặc lời mời từ tài xế!');
-        }
       });
     };
 
