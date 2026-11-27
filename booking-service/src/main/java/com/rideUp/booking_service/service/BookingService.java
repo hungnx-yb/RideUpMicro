@@ -126,7 +126,6 @@ public class BookingService {
         }
         if (isStripePrePaid) {
             booking.setPaymentStatus(PaymentStatus.HOLDING);
-            booking.setPaymentId(request.getPaymentIntentId());
         } else {
             booking.setPaymentStatus(PaymentStatus.PENDING);
         }
@@ -244,7 +243,6 @@ public class BookingService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        booking.setPaymentId(request.getPaymentId());
         booking.setPaymentStatus(PaymentStatus.PAID);
 
         if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
@@ -288,7 +286,6 @@ public class BookingService {
 
         BookingStatus oldStatus = booking.getStatus();
         booking.setStatus(BookingStatus.CANCELLED_PAYMENT_FAILED);
-        booking.setPaymentId(request.getPaymentId());
         booking.setPaymentStatus(PaymentStatus.FAILED);
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelReason(
@@ -403,16 +400,10 @@ public class BookingService {
 
 
     public PaymentMethod resolvePaymentMethod(Booking booking) {
-        if (booking == null) {
+        if (booking == null || booking.getPaymentMethod() == null) {
             return PaymentMethod.CASH;
         }
-        if (booking.getPaymentMethod() != null) {
-            return booking.getPaymentMethod();
-        }
-        if (booking.getPaymentId() != null && (booking.getPaymentId().startsWith("pi_") || booking.getPaymentId().startsWith("pm_"))) {
-            return PaymentMethod.STRIPE;
-        }
-        return PaymentMethod.CASH;
+        return booking.getPaymentMethod();
     }
 
     public BookingResponse toBookingResponse(Booking booking) {

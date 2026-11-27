@@ -618,7 +618,7 @@ const BookingDetailScreen = ({ route, navigation }) => {
           {/* ── Phương thức thanh toán ── */}
           <View style={s.priceDivider} />
           {(() => {
-            const isStripe = booking.paymentMethod === 'STRIPE' || (booking.paymentMethod !== 'CASH' && (booking.paymentStatus === 'HOLDING' || booking.paymentId?.startsWith('pi_')));
+            const isStripe = booking.paymentMethod === 'STRIPE' || (booking.paymentMethod !== 'CASH' && booking.paymentStatus === 'HOLDING');
             const methodLabel = isStripe ? 'Thẻ quốc tế (Stripe)' : 'Tiền mặt';
             const methodIcon = isStripe ? 'card' : 'cash-outline';
             const methodColor = isStripe ? '#2563EB' : '#D97706';
@@ -631,11 +631,6 @@ const BookingDetailScreen = ({ route, navigation }) => {
                 statusIcon = 'checkmark-circle';
                 statusBg = '#ECFDF5'; statusColor = '#059669';
                 guidanceText = 'Số tiền đã được thanh toán thành công qua thẻ. Bạn không cần trả thêm cho tài xế.';
-              } else if (booking.paymentStatus === 'HOLDING' || (isStripe && booking.paymentId?.startsWith('pi_'))) {
-                statusLabel = 'Đã giữ cọc qua thẻ';
-                statusIcon = 'shield-checkmark';
-                statusBg = '#EFF6FF'; statusColor = '#2563EB';
-                guidanceText = 'Số tiền đang được giữ an toàn trên thẻ của bạn. Sau khi hoàn thành chuyến, tiền sẽ tự động chuyển cho tài xế.';
               } else if (booking.paymentStatus === 'REFUNDED' || booking.paymentStatus === 'VOIDED') {
                 statusLabel = 'Đã hoàn tiền';
                 statusIcon = 'refresh-circle';
@@ -646,6 +641,11 @@ const BookingDetailScreen = ({ route, navigation }) => {
                 statusIcon = 'close-circle';
                 statusBg = '#FEF2F2'; statusColor = '#DC2626';
                 guidanceText = 'Thanh toán qua thẻ không thành công. Vui lòng thử lại hoặc chọn phương thức khác.';
+              } else if (booking.paymentStatus === 'HOLDING') {
+                statusLabel = 'Đã giữ cọc qua thẻ';
+                statusIcon = 'shield-checkmark';
+                statusBg = '#EFF6FF'; statusColor = '#2563EB';
+                guidanceText = 'Số tiền đang được giữ an toàn trên thẻ của bạn. Sau khi hoàn thành chuyến, tiền sẽ tự động chuyển cho tài xế.';
               } else {
                 statusLabel = 'Chờ thanh toán';
                 statusIcon = 'time-outline';

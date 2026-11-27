@@ -474,7 +474,7 @@ export default function DriverTripsScreen({ navigation }) {
   const handleCompleteBooking = (item) => {
     const bookingId = item?.id;
     const userName = item?.userName || 'Khách hàng';
-    const isStripe = item?.paymentMethod === 'STRIPE' || (item?.paymentMethod !== 'CASH' && (item?.paymentStatus === 'HOLDING' || item?.paymentId?.startsWith('pi_')));
+    const isStripe = item?.paymentMethod === 'STRIPE' || (item?.paymentMethod !== 'CASH' && item?.paymentStatus === 'HOLDING');
     const isPaid = item?.paymentStatus === 'PAID';
     const amountStr = formatMoney(item?.totalAmount);
 
@@ -899,24 +899,24 @@ export default function DriverTripsScreen({ navigation }) {
 
         {/* ── Payment Badge for Driver ── */}
         {(() => {
-          const isStripe = item.paymentMethod === 'STRIPE' || (item.paymentMethod !== 'CASH' && (item.paymentStatus === 'HOLDING' || item.paymentId?.startsWith('pi_')));
+          const isStripe = item.paymentMethod === 'STRIPE' || (item.paymentMethod !== 'CASH' && item.paymentStatus === 'HOLDING');
           if (isStripe) {
             const isPaid = item.paymentStatus === 'PAID';
-            const isHolding = item.paymentStatus === 'HOLDING' || (item.paymentMethod === 'STRIPE' && item.paymentId?.startsWith('pi_'));
+            const isHolding = item.paymentStatus === 'HOLDING';
             const isRefunded = item.paymentStatus === 'REFUNDED' || item.paymentStatus === 'VOIDED';
             let label, subLabel, bg, borderCol, textCol, icon;
             if (isPaid) {
               label = '💳 Thẻ Stripe • Đã thanh toán';
               subLabel = 'Không thu tiền mặt';
               bg = '#ECFDF5'; borderCol = '#A7F3D0'; textCol = '#059669'; icon = 'checkmark-circle';
-            } else if (isHolding) {
-              label = '💳 Thẻ Stripe • Đã cọc giữ tiền';
-              subLabel = 'Không thu tiền mặt';
-              bg = '#EFF6FF'; borderCol = '#BFDBFE'; textCol = '#2563EB'; icon = 'shield-checkmark';
             } else if (isRefunded) {
               label = '💳 Thẻ Stripe • Đã hoàn tiền';
               subLabel = '';
               bg = '#F3F4F6'; borderCol = '#E5E7EB'; textCol = '#6B7280'; icon = 'refresh-circle';
+            } else if (isHolding) {
+              label = '💳 Thẻ Stripe • Đã cọc giữ tiền';
+              subLabel = 'Không thu tiền mặt';
+              bg = '#EFF6FF'; borderCol = '#BFDBFE'; textCol = '#2563EB'; icon = 'shield-checkmark';
             } else {
               label = '💳 Thẻ Stripe • Đang xử lý';
               subLabel = 'Không thu tiền mặt';

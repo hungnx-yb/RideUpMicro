@@ -361,18 +361,21 @@ const BookingCard = ({ item, trip, onPress, onChatPress }) => {
     return Number(val).toLocaleString('vi-VN') + ' đ';
   };
 
-  const isStripe = item.paymentMethod === 'STRIPE' || (item.paymentMethod !== 'CASH' && (item.paymentStatus === 'HOLDING' || item.paymentId?.startsWith('pi_')));
+  const isStripe = item.paymentMethod === 'STRIPE' || (item.paymentMethod !== 'CASH' && item.paymentStatus === 'HOLDING');
 
   const getPayInfo = () => {
     if (isStripe) {
       if (item.paymentStatus === 'PAID') {
         return { label: 'Thẻ Stripe • Đã thanh toán', icon: 'card', bg: '#ECFDF5', color: '#059669', border: '#A7F3D0' };
       }
-      if (item.paymentStatus === 'HOLDING' || (isStripe && item.paymentId?.startsWith('pi_'))) {
-        return { label: 'Thẻ Stripe • Đã cọc giữ tiền', icon: 'shield-checkmark', bg: '#EFF6FF', color: '#2563EB', border: '#BFDBFE' };
-      }
       if (item.paymentStatus === 'REFUNDED' || item.paymentStatus === 'VOIDED') {
         return { label: 'Thẻ Stripe • Đã hoàn tiền', icon: 'refresh-circle', bg: '#F3F4F6', color: '#6B7280', border: '#E5E7EB' };
+      }
+      if (item.paymentStatus === 'FAILED') {
+        return { label: 'Thẻ Stripe • Thanh toán thất bại', icon: 'close-circle', bg: '#FEF2F2', color: '#DC2626', border: '#FECACA' };
+      }
+      if (item.paymentStatus === 'HOLDING') {
+        return { label: 'Thẻ Stripe • Đã cọc giữ tiền', icon: 'shield-checkmark', bg: '#EFF6FF', color: '#2563EB', border: '#BFDBFE' };
       }
       return { label: 'Thẻ Stripe', icon: 'card-outline', bg: '#EFF6FF', color: '#2563EB', border: '#BFDBFE' };
     }

@@ -37,8 +37,6 @@ public class Booking {
     @Column(nullable = false)
     BookingStatus status;
 
-    String paymentId;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method")
     PaymentMethod paymentMethod;

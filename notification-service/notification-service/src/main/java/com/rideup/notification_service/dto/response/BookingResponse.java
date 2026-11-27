@@ -23,7 +23,6 @@ public class BookingResponse {
     String bookingCode;
     String customerId;
     String tripId;
-    String paymentId;
     Integer seatCount;
     BigDecimal pricePerSeat;
     BigDecimal totalAmount;
