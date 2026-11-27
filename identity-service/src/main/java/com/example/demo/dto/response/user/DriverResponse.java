@@ -58,6 +58,8 @@ public class DriverResponse {
     String vehicleType;
     String vehicleImage;
     String registrationImage;
+    String registrationImageBack;
+    String inspectionImage;
     String insuranceImage;
     Boolean isVehicleVerified;
     Boolean isVehicleActive;

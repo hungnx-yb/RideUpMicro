@@ -26,3 +26,19 @@ export function resolveImageUrl(objectPathOrUrl) {
 
   return objectPathOrUrl;
 }
+
+/**
+ * Ảnh giấy tờ xe ngoài mặt trước đăng ký: mặt sau đăng ký, đăng kiểm, bảo hiểm.
+ * Hồ sơ cũ (chưa có registrationImageBack/inspectionImage) lưu mặt sau đăng ký xe vào insuranceImage.
+ */
+export function vehicleBackAndExtraDocs(vehicleOrDriver) {
+  const isLegacy = !vehicleOrDriver?.registrationImageBack && !vehicleOrDriver?.inspectionImage;
+  if (isLegacy) {
+    return [{ label: "Đăng ký xe mặt sau", url: resolveImageUrl(vehicleOrDriver?.insuranceImage) }];
+  }
+  return [
+    { label: "Đăng ký xe mặt sau", url: resolveImageUrl(vehicleOrDriver?.registrationImageBack) },
+    { label: "Giấy đăng kiểm", url: resolveImageUrl(vehicleOrDriver?.inspectionImage) },
+    { label: "Bảo hiểm xe", url: resolveImageUrl(vehicleOrDriver?.insuranceImage) },
+  ];
+}

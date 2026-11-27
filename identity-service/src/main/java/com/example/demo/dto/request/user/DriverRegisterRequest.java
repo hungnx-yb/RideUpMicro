@@ -46,5 +46,6 @@ public class DriverRegisterRequest {
     MultipartFile registrationImage;
     MultipartFile registrationImageFront;
     MultipartFile registrationImageBack;
+    MultipartFile inspectionImage;
     MultipartFile insuranceImage;
 }

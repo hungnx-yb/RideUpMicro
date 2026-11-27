@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { apiService } from '../services/apiService';
 import FaceVerificationModal from '../components/FaceVerificationModal';
 import DocumentScannerModal from '../components/DocumentScannerModal';
@@ -82,6 +83,10 @@ export default function DriverOnboardingScreen({ navigation }) {
   const [gplxIssuePlace, setGplxIssuePlace] = useState('');
   const [isIndefiniteGplx, setIsIndefiniteGplx] = useState(false);
   const [gplxClasses, setGplxClasses] = useState(['B2']);
+  // Nội dung ô nhập hạng (giữ nguyên dấu phẩy/khoảng trắng khi đang gõ), đồng bộ với gplxClasses
+  const [gplxClassText, setGplxClassText] = useState('B2');
+  // true khi hạng GPLX đã lấy từ mã QR => ẩn ô chọn hạng thủ công
+  const [isGplxClassFromQr, setIsGplxClassFromQr] = useState(false);
   const [gplxImage, setGplxImage] = useState(null);
 
   // Thông tin phương tiện
@@ -95,6 +100,8 @@ export default function DriverOnboardingScreen({ navigation }) {
   const [vehicleImage, setVehicleImage] = useState(null);
   const [registrationFront, setRegistrationFront] = useState(null);
   const [registrationBack, setRegistrationBack] = useState(null);
+  const [inspectionImage, setInspectionImage] = useState(null); // Giấy chứng nhận đăng kiểm
+  const [insuranceImage, setInsuranceImage] = useState(null); // Giấy bảo hiểm xe
 
   // Quản lý lỗi validation
   const [errors, setErrors] = useState({});
@@ -113,6 +120,8 @@ export default function DriverOnboardingScreen({ navigation }) {
   const shakeAnimVehicleImg = useRef(new Animated.Value(0)).current;
   const shakeAnimRegistrationFront = useRef(new Animated.Value(0)).current;
   const shakeAnimRegistrationBack = useRef(new Animated.Value(0)).current;
+  const shakeAnimInspection = useRef(new Animated.Value(0)).current;
+  const shakeAnimInsurance = useRef(new Animated.Value(0)).current;
 
   const triggerShake = (animValue) => {
     animValue.setValue(0);
@@ -208,6 +217,36 @@ export default function DriverOnboardingScreen({ navigation }) {
     });
   };
 
+  // Chọn ảnh có sẵn trong thư viện máy
+  const pickImageFromLibrary = async (onCaptured) => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Cần quyền truy cập ảnh', 'Vui lòng cho phép ứng dụng truy cập thư viện ảnh để chọn ảnh.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets?.length > 0) {
+        onCaptured({ uri: result.assets[0].uri });
+      }
+    } catch (error) {
+      console.log('Lỗi chọn ảnh từ thư viện:', error);
+      Alert.alert('Lỗi', 'Không thể mở thư viện ảnh. Vui lòng thử lại.');
+    }
+  };
+
+  // Cho người dùng chọn: chụp bằng camera hoặc lấy ảnh có sẵn trong máy
+  const openImageSourcePicker = (title, instruction, onCaptured) => {
+    Alert.alert(title, 'Bạn muốn chụp ảnh mới hay chọn ảnh có sẵn?', [
+      { text: 'Chụp ảnh', onPress: () => openDocumentScanner(title, instruction, onCaptured, false) },
+      { text: 'Chọn từ thư viện', onPress: () => pickImageFromLibrary(onCaptured) },
+      { text: 'Hủy', style: 'cancel' },
+    ]);
+  };
+
   // Hàm trích xuất tự động thông tin từ mã QR thẻ Căn cước công dân (CCCD cũ hoặc mới)
   const applyQrDataToForm = (qrData) => {
     if (!qrData) return;
@@ -287,6 +326,18 @@ export default function DriverOnboardingScreen({ navigation }) {
     setErrors((prev) => ({ ...prev, registrationBack: false }));
   };
 
+  // Xử lý khi chụp Giấy chứng nhận đăng kiểm
+  const handleInspectionCaptured = (photoAsset) => {
+    setInspectionImage(photoAsset);
+    setErrors((prev) => ({ ...prev, inspectionImage: false }));
+  };
+
+  // Xử lý khi chụp Giấy bảo hiểm xe
+  const handleInsuranceCaptured = (photoAsset) => {
+    setInsuranceImage(photoAsset);
+    setErrors((prev) => ({ ...prev, insuranceImage: false }));
+  };
+
   // Xử lý khi chụp Ảnh xe thực tế
   const handleVehicleImageCaptured = (photoAsset) => {
     setVehicleImage(photoAsset);
@@ -313,8 +364,14 @@ export default function DriverOnboardingScreen({ navigation }) {
     const classStr = qr.gplxClass || (qr.gplxClasses ? qr.gplxClasses.join(', ') : '');
     if (classStr) {
       const classArr = classStr.split(/[\s,]+/).filter(Boolean);
-      setGplxClasses(classArr);
-      fieldsFilled.push(`Hạng: ${classStr}`);
+      if (classArr.length > 0) {
+        const normalized = classArr.map((c) => c.toUpperCase());
+        setGplxClasses(normalized);
+        setGplxClassText(normalized.join(', '));
+        setIsGplxClassFromQr(true);
+        setErrors((prev) => ({ ...prev, gplxClasses: false }));
+        fieldsFilled.push(`Hạng: ${classStr}`);
+      }
     }
     if (qr.issueDate) {
       setGplxIssueDate(qr.issueDate);
@@ -497,6 +554,14 @@ export default function DriverOnboardingScreen({ navigation }) {
       newErrors.registrationBack = true;
       triggerShake(shakeAnimRegistrationBack);
     }
+    if (!inspectionImage) {
+      newErrors.inspectionImage = true;
+      triggerShake(shakeAnimInspection);
+    }
+    if (!insuranceImage) {
+      newErrors.insuranceImage = true;
+      triggerShake(shakeAnimInsurance);
+    }
 
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
@@ -640,6 +705,22 @@ export default function DriverOnboardingScreen({ navigation }) {
           formData.append('registrationImageBack', {
             uri: registrationBack.uri,
             name: 'registration_back.jpg',
+            type: 'image/jpeg',
+          });
+        }
+
+        if (inspectionImage) {
+          formData.append('inspectionImage', {
+            uri: inspectionImage.uri,
+            name: 'inspection.jpg',
+            type: 'image/jpeg',
+          });
+        }
+
+        if (insuranceImage) {
+          formData.append('insuranceImage', {
+            uri: insuranceImage.uri,
+            name: 'insurance.jpg',
             type: 'image/jpeg',
           });
         }
@@ -1131,17 +1212,11 @@ export default function DriverOnboardingScreen({ navigation }) {
               <View style={styles.stepBadge}><Text style={styles.stepBadgeText}>BƯỚC 3</Text></View>
               <Text style={styles.stepMainTitle}>GPLX & Phương Tiện</Text>
             </View>
-            <Text style={styles.stepDescText}>
-              Cung cấp Giấy phép lái xe và thông tin phương tiện.
-            </Text>
 
             {/* 1. CHỤP 2 MẶT GIẤY PHÉP LÁI XE ĐỂ NỘP DUYỆT */}
             <View style={styles.fieldSection}>
               <Text style={[styles.fieldLabel, (errors.gplxFront || errors.gplxBack) && styles.fieldLabelError]}>
                 Chụp Giấy phép lái xe
-              </Text>
-              <Text style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 8 }}>
-                Chụp mặt sau bằng lái xe để tự động lấy thông tin 
               </Text>
 
               <View style={styles.imageRow}>
@@ -1325,13 +1400,23 @@ export default function DriverOnboardingScreen({ navigation }) {
 
                 {/* Hạng Giấy phép lái xe */}
                 <View style={styles.inputGroup}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={[styles.fieldLabel, errors.gplxClasses && styles.fieldLabelError]}>Hạng</Text>
-                    <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '600' }}>
-                      Đã chọn: {gplxClasses.length > 0 ? gplxClasses.join(', ') : 'Chưa chọn'}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                  <Text style={[styles.fieldLabel, errors.gplxClasses && styles.fieldLabelError]}>Hạng</Text>
+                  <TextInput
+                    style={[styles.input, errors.gplxClasses && styles.inputError]}
+                    placeholder="VD: B2 hoặc B2, C"
+                    placeholderTextColor={COLORS.textMuted}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    value={gplxClassText}
+                    onChangeText={(val) => {
+                      const upper = val.toUpperCase();
+                      setGplxClassText(upper);
+                      setGplxClasses(upper.split(/[\s,;]+/).filter(Boolean));
+                      if (errors.gplxClasses) setErrors((prev) => ({ ...prev, gplxClasses: false }));
+                    }}
+                  />
+                  {!isGplxClassFromQr && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                     {['B1', 'B2', 'C', 'D', 'E', 'F'].map((cls) => {
                       const isSelected = gplxClasses.includes(cls);
                       return (
@@ -1339,11 +1424,11 @@ export default function DriverOnboardingScreen({ navigation }) {
                           key={cls}
                           activeOpacity={0.7}
                           onPress={() => {
-                            if (isSelected) {
-                              setGplxClasses((prev) => prev.filter((item) => item !== cls));
-                            } else {
-                              setGplxClasses((prev) => [...prev, cls]);
-                            }
+                            const next = isSelected
+                              ? gplxClasses.filter((item) => item !== cls)
+                              : [...gplxClasses, cls];
+                            setGplxClasses(next);
+                            setGplxClassText(next.join(', '));
                             if (errors.gplxClasses) setErrors((prev) => ({ ...prev, gplxClasses: false }));
                           }}
                           style={{
@@ -1368,7 +1453,8 @@ export default function DriverOnboardingScreen({ navigation }) {
                       );
                     })}
                   </View>
-                  {errors.gplxClasses && <Text style={styles.errorHelperText}>Vui lòng chọn ít nhất 1 hạng bằng lái</Text>}
+                  )}
+                  {errors.gplxClasses && <Text style={styles.errorHelperText}>Vui lòng nhập hạng bằng lái</Text>}
                 </View>
 
                 {/* THÔNG TIN PHƯƠNG TIỆN */}
@@ -1488,11 +1574,10 @@ export default function DriverOnboardingScreen({ navigation }) {
                         errors.vehicleImage && styles.imagePickerBoxError,
                       ]}
                       onPress={() =>
-                        openDocumentScanner(
+                        openImageSourcePicker(
                           'Ảnh Xe Thực Tế',
                           'Hướng camera chụp rõ toàn cảnh phương tiện của bạn',
-                          handleVehicleImageCaptured,
-                          false
+                          handleVehicleImageCaptured
                         )
                       }
                     >
@@ -1624,6 +1709,77 @@ export default function DriverOnboardingScreen({ navigation }) {
                         <Text style={styles.errorHelperText}>Thiếu mặt sau</Text>
                       )}
                     </Animated.View>
+                  </View>
+                </View>
+
+                {/* 3. Ảnh Giấy đăng kiểm & Bảo hiểm xe */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.fieldLabel}>Đăng kiểm & Bảo hiểm</Text>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    {[
+                      {
+                        key: 'inspectionImage',
+                        asset: inspectionImage,
+                        shake: shakeAnimInspection,
+                        icon: 'clipboard-check-outline',
+                        placeholder: 'Giấy đăng kiểm',
+                        scannerTitle: 'Giấy Chứng Nhận Đăng Kiểm',
+                        scannerHint: 'Hướng camera chụp rõ toàn bộ Giấy chứng nhận kiểm định (đăng kiểm) còn hiệu lực',
+                        onCaptured: handleInspectionCaptured,
+                        errorText: 'Thiếu đăng kiểm',
+                      },
+                      {
+                        key: 'insuranceImage',
+                        asset: insuranceImage,
+                        shake: shakeAnimInsurance,
+                        icon: 'shield-check-outline',
+                        placeholder: 'Bảo hiểm xe',
+                        scannerTitle: 'Giấy Bảo Hiểm Xe',
+                        scannerHint: 'Hướng camera chụp rõ toàn bộ Giấy chứng nhận bảo hiểm xe còn hiệu lực',
+                        onCaptured: handleInsuranceCaptured,
+                        errorText: 'Thiếu bảo hiểm',
+                      },
+                    ].map((doc) => (
+                      <Animated.View key={doc.key} style={{ flex: 1, transform: [{ translateX: doc.shake }] }}>
+                        <TouchableOpacity
+                          style={[
+                            styles.imagePickerBox,
+                            { height: 105 },
+                            errors[doc.key] && styles.imagePickerBoxError,
+                          ]}
+                          onPress={() =>
+                            // Đăng kiểm & bảo hiểm bắt buộc chụp trực tiếp, không cho chọn ảnh có sẵn
+                            openDocumentScanner(doc.scannerTitle, doc.scannerHint, doc.onCaptured, false)
+                          }
+                        >
+                          {doc.asset ? (
+                            <View style={{ width: '100%', height: '100%', position: 'relative' }}>
+                              <Image source={{ uri: doc.asset.uri }} style={styles.docImage} />
+                              <View style={styles.imageSuccessBadge}>
+                                <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                              </View>
+                            </View>
+                          ) : (
+                            <View style={styles.imagePlaceholder}>
+                              <MaterialCommunityIcons
+                                name={doc.icon}
+                                size={28}
+                                color={errors[doc.key] ? COLORS.error : COLORS.primary}
+                              />
+                              <Text
+                                style={[
+                                  styles.imagePlaceholderText,
+                                  errors[doc.key] && styles.fieldLabelError,
+                                ]}
+                              >
+                                {doc.placeholder}
+                              </Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                        {errors[doc.key] && <Text style={styles.errorHelperText}>{doc.errorText}</Text>}
+                      </Animated.View>
+                    ))}
                   </View>
                 </View>
 

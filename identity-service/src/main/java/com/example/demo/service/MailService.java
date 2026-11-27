@@ -11,17 +11,24 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
-import java.net.URLEncoder;
+import java.net.DatagramSocket;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class MailService {
+    private static final List<String> VIRTUAL_ADAPTER_KEYWORDS = List.of(
+            "vethernet", "wsl", "hyper-v", "vmware", "virtualbox", "vbox", "docker",
+            "radmin", "vpn", "tap", "tun", "hamachi", "zerotier", "tailscale", "loopback");
+
     JavaMailSender mailSender;
 
     @NonFinal
@@ -54,17 +61,21 @@ public class MailService {
     }
 
     private String getLanIpAddress() {
+        String routeIp = getDefaultRouteIp();
+        if (routeIp != null) {
+            return routeIp;
+        }
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
                 NetworkInterface iface = interfaces.nextElement();
-                if (iface.isLoopback() || !iface.isUp()) {
+                if (iface.isLoopback() || !iface.isUp() || iface.isVirtual() || isVirtualAdapter(iface)) {
                     continue;
                 }
                 Enumeration<InetAddress> addresses = iface.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     InetAddress addr = addresses.nextElement();
-                    if (!addr.isLoopbackAddress() && addr.isSiteLocalAddress() && addr.getHostAddress().contains(".")) {
+                    if (addr instanceof Inet4Address && !addr.isLoopbackAddress() && addr.isSiteLocalAddress()) {
                         return addr.getHostAddress();
                     }
                 }
@@ -74,6 +85,28 @@ public class MailService {
             log.warn("Could not determine local LAN IP, fallback to localhost: {}", e.getMessage());
             return "localhost";
         }
+    }
+
+    /**
+     * Lấy IP của card mạng mà hệ điều hành dùng để ra Internet (Wi-Fi/Ethernet thật).
+     * UDP connect chỉ chọn route, không gửi gói tin nào.
+     */
+    private String getDefaultRouteIp() {
+        try (DatagramSocket socket = new DatagramSocket()) {
+            socket.connect(InetAddress.getByName("8.8.8.8"), 53);
+            InetAddress local = socket.getLocalAddress();
+            if (local instanceof Inet4Address && !local.isAnyLocalAddress() && !local.isLoopbackAddress()) {
+                return local.getHostAddress();
+            }
+        } catch (Exception e) {
+            log.debug("Could not resolve default route IP: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private boolean isVirtualAdapter(NetworkInterface iface) {
+        String name = (iface.getName() + " " + iface.getDisplayName()).toLowerCase();
+        return VIRTUAL_ADAPTER_KEYWORDS.stream().anyMatch(name::contains);
     }
 
     private String buildVerificationUrl(String token) {
