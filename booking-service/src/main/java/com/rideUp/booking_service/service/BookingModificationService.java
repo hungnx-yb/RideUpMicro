@@ -50,7 +50,7 @@ public class BookingModificationService {
      */
     @Transactional
     public BookingModificationResponse requestModification(String bookingId, RequestBookingModificationRequest request) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         String currentUserId = SecurityUtils.getCurrentUserId();
@@ -61,6 +61,12 @@ public class BookingModificationService {
         // Quy tắc 1: Trạng thái vé hợp lệ (chỉ CONFIRMED hoặc WAITING_DRIVER_APPROVAL)
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.WAITING_DRIVER_APPROVAL) {
             throw new AppException(ErrorCode.MODIFICATION_INVALID_STATUS);
+        }
+
+        // Giới hạn tối đa 2 lần chỉnh sửa cho mỗi booking, bất kể trạng thái vé hay trạng thái duyệt
+        long modificationCount = bookingModificationRepository.countByBookingId(bookingId);
+        if (modificationCount >= 2) {
+            throw new AppException(ErrorCode.MAX_MODIFICATIONS_EXCEEDED);
         }
 
         // TRƯỜNG HỢP 1: Tài xế CHƯA duyệt booking (trạng thái WAITING_DRIVER_APPROVAL)
@@ -114,12 +120,6 @@ public class BookingModificationService {
         // Quy tắc 3: Kiểm soát tính duy nhất (không có yêu cầu pending khác)
         if (bookingModificationRepository.existsByBookingIdAndStatus(bookingId, ModificationStatus.PENDING_DRIVER)) {
             throw new AppException(ErrorCode.MODIFICATION_ALREADY_PENDING);
-        }
-
-        // Quy tắc 3: Giới hạn tối đa 2 lần chỉnh sửa thành công
-        long approvedCount = bookingModificationRepository.countByBookingIdAndStatus(bookingId, ModificationStatus.APPROVED);
-        if (approvedCount >= 2) {
-            throw new AppException(ErrorCode.MAX_MODIFICATIONS_EXCEEDED);
         }
 
         // Quy tắc 2: Cut-off time >= 2 tiếng trước giờ xuất phát
