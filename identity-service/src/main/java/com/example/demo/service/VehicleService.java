@@ -385,6 +385,11 @@ public class VehicleService {
     }
 
     public Long countVehicleByStatus(Boolean isVerified) {
+        // "Chờ duyệt" phải khớp với getPendingVehicles(): không đếm xe đã bị từ chối
+        // (xe bị từ chối vẫn có isVerified = false nhưng rejectedAt != null)
+        if (Boolean.FALSE.equals(isVerified)) {
+            return vehicleRepository.countByIsVerifiedFalseAndRejectedAtIsNull();
+        }
         return vehicleRepository.countByIsVerified(isVerified);
     }
 }

@@ -261,7 +261,8 @@ public class DriverService {
     }
 
     public List<DriverResponse> getPendingDrivers() {
-        return driverProfileRepository.findAllByStatus(DriverStatus.PENDING)
+        // Bỏ qua hồ sơ nháp (mới chụp mặt eKYC, chưa gửi đủ thông tin) để admin chỉ thấy hồ sơ hoàn chỉnh
+        return driverProfileRepository.findAllByStatusAndCccdIsNotNull(DriverStatus.PENDING)
                 .stream()
                 .map(this::mapToDriverResponse)
                 .toList();
@@ -303,7 +304,12 @@ public class DriverService {
     }
 
     public Long countDriverByStatus(String  status) {
-        return  driverProfileRepository.countByStatus(DriverStatus.valueOf(status));
+        DriverStatus driverStatus = DriverStatus.valueOf(status);
+        // Số "chờ duyệt" phải khớp với danh sách admin thấy: không đếm hồ sơ nháp
+        if (driverStatus == DriverStatus.PENDING) {
+            return driverProfileRepository.countByStatusAndCccdIsNotNull(driverStatus);
+        }
+        return  driverProfileRepository.countByStatus(driverStatus);
     }
 
     private String uploadIfPresent(MultipartFile file, String prefix) {
