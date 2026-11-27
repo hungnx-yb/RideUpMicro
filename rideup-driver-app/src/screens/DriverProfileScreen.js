@@ -410,7 +410,11 @@ export default function DriverProfileScreen({ navigation, route }) {
             
             <View style={styles.ratingBadge}>
               <Ionicons name="star" size={12} color={COLORS.warning} />
-              <Text style={styles.ratingText}>{driver?.rating ? `${driver.rating} Điểm tín nhiệm` : 'Chưa có đánh giá'}</Text>
+              <Text style={styles.ratingText}>
+                {(driver?.driverRating ?? driver?.rating) != null
+                  ? `${Number(driver?.driverRating ?? driver?.rating).toFixed(1)} Điểm tín nhiệm`
+                  : 'Chưa có đánh giá'}
+              </Text>
             </View>
           </View>
         </View>

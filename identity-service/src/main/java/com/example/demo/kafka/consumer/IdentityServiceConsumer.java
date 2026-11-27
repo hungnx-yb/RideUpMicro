@@ -44,8 +44,9 @@ public class IdentityServiceConsumer {
         log.info("[Kafka] Received DriverRatingUpdatedEvent: {}", payload);
         try {
             DriverRatingUpdatedEvent event = objectMapper.readValue(payload, DriverRatingUpdatedEvent.class);
-            User user = userRepository.findById(event.getDriverId()).orElseThrow(()->new AppException(ErrorCode.USER_NOT_EXISTED));
-            DriverProfile driverProfile = user.getDriverProfile();
+            DriverProfile driverProfile = driverProfileRepository.findById(event.getDriverId())
+                    .or(() -> driverProfileRepository.findByUserId(event.getDriverId()))
+                    .orElse(null);
 
             if (driverProfile != null) {
                 driverProfile.setDriverRating(event.getAverageRating());
