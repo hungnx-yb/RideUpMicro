@@ -720,6 +720,9 @@ public class BookingService {
             String correlationId = UUID.randomUUID().toString();
 
             booking.setStatus(BookingStatus.CANCELLED_DRIVER);
+            if (booking.getPaymentStatus() != PaymentStatus.PAID) {
+                booking.setPaymentStatus(PaymentStatus.VOIDED);
+            }
             booking.setCancelledAt(now);
             booking.setCancelReason(reason);
             // Giữ nguyên expiresAt ban đầu làm audit trail
