@@ -3,29 +3,23 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   FaBars,
   FaBroadcastTower,
-  FaCar,
   FaChartLine,
   FaClipboardList,
   FaClock,
-  FaHome,
-  FaIdCard,
   FaPercentage,
   FaRoute,
   FaSignOutAlt,
   FaTaxi,
   FaTimes,
   FaUserShield,
+  FaUsers,
 } from "react-icons/fa";
 import useAuth from "../../hooks/useAuth";
 
 export const ADMIN_MENU_GROUPS = [
   {
-    title: "Tổng quan",
-    items: [
-      { label: "Bảng điều khiển", path: "/admin-dashboard", icon: FaHome, end: true },
-      { label: "Duyệt tài xế", path: "/admin-dashboard/drivers-approval", icon: FaIdCard },
-      { label: "Duyệt phương tiện", path: "/admin-dashboard/vehicles-approval", icon: FaCar },
-    ],
+    title: "Quản lý",
+    items: [{ label: "Quản lý tài xế", path: "/admin/drivers", icon: FaUsers }],
   },
   {
     title: "Thống kê & Báo cáo",
@@ -35,7 +29,7 @@ export const ADMIN_MENU_GROUPS = [
     title: "Cấu hình hệ thống",
     items: [
       { label: "Hoa hồng & Uy tín", path: "/admin/commission-config", icon: FaPercentage },
-      { label: "Thời gian Timeout (SLA)", path: "/admin/timeout-config", icon: FaClock },
+      { label: "Thời gian Timeout", path: "/admin/timeout-config", icon: FaClock },
       { label: "Khung giá cước", path: "/admin/fare-boundary", icon: FaRoute },
     ],
   },

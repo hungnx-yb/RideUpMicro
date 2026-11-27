@@ -316,7 +316,8 @@ public class DriverService {
         return file != null && !file.isEmpty() ? fileService.upload(file, prefix) : null;
     }
 
-    private DriverResponse mapToDriverResponse(DriverProfile driverProfile) {
+    // public để AdminDriverService dùng lại cùng một cách map (user + vehicle + hạng GPLX)
+    public DriverResponse mapToDriverResponse(DriverProfile driverProfile) {
 
         DriverResponse response = modelMapper.map(driverProfile, DriverResponse.class);
 
@@ -345,6 +346,8 @@ public class DriverService {
             response.setInsuranceImage(vehicle.getInsuranceImage());
             response.setIsVehicleVerified(vehicle.getIsVerified());
             response.setIsVehicleActive(vehicle.getIsActive());
+            response.setVehicleRejectedAt(vehicle.getRejectedAt());
+            response.setVehicleRejectionReason(vehicle.getRejectionReason());
         }
 
         if (driverProfile.getGplxClasses() != null && !driverProfile.getGplxClasses().isBlank()) {

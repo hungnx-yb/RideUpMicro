@@ -48,7 +48,7 @@ function LoginPage() {
         return;
       }
 
-      navigate("/admin-dashboard", { replace: true });
+      navigate("/admin/drivers", { replace: true });
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin."));
     } finally {
