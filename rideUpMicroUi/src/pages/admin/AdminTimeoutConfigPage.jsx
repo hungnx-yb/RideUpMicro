@@ -101,7 +101,7 @@ function AdminTimeoutConfigPage() {
 
   return (
     <AdminLayout
-      title="Thời gian Timeout (SLA)"
+      title="Thời gian Timeout"
       subtitle="Điều chỉnh các mốc thời gian chờ theo mùa vụ, thời tiết mà không cần sửa mã nguồn. Giá trị mới áp dụng cho giao dịch phát sinh sau khi lưu; các tiến trình quét hết hạn chạy mỗi phút."
       icon={FaClock}
       actions={(
