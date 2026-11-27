@@ -174,6 +174,9 @@ export default function FaceVerificationModal({
             ref={cameraRef}
             style={StyleSheet.absoluteFill}
             facing="front"
+            // Lat anh dau ra cua camera truoc cho khop voi preview kieu guong.
+            // Dung prop cua CameraView thay cho takePictureAsync({ mirror }) da deprecated (expo-camera 58).
+            mirror
             onCameraReady={() => setIsCameraReady(true)}
           />
         ) : (

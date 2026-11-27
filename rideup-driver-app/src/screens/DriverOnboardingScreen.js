@@ -1748,7 +1748,8 @@ export default function DriverOnboardingScreen({ navigation }) {
                             errors[doc.key] && styles.imagePickerBoxError,
                           ]}
                           onPress={() =>
-                            openImageSourcePicker(doc.scannerTitle, doc.scannerHint, doc.onCaptured)
+                            // Đăng kiểm & bảo hiểm bắt buộc chụp trực tiếp, không cho chọn ảnh có sẵn
+                            openDocumentScanner(doc.scannerTitle, doc.scannerHint, doc.onCaptured, false)
                           }
                         >
                           {doc.asset ? (

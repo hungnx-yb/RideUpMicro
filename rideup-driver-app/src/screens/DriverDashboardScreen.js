@@ -824,8 +824,18 @@ export default function DriverDashboardScreen() {
           <TouchableOpacity 
             style={styles.emptyTicket} 
             activeOpacity={0.8} 
-            onPress={() => {
-              const v = driverProfile?.vehicle;
+            onPress={async () => {
+              // Lấy trạng thái xe từ /vehicles/me giống CreateTripScreen.
+              // (/drivers/me trả DriverResponse phẳng, không có object `vehicle` nên không dùng được ở đây.)
+              let v = null;
+              try {
+                const vehicleRes = await apiService.getMyVehicle();
+                v = vehicleRes?.data?.result ?? null;
+              } catch (e) {
+                // Lỗi mạng: vẫn cho vào màn tạo chuyến, màn đó tự kiểm tra lại khi gửi
+                navigation.navigate('CreateTrip');
+                return;
+              }
               if (!v || !v.isVerified || !v.isActive) {
                 Alert.alert(
                   'Chưa thể tạo chuyến',
