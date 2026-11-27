@@ -17,4 +17,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, String> {
     Optional<Vehicle> findByPlateNumber(String plateNumber);
     List<Vehicle> findAllByIsVerifiedFalseAndRejectedAtIsNull();
     Long countByIsVerified(boolean verified);
+    // Cùng điều kiện với danh sách chờ duyệt: chưa duyệt và chưa bị từ chối
+    Long countByIsVerifiedFalseAndRejectedAtIsNull();
 }

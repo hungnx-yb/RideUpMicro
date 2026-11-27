@@ -22,6 +22,10 @@ public interface DriverProfileRepository extends JpaRepository<DriverProfile, St
     boolean existsByGplx(String gplx);
     long countByStatus(DriverStatus status);
     List<DriverProfile> findAllByStatus(DriverStatus status);
+    // Hồ sơ đã gửi đầy đủ: cccd chỉ được ghi khi tài xế submit toàn bộ form (registerDriver).
+    // Hồ sơ nháp tạo lúc chụp mặt eKYC ở bước 1 có cccd = null.
+    long countByStatusAndCccdIsNotNull(DriverStatus status);
+    List<DriverProfile> findAllByStatusAndCccdIsNotNull(DriverStatus status);
     List<DriverProfile> findByStatusAndReputationScoreLessThan(DriverStatus status, Integer reputationScore);
 
     @Query(value = """
