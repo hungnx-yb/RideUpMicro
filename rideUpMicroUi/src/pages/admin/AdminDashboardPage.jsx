@@ -307,7 +307,7 @@ function DataTable({
 }
 
 function AdminDashboardPage() {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
   const [pendingDrivers, setPendingDrivers] = useState([]);
   const [pendingVehicles, setPendingVehicles] = useState([]);
@@ -410,7 +410,6 @@ function AdminDashboardPage() {
     }
   };
 
-  const totalPending = useMemo(() => pendingDriverCount + pendingVehicleCount, [pendingDriverCount, pendingVehicleCount]);
   const totalUsers = useMemo(() => {
     if (!hasLoadedDriverList && !hasLoadedVehicleList) {
       return pendingDriverCount + pendingVehicleCount;
@@ -485,15 +484,11 @@ function AdminDashboardPage() {
 
   return (
     <AdminLayout
-      title="Bảng điều khiển Admin"
+      title="Bảng điều khiển"
       subtitle="Tổng quan hoạt động và dữ liệu phê duyệt hệ thống RideUp theo thời gian thực"
       icon={FaUserShield}
       actions={
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700">
-            <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-            {totalPending} hồ sơ chờ duyệt
-          </div>
           <button
             type="button"
             onClick={loadPendingCounts}
@@ -506,33 +501,8 @@ function AdminDashboardPage() {
       }
     >
       <div className="space-y-6">
-        {/* Banner tóm tắt nhanh */}
-        <section className="relative overflow-hidden rounded-2xl border border-orange-200/80 bg-gradient-to-r from-orange-500 via-amber-500 to-red-500 px-6 py-5 text-white shadow-lg shadow-orange-500/15">
-          <div className="relative flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-orange-100">Hệ thống điều hành RideUp</p>
-              <h2 className="mt-1 text-xl font-extrabold text-white sm:text-2xl">
-                Xin chào, {user?.fullName || "Quản trị viên"}!
-              </h2>
-              <p className="mt-0.5 text-xs text-orange-100">
-                Theo dõi tình trạng phê duyệt tài xế, phương tiện và giám sát toàn bộ hoạt động hệ thống.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 backdrop-blur">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-orange-100">Hồ sơ chờ duyệt</p>
-                <p className="mt-0.5 text-xl font-extrabold text-white">{totalPending}</p>
-              </div>
-              <div className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 backdrop-blur">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-orange-100">Người dùng liên quan</p>
-                <p className="mt-0.5 text-xl font-extrabold text-white">{Math.max(1, totalUsers)}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* ADM-FEAT-01 → 06: lối tắt tới các chức năng quản trị mở rộng */}
-        <section className="mt-6 rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm">
+        <section className="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm">
           <h2 className="text-lg font-extrabold text-slate-900">Công cụ quản trị</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {ADMIN_MENU_GROUPS.slice(1).flatMap((group) => group.items).map((item) => {
@@ -572,7 +542,7 @@ function AdminDashboardPage() {
           <KpiCard
             icon={FaMapMarkedAlt}
             value={formatVnd(revenueKpis?.totalGmv ?? 0)}
-            title="Tổng GMV giao dịch"
+            title="Tổng giá trị giao dịch"
             sub="Doanh số toàn hệ thống"
             accent="emerald"
           />
@@ -622,19 +592,6 @@ function AdminDashboardPage() {
           </div>
 
         </section>
-
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          <article className="rounded-2xl border border-orange-200 bg-orange-50/95 px-4 py-3 text-sm text-orange-800 shadow-sm">
-            <p className="inline-flex items-center gap-2 font-semibold">
-              <FaClock /> Tổng hồ sơ cần xử lý ngay: {totalPending}
-            </p>
-          </article>
-          <article className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm text-slate-600 shadow-sm">
-            <p className="inline-flex items-center gap-2 font-semibold text-slate-700">
-              <FaUsers /> Người dùng liên quan: {Math.max(1, totalUsers)}
-            </p>
-          </article>
-        </div>
 
         {isLoadingCounts ? (
           <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">

@@ -60,43 +60,54 @@ function DailyRevenueChart({ series }) {
   const yTicks = [max, max * 0.75, max * 0.5, max * 0.25, 0];
   const showEvery = Math.max(1, Math.ceil(series.length / 12));
 
+  // Vị trí theo % chiều cao vùng vẽ cho từng mốc trục tung (0% = đỉnh, 100% = đáy)
+  const tickTop = (idx) => `${(idx / (yTicks.length - 1)) * 100}%`;
+
   return (
     <div className="w-full">
-      <div className="flex items-stretch gap-2.5">
-        {/* Trục tung (Y-Axis) */}
-        <div className="flex w-16 shrink-0 flex-col justify-between py-1 text-right text-[11px] font-semibold text-slate-400">
+      <div className="flex gap-2.5">
+        {/* Trục tung (Y-Axis): nhãn căn giữa đúng đường lưới tương ứng */}
+        <div className="relative h-52 w-16 shrink-0 text-right text-[11px] font-semibold text-slate-400">
           {yTicks.map((tick, idx) => (
-            <span key={idx} className="leading-none">
+            <span
+              key={idx}
+              className="absolute right-0 -translate-y-1/2 leading-none"
+              style={{ top: tickTop(idx) }}
+            >
               {formatYAxisLabel(tick)}
             </span>
           ))}
         </div>
 
-        {/* Vùng vẽ biểu đồ kèm lưới ngang */}
-        <div className="relative flex-1">
-          {/* Lưới ngang (Gridlines) */}
-          <div className="pointer-events-none absolute inset-0 flex flex-col justify-between py-1">
-            {yTicks.map((_, idx) => (
-              <div key={idx} className="w-full border-b border-dashed border-slate-200" />
-            ))}
-          </div>
+        {/* Vùng vẽ: min-w-0 để co theo card, không tràn sang cột bên cạnh */}
+        <div className="relative h-52 min-w-0 flex-1">
+          {/* Lưới ngang (Gridlines); đường đáy liền nét làm trục hoành */}
+          {yTicks.map((_, idx) => (
+            <div
+              key={idx}
+              className={`pointer-events-none absolute inset-x-0 border-t ${
+                idx === yTicks.length - 1 ? "border-slate-300" : "border-dashed border-slate-200"
+              }`}
+              style={{ top: tickTop(idx) }}
+            />
+          ))}
 
-          {/* Các cột bar */}
-          <div className="relative flex h-52 items-end gap-1.5 overflow-x-auto pb-1 pt-2">
-            {series.map((point, index) => {
+          {/* Các cột bar: tự co cho vừa chiều rộng, không cuộn ngang (để tooltip không bị cắt) */}
+          <div className="relative flex h-full items-end gap-1.5">
+            {series.map((point) => {
               const cash = Number(point.cashGmv || 0);
               const stripe = Number(point.stripeGmv || 0);
               const total = cash + stripe;
-              const heightPct = Math.min(100, Math.max(2, (total / max) * 100));
+              const heightPct = total > 0 ? Math.min(100, Math.max(2, (total / max) * 100)) : 0;
               const stripePct = total > 0 ? (stripe / total) * 100 : 0;
               const cashPct = total > 0 ? (cash / total) * 100 : 0;
 
               return (
-                <div key={point.date} className="group relative flex h-full min-w-[16px] flex-1 flex-col justify-end">
+                <div key={point.date} className="group relative flex h-full min-w-0 flex-1 flex-col justify-end">
                   {/* Tooltip khi hover */}
                   <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-900/95 p-2.5 text-xs text-white shadow-xl backdrop-blur group-hover:block">
                     <p className="font-bold text-orange-400">{point.date}</p>
-                    <p className="mt-1 font-semibold">Tổng GMV: {formatVnd(point.gmv)}</p>
+                    <p className="mt-1 font-semibold">Tổng giá trị: {formatVnd(point.gmv)}</p>
                     <div className="mt-1 space-y-0.5 text-[11px] text-slate-300">
                       <p className="flex items-center gap-1.5">
                         <span className="h-2 w-2 rounded-full bg-orange-400" />
@@ -118,19 +129,26 @@ function DailyRevenueChart({ series }) {
                     <div className="w-full bg-sky-500" style={{ height: `${stripePct}%` }} />
                     <div className="w-full bg-orange-400" style={{ height: `${cashPct}%` }} />
                   </div>
-
-                  {/* Nhãn ngày tháng trục hoành */}
-                  <span
-                    className={`mt-1.5 block text-center text-[10px] font-medium text-slate-400 ${
-                      index % showEvery === 0 ? "" : "invisible"
-                    }`}
-                  >
-                    {point.date.slice(8, 10)}/{point.date.slice(5, 7)}
-                  </span>
                 </div>
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* Nhãn ngày trục hoành: hàng riêng, thẳng cột với vùng vẽ */}
+      <div className="mt-1.5 flex gap-2.5">
+        <div className="w-16 shrink-0" />
+        <div className="flex min-w-0 flex-1 gap-1.5">
+          {series.map((point, index) => (
+            <div key={point.date} className="flex min-w-0 flex-1 justify-center">
+              {index % showEvery === 0 && (
+                <span className="whitespace-nowrap text-[10px] font-medium text-slate-400">
+                  {point.date.slice(8, 10)}/{point.date.slice(5, 7)}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -244,7 +262,7 @@ function AdminRevenueAnalyticsPage() {
   return (
     <AdminLayout
       title="Doanh thu & Công nợ"
-      subtitle="Tổng quan GMV, doanh thu hoa hồng sàn, dòng tiền tiền mặt / Stripe và theo dõi công nợ hoa hồng của tài xế."
+      subtitle="Tổng quan giá trị giao dịch, doanh thu hoa hồng sàn, dòng tiền tiền mặt / Stripe và theo dõi công nợ hoa hồng của tài xế."
       icon={FaChartLine}
     >
       <Card className="mb-6">
@@ -273,14 +291,14 @@ function AdminRevenueAnalyticsPage() {
 
       {kpis && !kpis.financeAvailable ? (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-          Không lấy được dữ liệu hoa hồng/công nợ từ identity-service. Các chỉ số GMV vẫn chính xác.
+          Không lấy được dữ liệu hoa hồng/công nợ từ identity-service. Các chỉ số giá trị giao dịch vẫn chính xác.
         </div>
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           icon={FaMoneyBillWave}
-          label="Tổng GMV giao dịch"
+          label="Tổng giá trị giao dịch"
           value={isLoadingKpis ? "…" : formatVnd(kpis?.totalGmv)}
           hint={kpis ? `${kpis.completedBookings} vé hoàn thành · TB ${formatVnd(kpis.averageTicketValue)}/vé` : ""}
           tone="blue"
@@ -309,7 +327,7 @@ function AdminRevenueAnalyticsPage() {
       </section>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Card title="GMV theo ngày" description={kpis ? `${kpis.fromDate} → ${kpis.toDate}` : ""} icon={FaChartLine}>
+        <Card title="Giá trị giao dịch theo ngày" description={kpis ? `${kpis.fromDate} → ${kpis.toDate}` : ""} icon={FaChartLine}>
           <DailyRevenueChart series={series} />
         </Card>
         <Card title="Cơ cấu dòng tiền" icon={FaHandHoldingUsd}>
