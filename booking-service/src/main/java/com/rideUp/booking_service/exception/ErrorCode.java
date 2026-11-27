@@ -45,7 +45,7 @@ public enum ErrorCode {
     // Booking Modification errors (REQ-P3-01)
     MODIFICATION_NOT_FOUND(6013, "Yêu cầu chỉnh sửa chuyến đi không tồn tại", HttpStatus.NOT_FOUND),
     MODIFICATION_ALREADY_PENDING(6014, "Đơn đặt xe đang có yêu cầu chỉnh sửa chờ tài xế duyệt", HttpStatus.BAD_REQUEST),
-    MAX_MODIFICATIONS_EXCEEDED(6015, "Đơn đặt xe đã đạt giới hạn tối đa 2 lần chỉnh sửa thành công", HttpStatus.BAD_REQUEST),
+    MAX_MODIFICATIONS_EXCEEDED(6015, "Đơn đặt xe đã đạt giới hạn tối đa 2 lần chỉnh sửa", HttpStatus.BAD_REQUEST),
     MODIFICATION_CUTOFF_EXCEEDED(6016, "Chỉ được phép gửi yêu cầu chỉnh sửa trước giờ khởi hành tối thiểu 2 tiếng", HttpStatus.BAD_REQUEST),
     MODIFICATION_INVALID_STATUS(6017, "Trạng thái đơn đặt xe không hợp lệ để yêu cầu chỉnh sửa (chỉ hỗ trợ vé Đã xác nhận)", HttpStatus.BAD_REQUEST),
     MODIFICATION_ALREADY_RESOLVED(6018, "Yêu cầu chỉnh sửa đã được xử lý hoặc đã hết hạn", HttpStatus.BAD_REQUEST),

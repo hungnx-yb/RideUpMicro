@@ -101,7 +101,7 @@ public class IdentityServiceConsumer {
                     // 1. Tính hoa hồng cá nhân hóa theo thời gian thực (12% - 25%)
                     java.math.BigDecimal dynamicRate = commissionService.calculateCommissionRate(driverProfile);
                     java.math.BigDecimal commission = event.getTotalAmount().multiply(dynamicRate)
-                            .setScale(2, java.math.RoundingMode.HALF_UP);
+                            .setScale(0, java.math.RoundingMode.HALF_UP);
 
                     // 2. Với cuốc tiền mặt (CASH), cộng công nợ hoa hồng cho tài xế. Với STRIPE, sàn đã tự trích giữ hoa hồng tại nguồn.
                     boolean isCash = event.getPaymentMethod() == null || "CASH".equalsIgnoreCase(event.getPaymentMethod());

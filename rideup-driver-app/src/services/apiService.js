@@ -200,6 +200,17 @@ export const apiService = {
     return await apiClient.get(`/api/trip/trip/${tripId}`);
   },
 
+  // Booking Modifications
+  getPendingModificationsByTrip: async (tripId) => {
+    return await apiClient.get(`/api/booking/bookings/trip/${tripId}/pending-modifications`);
+  },
+  approveBookingModification: async (modificationId) => {
+    return await apiClient.post(`/api/booking/bookings/modifications/${modificationId}/approve`);
+  },
+  rejectBookingModification: async (modificationId, reason) => {
+    return await apiClient.post(`/api/booking/bookings/modifications/${modificationId}/reject`, { reason });
+  },
+
   // --- MARKETPLACE (CHỢ NHU CẦU) ---
   getMarketplaceTripRequests: async (params) => {
     return await apiClient.get('/api/trip/trip-requests/marketplace', { params });

@@ -28,7 +28,6 @@ public class BookingResponse {
     String tripId;
     BookingStatus status;
     PaymentMethod paymentMethod;
-    String paymentId;
     PaymentStatus paymentStatus;
 
     Integer seatCount;

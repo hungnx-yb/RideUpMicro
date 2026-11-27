@@ -63,12 +63,17 @@ public class PaymentService {
 			return modelMapper.map(existingPayment, PaymentResponse.class);
 		}
 
+		if (request.getPaymentMethod() == PaymentMethod.STRIPE
+				&& (request.getTransactionId() == null || request.getTransactionId().isBlank())) {
+			throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
+		}
+
 		Payment payment = Payment.builder()
 				.bookingId(request.getBookingId())
 				.correlationId(request.getCorrelationId())
 				.amount(request.getAmount())
 				.method(request.getPaymentMethod())
-				.status(request.getTransactionId() != null ? PaymentStatus.HOLDING : PaymentStatus.PENDING)
+				.status(request.getPaymentMethod() == PaymentMethod.STRIPE ? PaymentStatus.HOLDING : PaymentStatus.PENDING)
 				.transactionId(request.getTransactionId())
 				.build();
 
@@ -78,26 +83,6 @@ public class PaymentService {
 		}
 
 		Payment savedPayment = paymentRepository.save(payment);
-
-		if (request.getPaymentMethod() == PaymentMethod.STRIPE && savedPayment.getTransactionId() == null) {
-			try {
-				PaymentIntentCreateParams params =
-						com.stripe.param.PaymentIntentCreateParams.builder()
-								.setAmount(savedPayment.getAmount().longValue())
-								.setCurrency("vnd")
-								.setCaptureMethod(PaymentIntentCreateParams.CaptureMethod.MANUAL)
-								.putMetadata("bookingId", savedPayment.getBookingId())
-								.putMetadata("paymentId", savedPayment.getId())
-								.build();
-				PaymentIntent paymentIntent = PaymentIntent.create(params);
-				savedPayment.setClientSecret(paymentIntent.getClientSecret()); 
-				savedPayment.setTransactionId(paymentIntent.getId());
-				savedPayment = paymentRepository.save(savedPayment);
-			} catch (StripeException e) {
-				log.error("Stripe error: ", e);
-				throw new AppException(ErrorCode.STRIPE_PAYMENT_FAILED);
-			}
-		}
 
 		return modelMapper.map(savedPayment, PaymentResponse.class);
 	}

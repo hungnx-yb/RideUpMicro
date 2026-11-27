@@ -54,15 +54,9 @@ public class BookingService {
     SystemTimeoutConfigService timeoutConfigService;
     BookingModificationService bookingModificationService;
 
-    /** Fallback nội bộ nếu phát sinh luồng PENDING_PAYMENT cũ (không còn cấu hình SLA) */
-    private LocalDateTime paymentDeadlineFrom(LocalDateTime now) {
-        return now.plusMinutes(60);
-    }
-
     public void checkDuplicateBooking(String tripId) {
         String currentCustomerId = SecurityUtils.getCurrentUserId();
         List<BookingStatus> activeStatuses = List.of(
-                BookingStatus.PENDING_PAYMENT,
                 BookingStatus.WAITING_DRIVER_APPROVAL,
                 BookingStatus.CONFIRMED
         );
@@ -109,24 +103,23 @@ public class BookingService {
                 && request.getPaymentIntentId() != null
                 && !request.getPaymentIntentId().isBlank();
 
+        if (request.getPaymentMethod() == PaymentMethod.STRIPE && !isStripePrePaid) {
+            throw new AppException(ErrorCode.INVALID_TRANSACTION_ID);
+        }
+
         boolean isFromInvitation = request.getInvitationId() != null && !request.getInvitationId().isBlank();
 
-        if (isFromInvitation && (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid)) {
+        if (isFromInvitation) {
             // Khách chấp nhận lời mời từ tài xế -> Đã được tài xế chủ động mời nên chuyển thẳng CONFIRMED
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setExpiresAt(null);
             // Trừ ghế trực tiếp trên trip-service để số ghế hiển thị đồng bộ chính xác
             reserveTripSeats(request.getTripId(), request.getSeatCount());
         } else {
-            booking.setStatus(
-                    (request.getPaymentMethod() == PaymentMethod.CASH || isStripePrePaid)
-                            ? BookingStatus.WAITING_DRIVER_APPROVAL
-                            : BookingStatus.PENDING_PAYMENT
-            );
+            booking.setStatus(BookingStatus.WAITING_DRIVER_APPROVAL);
         }
         if (isStripePrePaid) {
             booking.setPaymentStatus(PaymentStatus.HOLDING);
-            booking.setPaymentId(request.getPaymentIntentId());
         } else {
             booking.setPaymentStatus(PaymentStatus.PENDING);
         }
@@ -141,8 +134,6 @@ public class BookingService {
             booking.setExpiresAt(trip.getDepartureTime() != null
                     ? trip.getDepartureTime().minusMinutes(approvalMinutes)
                     : now.plusMinutes(approvalMinutes));
-        } else if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-            booking.setExpiresAt(paymentDeadlineFrom(now));
         }
         Booking saved = bookingRepository.save(booking);
         publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId, request.getPaymentIntentId());
@@ -187,56 +178,6 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse createBookingFromInvitation(AcceptInvitationRequest request) {
-        String currentUserId = SecurityUtils.getCurrentUserId();
-
-        com.rideUp.booking_service.dto.response.ProcessMarketplaceBookingResponse processResp;
-        try {
-            var apiResponse = tripServiceClient.validateAndReserve(request.getInvitationId(), currentUserId);
-            if (apiResponse == null || apiResponse.getResult() == null) {
-                throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
-            }
-            processResp = apiResponse.getResult();
-        } catch (feign.FeignException e) {
-            log.error("Failed to process invitation in trip-service: {}", e.getMessage());
-            throw new AppException(ErrorCode.TRIP_SERVICE_UNAVAILABLE);
-        }
-        String correlationId = UUID.randomUUID().toString();
-        LocalDateTime now = LocalDateTime.now();
-        Booking booking = new Booking();
-        booking.setBookingCode(generateBookingCode());
-        booking.setTripId(processResp.getTripId());
-        booking.setCustomerId(currentUserId);
-        booking.setSeatCount(processResp.getSeatCount());
-        booking.setTotalAmount(processResp.getPriceVnd().multiply(BigDecimal.valueOf(processResp.getSeatCount())));
-        booking.setPaymentMethod(request.getPaymentMethod());
-        booking.setPaymentStatus(PaymentStatus.PENDING);
-        if (request.getPaymentMethod() == PaymentMethod.CASH) {
-            booking.setStatus(BookingStatus.CONFIRMED);
-            booking.setExpiresAt(null);
-        } else {
-            booking.setStatus(BookingStatus.PENDING_PAYMENT);
-            booking.setExpiresAt(paymentDeadlineFrom(now));
-        }
-
-        Booking saved = bookingRepository.save(booking);
-        publishPaymentRequested(saved, request.getPaymentMethod(), now, correlationId);
-        if (request.getPaymentMethod() == PaymentMethod.CASH) {
-                publishBookingConfirmed(saved, correlationId); 
-        }
-
-        bookingServicePublisher.publishMarketplaceBookingCreated(
-            com.rideUp.booking_service.dto.event.MarketplaceBookingCreatedEvent.builder()
-                .bookingId(saved.getId())
-                .invitationId(request.getInvitationId())
-                .customerId(saved.getCustomerId())
-                .build()
-        );
-
-        return modelMapper.map(saved, BookingResponse.class);
-    }
-
-    @Transactional
     public BookingResponse handlePaymentCompleted(PaymentCompletedRequest request) {
         log.info("Handling payment completed for bookingId={}, paymentId={}, correlationId={}",
             request.getBookingId(), request.getPaymentId(), request.getCorrelationId());
@@ -244,14 +185,7 @@ public class BookingService {
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        booking.setPaymentId(request.getPaymentId());
         booking.setPaymentStatus(PaymentStatus.PAID);
-
-        if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-            booking.setStatus(BookingStatus.CONFIRMED);
-            reserveTripSeats(booking.getTripId(), booking.getSeatCount());
-            publishBookingConfirmed(booking, request.getCorrelationId());
-        }
 
         Booking saved = bookingRepository.save(booking);
         return toBookingResponse(saved);
@@ -288,7 +222,6 @@ public class BookingService {
 
         BookingStatus oldStatus = booking.getStatus();
         booking.setStatus(BookingStatus.CANCELLED_PAYMENT_FAILED);
-        booking.setPaymentId(request.getPaymentId());
         booking.setPaymentStatus(PaymentStatus.FAILED);
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelReason(
@@ -403,16 +336,10 @@ public class BookingService {
 
 
     public PaymentMethod resolvePaymentMethod(Booking booking) {
-        if (booking == null) {
+        if (booking == null || booking.getPaymentMethod() == null) {
             return PaymentMethod.CASH;
         }
-        if (booking.getPaymentMethod() != null) {
-            return booking.getPaymentMethod();
-        }
-        if (booking.getPaymentId() != null && (booking.getPaymentId().startsWith("pi_") || booking.getPaymentId().startsWith("pm_"))) {
-            return PaymentMethod.STRIPE;
-        }
-        return PaymentMethod.CASH;
+        return booking.getPaymentMethod();
     }
 
     public BookingResponse toBookingResponse(Booking booking) {
@@ -607,7 +534,7 @@ public class BookingService {
     public int expirePendingBookings() {
         LocalDateTime now = LocalDateTime.now();
         List<Booking> pendingExpiredBookings = bookingRepository
-            .findByStatusInAndExpiresAtBefore(List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.WAITING_DRIVER_APPROVAL), now);
+            .findByStatusAndExpiresAtBefore(BookingStatus.WAITING_DRIVER_APPROVAL, now);
 
         if (pendingExpiredBookings.isEmpty()) {
             return 0;
@@ -615,12 +542,9 @@ public class BookingService {
         int expiredCount = 0;
         for (Booking booking : pendingExpiredBookings) {
             try {
-                BookingStatus oldStatus = booking.getStatus();
                 booking.setPaymentStatus(PaymentStatus.VOIDED);
                 booking.setCancelledAt(now);
-                booking.setCancelReason(oldStatus == BookingStatus.PENDING_PAYMENT 
-                        ? "Payment timeout" 
-                        : "Tự động hủy: Quá thời hạn duyệt vé mà tài xế chưa phản hồi");
+                booking.setCancelReason("Tự động hủy: Quá thời hạn duyệt vé mà tài xế chưa phản hồi");
                 booking.setStatus(BookingStatus.EXPIRED);
                 // Giữ nguyên expiresAt ban đầu làm audit trail
                 
@@ -702,7 +626,6 @@ public class BookingService {
     public void handleTripCancelled(String tripId, String cancelReason) {
         log.info("Handling trip cancelled event for tripId={}, reason={}", tripId, cancelReason);
         List<BookingStatus> activeStatuses = List.of(
-                BookingStatus.PENDING_PAYMENT,
                 BookingStatus.WAITING_DRIVER_APPROVAL,
                 BookingStatus.CONFIRMED
         );
@@ -720,6 +643,9 @@ public class BookingService {
             String correlationId = UUID.randomUUID().toString();
 
             booking.setStatus(BookingStatus.CANCELLED_DRIVER);
+            if (booking.getPaymentStatus() != PaymentStatus.PAID) {
+                booking.setPaymentStatus(PaymentStatus.VOIDED);
+            }
             booking.setCancelledAt(now);
             booking.setCancelReason(reason);
             // Giữ nguyên expiresAt ban đầu làm audit trail
@@ -753,9 +679,8 @@ public class BookingService {
                 } catch (Exception ex) {
                     log.error("Failed to auto-complete bookingId={} for tripId={}: {}", booking.getId(), tripId, ex.getMessage());
                 }
-            } else if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL || booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+            } else if (booking.getStatus() == BookingStatus.WAITING_DRIVER_APPROVAL) {
                 try {
-                    BookingStatus oldStatus = booking.getStatus();
                     booking.setStatus(BookingStatus.EXPIRED);
                     booking.setPaymentStatus(PaymentStatus.VOIDED);
                     booking.setCancelledAt(LocalDateTime.now());
@@ -801,10 +726,6 @@ public class BookingService {
         return code;
     }
 
-
-    private void publishPaymentRequested(Booking booking, PaymentMethod paymentMethod, LocalDateTime now, String correlationId) {
-        publishPaymentRequested(booking, paymentMethod, now, correlationId, null);
-    }
 
     private void publishPaymentRequested(Booking booking, PaymentMethod paymentMethod, LocalDateTime now, String correlationId, String transactionId) {
         PaymentRequestedEvent event = PaymentRequestedEvent.builder()
