@@ -421,8 +421,10 @@ const CustomerDashboardScreen = ({ navigation }) => {
 
                     {/* Meta & Actions */}
                     <View style={styles.activeBookingFooter}>
-                      <View>
-                        <Text style={styles.footerSubText}>{bk.seatCount || 1} ghế • Mã: {bk.bookingCode || bk.id?.slice(0, 8)}</Text>
+                      <View style={{ flex: 1, marginRight: 10 }}>
+                        <Text style={styles.footerSubText} numberOfLines={1} ellipsizeMode="tail">
+                          {bk.seatCount || 1} ghế • Mã: {bk.bookingCode || bk.id?.slice(0, 8)}
+                        </Text>
                         <Text style={styles.footerPrice}>{formatMoney(bk.totalAmount)}</Text>
                       </View>
 
@@ -886,7 +888,7 @@ const styles = StyleSheet.create({
   },
   footerSubText: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600' },
   footerPrice: { color: COLORS.success, fontSize: 17, fontWeight: '900', marginTop: 1 },
-  footerBtnGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  footerBtnGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   btnChatDriver: {
     flexDirection: 'row',
     alignItems: 'center',
