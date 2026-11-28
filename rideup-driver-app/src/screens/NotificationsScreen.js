@@ -161,6 +161,12 @@ const NotificationsScreen = ({ navigation }) => {
     const titleLower = (item.title || '').toLowerCase();
     const targetRequestId = metadata.tripRequestId || metadata.requestId;
 
+    // 0. Phương tiện bị admin từ chối -> mở thẳng thông tin xe để sửa và gửi duyệt lại
+    if (notiType === 'VEHICLE_REJECTED') {
+      navigation.navigate('Profile', { openVehicleModal: true });
+      return;
+    }
+
     // A. Chợ khách (Trip Request, lời mời, từ chối, chấp nhận lời mời)
     if (
       notiType === 'TRIP_REQUEST_CREATED' || 

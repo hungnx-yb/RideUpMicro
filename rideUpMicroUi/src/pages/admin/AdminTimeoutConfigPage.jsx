@@ -1,25 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FaClock, FaSave, FaUndo } from "react-icons/fa";
+import { FaClock, FaSave } from "react-icons/fa";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { Button, Card, EmptyState, StatusBadge, formatDateTime, inputClass, useToast } from "../../components/admin/AdminUi";
 import {
   getSystemTimeoutsApi,
-  resetSystemTimeoutApi,
   updateAllSystemTimeoutsApi,
   updateSystemTimeoutApi,
 } from "../../services/adminApi";
 import { getApiErrorMessage } from "../../services/authApi";
-
-function formatMinutes(minutes) {
-  const value = Number(minutes || 0);
-  if (value >= 1440 && value % 1440 === 0) return `${value / 1440} ngày`;
-  if (value >= 60) {
-    const hours = Math.floor(value / 60);
-    const rest = value % 60;
-    return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`;
-  }
-  return `${value} phút`;
-}
 
 function AdminTimeoutConfigPage() {
   const [items, setItems] = useState([]);
@@ -59,6 +47,19 @@ function AdminTimeoutConfigPage() {
 
   const changedItems = items.filter((item) => String(item.valueMinutes) !== drafts[item.configKey]);
 
+  // Nhóm các dòng cùng service liền nhau (giữ thứ tự xuất hiện) để gộp ô Service bằng rowSpan
+  const groupedRows = useMemo(() => {
+    const groups = new Map();
+    items.forEach((item) => {
+      const key = item.ownerService || "";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    });
+    return [...groups.values()].flatMap((group) =>
+      group.map((item, index) => ({ item, serviceRowSpan: index === 0 ? group.length : 0 })),
+    );
+  }, [items]);
+
   const replaceItem = (updated) => {
     setItems((prev) => prev.map((item) => (item.configKey === updated.configKey ? updated : item)));
     setDrafts((prev) => ({ ...prev, [updated.configKey]: String(updated.valueMinutes) }));
@@ -75,18 +76,6 @@ function AdminTimeoutConfigPage() {
       showToast(`Đã cập nhật "${item.displayName}"`);
     } catch (error) {
       showToast(getApiErrorMessage(error, "Cập nhật thất bại"), "error");
-    } finally {
-      setSavingKey("");
-    }
-  };
-
-  const handleReset = async (item) => {
-    try {
-      setSavingKey(item.configKey);
-      replaceItem(await resetSystemTimeoutApi(item.configKey));
-      showToast(`Đã khôi phục mặc định ${formatMinutes(item.defaultMinutes)}`);
-    } catch (error) {
-      showToast(getApiErrorMessage(error, "Khôi phục thất bại"), "error");
     } finally {
       setSavingKey("");
     }
@@ -112,7 +101,7 @@ function AdminTimeoutConfigPage() {
 
   return (
     <AdminLayout
-      title="Thời gian Timeout (SLA)"
+      title="Thời gian Timeout"
       subtitle="Điều chỉnh các mốc thời gian chờ theo mùa vụ, thời tiết mà không cần sửa mã nguồn. Giá trị mới áp dụng cho giao dịch phát sinh sau khi lưu; các tiến trình quét hết hạn chạy mỗi phút."
       icon={FaClock}
       actions={(
@@ -130,25 +119,32 @@ function AdminTimeoutConfigPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                <tr className="border-b-2 border-slate-300 text-left text-xs uppercase tracking-wide text-slate-400">
                   <th className="py-3 pr-3">Mã cấu hình</th>
+                  <th className="py-3 pr-3">Service</th>
                   <th className="py-3 pr-3">Nghiệp vụ</th>
                   <th className="py-3 pr-3">Thời gian (phút)</th>
-                  <th className="py-3 pr-3">Mặc định</th>
                   <th className="py-3 pr-3">Khi quá hạn</th>
                   <th className="py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
+                {groupedRows.map(({ item, serviceRowSpan }) => {
                   const error = validationErrors[item.configKey];
                   const isChanged = String(item.valueMinutes) !== drafts[item.configKey];
                   return (
-                    <tr key={item.configKey} className="border-b border-slate-100 align-top">
+                    <tr key={item.configKey} className="border-b border-slate-300 align-top">
                       <td className="py-4 pr-3">
                         <code className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{item.configKey}</code>
-                        <div className="mt-2"><StatusBadge tone="blue">{item.ownerService}</StatusBadge></div>
                       </td>
+                      {serviceRowSpan > 0 && (
+                        <td
+                          rowSpan={serviceRowSpan}
+                          className="border-x border-slate-300 px-3 py-4 align-middle"
+                        >
+                          <StatusBadge tone="blue">{item.ownerService}</StatusBadge>
+                        </td>
+                      )}
                       <td className="py-4 pr-3">
                         <p className="font-bold text-slate-900">{item.displayName}</p>
                         <p className="mt-1 text-xs text-slate-400">
@@ -163,13 +159,7 @@ function AdminTimeoutConfigPage() {
                           onChange={(e) => setDrafts((prev) => ({ ...prev, [item.configKey]: e.target.value }))}
                           className={`${inputClass} w-28 ${error ? "border-red-400" : isChanged ? "border-orange-400" : ""}`}
                         />
-                        <p className={`mt-1 text-xs ${error ? "font-semibold text-red-600" : "text-slate-500"}`}>
-                          {error || `≈ ${formatMinutes(drafts[item.configKey])}`}
-                        </p>
-                      </td>
-                      <td className="py-4 pr-3 text-slate-600">
-                        <span className="font-medium text-slate-700">{formatMinutes(item.defaultMinutes)}</span>
-                        <p className="text-xs text-slate-400">({item.defaultMinutes} phút)</p>
+                        {error && <p className="mt-1 text-xs font-semibold text-red-600">{error}</p>}
                       </td>
                       <td className="max-w-[280px] py-4 pr-3 text-slate-600">{item.expireAction}</td>
                       <td className="py-4">
@@ -180,14 +170,6 @@ function AdminTimeoutConfigPage() {
                             disabled={!isChanged || Boolean(error) || savingKey === item.configKey}
                           >
                             Cập nhật
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            className="px-3 py-1.5 text-xs"
-                            onClick={() => handleReset(item)}
-                            disabled={savingKey === item.configKey || item.valueMinutes === item.defaultMinutes}
-                          >
-                            <FaUndo /> Mặc định
                           </Button>
                         </div>
                       </td>

@@ -39,6 +39,12 @@ public class DriverResponse {
     Boolean isFaceEnrolled;
     LocalDateTime lastFaceVerifiedAt;
     Double faceMatchScore;
+
+    // Quản trị: điểm uy tín, công nợ hoa hồng và trạng thái bị khóa nhận chuyến
+    // (reputationScore / systemDebt map thẳng từ DriverProfile; isLocked do AdminDriverService tính)
+    Integer reputationScore;
+    java.math.BigDecimal systemDebt;
+    Boolean isLocked;
     
     // User info
     String userId;
@@ -63,6 +69,9 @@ public class DriverResponse {
     String insuranceImage;
     Boolean isVehicleVerified;
     Boolean isVehicleActive;
+    // Xe bị từ chối: isVehicleVerified = false nhưng có thời điểm + lý do từ chối
+    LocalDateTime vehicleRejectedAt;
+    String vehicleRejectionReason;
 
     public DriverResponse(
             String userId,

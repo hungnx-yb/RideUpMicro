@@ -3,29 +3,23 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   FaBars,
   FaBroadcastTower,
-  FaCar,
   FaChartLine,
   FaClipboardList,
   FaClock,
-  FaHome,
-  FaIdCard,
   FaPercentage,
   FaRoute,
   FaSignOutAlt,
   FaTaxi,
   FaTimes,
   FaUserShield,
+  FaUsers,
 } from "react-icons/fa";
 import useAuth from "../../hooks/useAuth";
 
 export const ADMIN_MENU_GROUPS = [
   {
-    title: "Tổng quan",
-    items: [
-      { label: "Bảng điều khiển", path: "/admin-dashboard", icon: FaHome, end: true },
-      { label: "Duyệt tài xế", path: "/admin-dashboard/drivers-approval", icon: FaIdCard },
-      { label: "Duyệt phương tiện", path: "/admin-dashboard/vehicles-approval", icon: FaCar },
-    ],
+    title: "Quản lý",
+    items: [{ label: "Quản lý tài xế", path: "/admin/drivers", icon: FaUsers }],
   },
   {
     title: "Thống kê & Báo cáo",
@@ -35,7 +29,7 @@ export const ADMIN_MENU_GROUPS = [
     title: "Cấu hình hệ thống",
     items: [
       { label: "Hoa hồng & Uy tín", path: "/admin/commission-config", icon: FaPercentage },
-      { label: "Thời gian Timeout (SLA)", path: "/admin/timeout-config", icon: FaClock },
+      { label: "Thời gian Timeout", path: "/admin/timeout-config", icon: FaClock },
       { label: "Khung giá cước", path: "/admin/fare-boundary", icon: FaRoute },
     ],
   },
@@ -148,9 +142,6 @@ function AdminLayout({ title, subtitle, icon: TitleIcon, actions, children }) {
             <div className="flex items-center gap-1.5">
               <span className="text-lg font-extrabold tracking-tight text-slate-900">
                 Ride<span className="text-orange-500">Up</span>
-              </span>
-              <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-extrabold text-orange-700">
-                ADMIN
               </span>
             </div>
             <p className="text-[11px] font-medium text-slate-400">Hệ thống điều hành</p>

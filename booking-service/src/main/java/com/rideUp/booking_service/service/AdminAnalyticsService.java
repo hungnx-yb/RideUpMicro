@@ -145,9 +145,9 @@ public class AdminAnalyticsService {
             r = writeRow(summary, r, null, null, "Phương thức thanh toán", kpi.getPaymentMethod());
             r++;
             r = writeRow(summary, r, header, null, "Chỉ số", "Giá trị");
-            r = writeMoneyRow(summary, r, money, "Tổng GMV giao dịch", kpi.getTotalGmv());
-            r = writeMoneyRow(summary, r, money, "GMV tiền mặt", kpi.getCashGmv());
-            r = writeMoneyRow(summary, r, money, "GMV Stripe", kpi.getStripeGmv());
+            r = writeMoneyRow(summary, r, money, "Tổng giá trị giao dịch", kpi.getTotalGmv());
+            r = writeMoneyRow(summary, r, money, "Giá trị giao dịch tiền mặt", kpi.getCashGmv());
+            r = writeMoneyRow(summary, r, money, "Giá trị giao dịch Stripe", kpi.getStripeGmv());
             r = writeRow(summary, r, null, null, "Số vé hoàn thành", String.valueOf(kpi.getCompletedBookings()));
             r = writeRow(summary, r, null, null, "Số vé hủy/hết hạn", String.valueOf(kpi.getCancelledBookings()));
             if (kpi.isFinanceAvailable()) {

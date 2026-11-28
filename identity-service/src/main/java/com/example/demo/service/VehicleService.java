@@ -1,5 +1,6 @@
 package com.example.demo.service;
 
+import com.example.demo.kafka.producer.VehicleReviewEventPublisher;
 import com.example.demo.dto.request.vehicle.VehicleDocumentsUpdateRequest;
 import com.example.demo.dto.request.vehicle.VehicleRegisterRequest;
 import com.example.demo.dto.request.vehicle.VehicleUpdateRequest;
@@ -37,6 +38,7 @@ public class VehicleService {
     ModelMapper modelMapper;
     FileService fileService;
     AdminAuditLogService auditLogService;
+    VehicleReviewEventPublisher vehicleReviewEventPublisher;
 
     @Transactional
     public VehicleResponse registerVehicle(VehicleRegisterRequest request) {
@@ -174,6 +176,12 @@ public class VehicleService {
                 "Từ chối phương tiện " + vehicle.getPlateNumber()
                         + (reason != null && !reason.isBlank() ? ": " + reason : ""),
                 null, java.util.Map.of("isVerified", false, "isActive", false));
+
+        // Báo cho tài xế (gửi sau khi commit) để họ sửa giấy tờ và gửi duyệt lại
+        String driverUserId = vehicle.getDriver() != null && vehicle.getDriver().getUser() != null
+                ? vehicle.getDriver().getUser().getId() : null;
+        vehicleReviewEventPublisher.publishVehicleRejected(driverUserId, vehicle.getId(),
+                vehicle.getPlateNumber(), reason);
         return mapToVehicleResponse(vehicle);
     }
 
@@ -302,6 +310,17 @@ public class VehicleService {
 
         if (!updated) {
             throw new AppException(ErrorCode.NO_DOCUMENT_TO_UPDATE);
+        }
+
+        // Xe đang bị từ chối mà tài xế gửi lại giấy tờ => quay về "chờ duyệt"
+        // (giống updateMyVehicle), nếu không xe sẽ kẹt mãi ở trạng thái bị từ chối
+        // và không bao giờ hiện lại trong danh sách chờ duyệt của admin.
+        if (vehicle.getRejectedAt() != null) {
+            vehicle.setIsVerified(false);
+            vehicle.setIsActive(false);
+            vehicle.setRejectedAt(null);
+            vehicle.setRejectionReason(null);
+            vehicle.setRejectedBy(null);
         }
 
         vehicle = vehicleRepository.save(vehicle);

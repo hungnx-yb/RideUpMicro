@@ -430,8 +430,15 @@ export default function DriverProfileScreen({ navigation, route }) {
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>CÔNG VIỆC</Text>
           <View style={styles.menuCard}>
-            <MenuItem 
-              icon="car-sport" title="Phương tiện của tôi" 
+            <MenuItem
+              icon="car-sport" title="Phương tiện của tôi"
+              subtitle={
+                loading ? "Đang tải…"
+                  : !vehicle ? "Chưa đăng ký phương tiện"
+                  : vehicle.rejectedAt ? "Bị từ chối · Bấm để xem lý do"
+                  : vehicle.isVerified ? "Đã duyệt"
+                  : "Đang chờ duyệt"
+              }
               onPress={async () => {
                 try {
                   const res = await apiService.getMyVehicle();

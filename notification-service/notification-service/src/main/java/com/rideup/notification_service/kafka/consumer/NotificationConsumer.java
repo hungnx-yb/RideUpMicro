@@ -432,6 +432,34 @@ public class NotificationConsumer {
 		ack.acknowledge();
 	}
 
+	/**
+	 * Admin từ chối phương tiện (identity-service) => báo tài xế kèm lý do để sửa và gửi duyệt lại.
+	 */
+	@RetryableTopic(exclude = {com.fasterxml.jackson.core.JsonProcessingException.class})
+	@KafkaListener(
+			topics = "${app.kafka.topics.vehicle-rejected:vehicle.rejected}",
+			groupId = "${spring.kafka.consumer.group-id}"
+	)
+	public void onVehicleRejected(String payload, Acknowledgment ack) throws Exception {
+		Map<String, String> event = objectMapper.readValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+		String driverUserId = event.get("driverUserId");
+		if (driverUserId != null && !driverUserId.isBlank()) {
+			String plate = event.getOrDefault("plateNumber", "");
+			String reason = event.getOrDefault("reason", "");
+			String message = "Phương tiện" + (plate.isBlank() ? "" : " " + plate) + " của bạn chưa được duyệt."
+					+ (reason.isBlank() ? "" : " Lý do: " + reason + ".")
+					+ " Vui lòng cập nhật lại thông tin, hình ảnh xe trong mục Phương tiện của tôi để gửi duyệt lại.";
+			notificationService.createNotification(
+					driverUserId,
+					"Phương tiện bị từ chối",
+					message,
+					NotificationType.SYSTEM,
+					buildMetadata("type", "VEHICLE_REJECTED", "vehicleId", event.get("vehicleId"))
+			);
+		}
+		ack.acknowledge();
+	}
+
 	private String buildMetadata(String... keyValues) {
 		try {
 			Map<String, String> metadata = new HashMap<>();

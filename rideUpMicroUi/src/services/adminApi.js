@@ -133,6 +133,25 @@ export async function getFinanceSummaryApi(params) {
   return unwrapApiResponse(response);
 }
 
+/**
+ * Quản lý tài xế: danh sách toàn bộ tài xế (đã gửi đủ hồ sơ) kèm bộ lọc + phân trang.
+ * Trả về { items, page, size, totalElements, totalPages }.
+ */
+export async function searchAdminDriversApi({
+  keyword,
+  status = "ALL",
+  vehicleStatus = "ALL",
+  lockStatus = "ALL",
+  sort = "NEWEST",
+  page = 0,
+  size = 20,
+} = {}) {
+  const response = await axiosClient.get("/admin/drivers", {
+    params: { keyword: keyword || undefined, status, vehicleStatus, lockStatus, sort, page, size },
+  });
+  return unwrapApiResponse(response) || { items: [], page: 0, size, totalElements: 0, totalPages: 0 };
+}
+
 export async function getDriverDebtsApi({ keyword, status } = {}) {
   const response = await axiosClient.get("/admin/finance/driver-debts", {
     params: { keyword: keyword || undefined, status: status || "ALL" },

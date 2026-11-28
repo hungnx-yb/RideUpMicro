@@ -5,6 +5,7 @@ import com.example.demo.entity.DriverProfile;
 import com.example.demo.entity.User;
 import com.example.demo.enums.DriverStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,7 +14,8 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface DriverProfileRepository extends JpaRepository<DriverProfile, String> {
+public interface DriverProfileRepository extends JpaRepository<DriverProfile, String>,
+        JpaSpecificationExecutor<DriverProfile> {
     Optional<DriverProfile> findByUser(User user);
     Optional<DriverProfile> findByUserId(String userId);
     Optional<DriverProfile> findByStripeAccountId(String stripeAccountId);
