@@ -18,6 +18,8 @@ import com.rideUp.payment_service.kafka.producer.PaymentServicePublisher;
 import com.rideUp.payment_service.repository.DriverPayoutTransactionRepository;
 import com.rideUp.payment_service.repository.PaymentRepository;
 import com.stripe.exception.StripeException;
+import com.stripe.model.BalanceTransaction;
+import com.stripe.model.Charge;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.Transfer;
 import com.stripe.param.TransferCreateParams;
@@ -172,20 +174,55 @@ public class PayoutService {
         // 6. Execute Stripe Transfer API (ONLY if finalTransfer > 0)
         if (finalTransfer.compareTo(BigDecimal.ZERO) > 0) {
             try {
-                // Zero-decimal VND rule: integer amount in VND
-                TransferCreateParams transferParams = TransferCreateParams.builder()
-                        .setAmount(finalTransfer.longValue())
-                        .setCurrency("vnd")
+                String sourceChargeId = null;
+                String transferCurrency = "vnd";
+                long transferAmount = finalTransfer.longValue();
+
+                if (payment != null && payment.getTransactionId() != null && !payment.getTransactionId().isBlank()) {
+                    try {
+                        PaymentIntent pi = PaymentIntent.retrieve(payment.getTransactionId());
+                        sourceChargeId = pi.getLatestCharge();
+                        if (sourceChargeId != null && !sourceChargeId.isBlank()) {
+                            Charge charge = Charge.retrieve(sourceChargeId);
+                            if (charge.getBalanceTransaction() != null && !charge.getBalanceTransaction().isBlank()) {
+                                BalanceTransaction bt = BalanceTransaction.retrieve(charge.getBalanceTransaction());
+                                if (bt.getCurrency() != null && !"vnd".equalsIgnoreCase(bt.getCurrency())) {
+                                    // Tài khoản Stripe Platform đang settle bằng ngoại tệ (VD: USD) -> quy đổi đúng tỷ lệ sang đơn vị của BalanceTransaction
+                                    transferCurrency = bt.getCurrency();
+                                    BigDecimal ratio = finalTransfer.divide(totalFare, 6, RoundingMode.HALF_UP);
+                                    long proportional = BigDecimal.valueOf(bt.getAmount())
+                                            .multiply(ratio)
+                                            .setScale(0, RoundingMode.HALF_UP)
+                                            .longValue();
+                                    long maxNet = bt.getNet() != null && bt.getNet() > 0 ? bt.getNet() : bt.getAmount();
+                                    transferAmount = Math.max(1L, Math.min(proportional, maxNet));
+                                    log.info("[PayoutService] Converted transfer to settlement currency {}: {} (charge net={})",
+                                            transferCurrency, transferAmount, maxNet);
+                                }
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.warn("[PayoutService] Could not resolve charge/balanceTransaction for PaymentIntent {}: {}",
+                                payment.getTransactionId(), ex.getMessage());
+                    }
+                }
+
+                TransferCreateParams.Builder transferBuilder = TransferCreateParams.builder()
+                        .setAmount(transferAmount)
+                        .setCurrency(transferCurrency)
                         .setDestination(stripeAccountId)
                         .setDescription("Payout for RideUp booking " + bookingId)
                         .putMetadata("bookingId", bookingId)
-                        .putMetadata("driverId", driverId)
-                        .build();
+                        .putMetadata("driverId", driverId);
 
-                Transfer transfer = Transfer.create(transferParams);
+                if (sourceChargeId != null && !sourceChargeId.isBlank()) {
+                    transferBuilder.setSourceTransaction(sourceChargeId);
+                }
+
+                Transfer transfer = Transfer.create(transferBuilder.build());
                 stripeTransferId = transfer.getId();
-                log.info("[PayoutService] Stripe Transfer succeeded: transferId={}, amount={} VND to destination={}",
-                        stripeTransferId, finalTransfer, stripeAccountId);
+                log.info("[PayoutService] Stripe Transfer succeeded: transferId={}, amount={} {} (vnd={} VND) to destination={}",
+                        stripeTransferId, transferAmount, transferCurrency, finalTransfer, stripeAccountId);
 
             } catch (StripeException e) {
                 log.error("[PayoutService] Stripe Transfer failed for booking {}: {}", bookingId, e.getMessage(), e);
